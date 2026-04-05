@@ -1,0 +1,64 @@
+import { google } from "googleapis"
+import { createAdmin } from "@/lib/supabase/server"
+
+const oauth2Client = new google.auth.OAuth2(
+  process.env.GOOGLE_CLIENT_ID,
+  process.env.GOOGLE_CLIENT_SECRET,
+  process.env.GOOGLE_REDIRECT_URI
+)
+
+const SCOPES = [
+  "https://www.googleapis.com/auth/spreadsheets",
+  "https://www.googleapis.com/auth/drive.file",
+]
+
+export function getAuthUrl(): string {
+  return oauth2Client.generateAuthUrl({
+    access_type: "offline",
+    scope: SCOPES,
+    prompt: "consent",
+  })
+}
+
+export async function exchangeCode(code: string) {
+  const { tokens } = await oauth2Client.getToken(code)
+  return tokens
+}
+
+export async function getAuthedClient() {
+  const supabase = createAdmin()
+
+  const { data: settings } = await supabase
+    .from("admin_settings")
+    .select("*")
+    .single()
+
+  if (!settings?.google_refresh_token) {
+    throw new Error("Google account not connected")
+  }
+
+  oauth2Client.setCredentials({
+    refresh_token: settings.google_refresh_token,
+    access_token: settings.google_access_token,
+    expiry_date: settings.google_token_expiry
+      ? new Date(settings.google_token_expiry).getTime()
+      : undefined,
+  })
+
+  // Refresh if expired
+  const tokenInfo = await oauth2Client.getAccessToken()
+  if (tokenInfo.token !== settings.google_access_token) {
+    await supabase
+      .from("admin_settings")
+      .update({
+        google_access_token: tokenInfo.token,
+        google_token_expiry: new Date(
+          oauth2Client.credentials.expiry_date || 0
+        ).toISOString(),
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", settings.id)
+  }
+
+  return oauth2Client
+}
