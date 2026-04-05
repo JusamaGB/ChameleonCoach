@@ -1,7 +1,9 @@
 import { NextResponse, type NextRequest } from "next/server"
-import { createClient, createAdmin } from "@/lib/supabase/server"
+import { createClient } from "@/lib/supabase/server"
 import { sendInviteEmail } from "@/lib/resend"
 import { generateToken } from "@/lib/utils"
+
+const adminEmails = ["kris.deane93@gmail.com"]
 
 export async function POST(request: NextRequest) {
   const supabase = await createClient()
@@ -9,7 +11,7 @@ export async function POST(request: NextRequest) {
     data: { user },
   } = await supabase.auth.getUser()
 
-  if (!user || user.app_metadata?.role !== "admin") {
+  if (!user || !user.email || !adminEmails.includes(user.email.toLowerCase())) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
   }
 
@@ -22,10 +24,8 @@ export async function POST(request: NextRequest) {
     )
   }
 
-  const admin = createAdmin()
-
   // Check if client already exists
-  const { data: existing } = await admin
+  const { data: existing } = await supabase
     .from("clients")
     .select("id, onboarding_completed")
     .eq("email", email)
@@ -43,7 +43,7 @@ export async function POST(request: NextRequest) {
 
   if (existing) {
     // Resend invite
-    await admin
+    await supabase
       .from("clients")
       .update({
         name,
@@ -54,7 +54,7 @@ export async function POST(request: NextRequest) {
       .eq("id", existing.id)
   } else {
     // New client
-    await admin.from("clients").insert({
+    await supabase.from("clients").insert({
       name,
       email,
       invite_token: token,

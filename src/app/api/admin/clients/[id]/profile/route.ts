@@ -11,7 +11,8 @@ export async function PUT(
     data: { user },
   } = await supabase.auth.getUser()
 
-  if (!user || user.app_metadata?.role !== "admin") {
+  const adminEmails = ["kris.deane93@gmail.com"]
+  if (!user || !user.email || !adminEmails.includes(user.email.toLowerCase())) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
   }
 

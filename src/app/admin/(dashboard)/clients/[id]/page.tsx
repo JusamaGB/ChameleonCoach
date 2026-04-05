@@ -1,4 +1,4 @@
-import { createAdmin } from "@/lib/supabase/server"
+import { createClient } from "@/lib/supabase/server"
 import { getProfile, getMealPlan, getProgress } from "@/lib/google/sheets"
 import { ClientDetailView } from "@/components/admin/client-detail-view"
 import { redirect } from "next/navigation"
@@ -12,7 +12,7 @@ export default async function ClientDetailPage({
   params: Promise<{ id: string }>
 }) {
   const { id } = await params
-  const supabase = createAdmin()
+  const supabase = await createClient()
 
   const { data: client } = await supabase
     .from("clients")

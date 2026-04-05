@@ -1,6 +1,8 @@
 import { NextResponse, type NextRequest } from "next/server"
-import { createClient, createAdmin } from "@/lib/supabase/server"
+import { createClient } from "@/lib/supabase/server"
 import { addProgressEntry } from "@/lib/google/sheets"
+
+const adminEmails = ["kris.deane93@gmail.com"]
 
 export async function POST(
   request: NextRequest,
@@ -11,14 +13,13 @@ export async function POST(
     data: { user },
   } = await supabase.auth.getUser()
 
-  if (!user || user.app_metadata?.role !== "admin") {
+  if (!user || !user.email || !adminEmails.includes(user.email.toLowerCase())) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
   }
 
   const { id } = await params
-  const admin = createAdmin()
 
-  const { data: client } = await admin
+  const { data: client } = await supabase
     .from("clients")
     .select("sheet_id")
     .eq("id", id)

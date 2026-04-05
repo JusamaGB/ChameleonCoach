@@ -1,4 +1,4 @@
-import { createAdmin } from "@/lib/supabase/server"
+import { createClient } from "@/lib/supabase/server"
 import { Card } from "@/components/ui/card"
 import { ClientList } from "@/components/admin/client-list"
 import { Users, CheckCircle, Clock } from "lucide-react"
@@ -6,7 +6,7 @@ import { Users, CheckCircle, Clock } from "lucide-react"
 export const dynamic = 'force-dynamic'
 
 export default async function AdminDashboard() {
-  const supabase = createAdmin()
+  const supabase = await createClient()
 
   const { data: clients } = await supabase
     .from("clients")

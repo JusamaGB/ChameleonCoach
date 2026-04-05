@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server"
-import { createClient, createAdmin } from "@/lib/supabase/server"
+import { createClient } from "@/lib/supabase/server"
 
 export async function GET() {
   const supabase = await createClient()
@@ -7,12 +7,17 @@ export async function GET() {
     data: { user },
   } = await supabase.auth.getUser()
 
-  if (!user || user.app_metadata?.role !== "admin") {
+  if (!user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
   }
 
-  const admin = createAdmin()
-  const { data: clients } = await admin
+  // Check admin by email
+  const adminEmails = ["kris.deane93@gmail.com"]
+  if (!user.email || !adminEmails.includes(user.email.toLowerCase())) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+  }
+
+  const { data: clients } = await supabase
     .from("clients")
     .select("*")
     .order("created_at", { ascending: false })
