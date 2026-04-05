@@ -34,7 +34,7 @@ export default function RegisterForm() {
 
     try {
       const supabase = createClient()
-      const { error: signUpError } = await supabase.auth.signUp({
+      const { data, error: signUpError } = await supabase.auth.signUp({
         email,
         password,
         options: {
@@ -48,7 +48,11 @@ export default function RegisterForm() {
         return
       }
 
-      router.push("/login?registered=true")
+      if (data.session) {
+        router.push("/dashboard")
+      } else {
+        router.push("/login?registered=true")
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong")
       setLoading(false)
