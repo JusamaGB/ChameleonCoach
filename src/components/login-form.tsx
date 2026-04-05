@@ -26,7 +26,7 @@ export default function LoginForm() {
 
     try {
       const supabase = createClient()
-      const { error: authError } = await supabase.auth.signInWithPassword({
+      const { data, error: authError } = await supabase.auth.signInWithPassword({
         email,
         password,
       })
@@ -37,7 +37,12 @@ export default function LoginForm() {
         return
       }
 
-      router.push(redirect)
+      // Redirect admins to admin dashboard
+      if (data.user?.app_metadata?.role === "admin") {
+        router.push("/admin")
+      } else {
+        router.push(redirect)
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong")
       setLoading(false)
