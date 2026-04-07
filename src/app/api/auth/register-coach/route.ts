@@ -24,11 +24,10 @@ export async function POST(request: NextRequest) {
     )
   }
 
-  // Create auth user
+  // Create auth user — email_confirm omitted so Supabase sends a confirmation email
   const { data: authData, error: authError } = await supabase.auth.admin.createUser({
     email,
     password,
-    email_confirm: true,
     user_metadata: { name },
   })
 
