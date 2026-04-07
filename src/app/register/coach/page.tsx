@@ -2,6 +2,7 @@
 
 import { useState } from "react"
 import { useRouter } from "next/navigation"
+import { createClient } from "@/lib/supabase/client"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
@@ -47,7 +48,15 @@ export default function RegisterCoachPage() {
         return
       }
 
-      router.push("/login?registered=coach")
+      // Auto sign-in — email is already confirmed server-side
+      const supabase = createClient()
+      const { error: signInError } = await supabase.auth.signInWithPassword({ email, password })
+      if (signInError) {
+        // Sign-in failed but account was created — just go to login
+        router.push("/login?onboarded=1")
+        return
+      }
+      router.push("/admin")
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong")
       setLoading(false)
