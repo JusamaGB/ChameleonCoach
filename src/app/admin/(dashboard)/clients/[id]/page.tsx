@@ -14,6 +14,9 @@ export default async function ClientDetailPage({
   const { id } = await params
   const supabase = await createClient()
 
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) redirect("/login")
+
   let client = null
   try {
     const { data } = await supabase
@@ -35,9 +38,9 @@ export default async function ClientDetailPage({
   if (client.sheet_id) {
     try {
       ;[profile, mealPlan, progress] = await Promise.all([
-        getProfile(client.sheet_id),
-        getMealPlan(client.sheet_id),
-        getProgress(client.sheet_id),
+        getProfile(client.sheet_id, user.id),
+        getMealPlan(client.sheet_id, user.id),
+        getProgress(client.sheet_id, user.id),
       ])
     } catch {
       // Sheet access issue

@@ -1,12 +1,14 @@
 import { google } from "googleapis"
 import { getAuthedClient } from "./auth"
+import { PLATFORM_NAME } from "@/lib/platform"
 import type { OnboardingData } from "@/types"
 
 export async function createClientSheet(
   clientName: string,
-  onboarding: OnboardingData
+  onboarding: OnboardingData,
+  coachId: string
 ): Promise<string> {
-  const auth = await getAuthedClient()
+  const auth = await getAuthedClient(coachId)
   const sheets = google.sheets({ version: "v4", auth })
   const drive = google.drive({ version: "v3", auth })
 
@@ -14,18 +16,12 @@ export async function createClientSheet(
   const spreadsheet = await sheets.spreadsheets.create({
     requestBody: {
       properties: {
-        title: `G-Fitness — ${clientName}`,
+        title: `${PLATFORM_NAME} — ${clientName}`,
       },
       sheets: [
-        {
-          properties: { title: "Profile", index: 0 },
-        },
-        {
-          properties: { title: "Meal Plan", index: 1 },
-        },
-        {
-          properties: { title: "Progress", index: 2 },
-        },
+        { properties: { title: "Profile", index: 0 } },
+        { properties: { title: "Meal Plan", index: 1 } },
+        { properties: { title: "Progress", index: 2 } },
       ],
     },
   })
@@ -84,9 +80,10 @@ export async function createClientSheet(
     },
   })
 
-  // Move to a G-Fitness folder if it exists, otherwise create one
+  // Move to a platform folder in coach's Drive, create if it doesn't exist
+  const folderName = `${PLATFORM_NAME} Clients`
   const folderSearch = await drive.files.list({
-    q: "name = 'G-Fitness Clients' and mimeType = 'application/vnd.google-apps.folder' and trashed = false",
+    q: `name = '${folderName}' and mimeType = 'application/vnd.google-apps.folder' and trashed = false`,
     fields: "files(id)",
   })
 
@@ -97,7 +94,7 @@ export async function createClientSheet(
   } else {
     const folder = await drive.files.create({
       requestBody: {
-        name: "G-Fitness Clients",
+        name: folderName,
         mimeType: "application/vnd.google-apps.folder",
       },
       fields: "id",

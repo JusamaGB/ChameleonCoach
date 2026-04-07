@@ -1,9 +1,10 @@
 import type { Metadata } from "next"
 import "./globals.css"
+import { PLATFORM_NAME } from "@/lib/platform"
 
 export const metadata: Metadata = {
-  title: "G-Fitness",
-  description: "Your personal fitness and nutrition portal",
+  title: PLATFORM_NAME,
+  description: "Your personalised coaching portal",
 }
 
 export default function RootLayout({

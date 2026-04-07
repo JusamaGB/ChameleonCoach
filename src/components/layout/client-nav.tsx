@@ -9,13 +9,16 @@ import {
   UtensilsCrossed,
   TrendingUp,
   User,
+  Calendar,
   LogOut,
 } from "lucide-react"
+import { PLATFORM_NAME } from "@/lib/platform"
 
 const navItems = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/meal-plan", label: "Meal Plan", icon: UtensilsCrossed },
   { href: "/progress", label: "Progress", icon: TrendingUp },
+  { href: "/appointments", label: "Appointments", icon: Calendar },
   { href: "/profile", label: "Profile", icon: User },
 ]
 
@@ -34,9 +37,7 @@ export function ClientNav() {
       {/* Desktop sidebar */}
       <nav className="hidden md:flex flex-col w-64 min-h-screen bg-gf-dark border-r border-gf-border p-6">
         <Link href="/dashboard" className="mb-10">
-          <h1 className="text-2xl font-bold">
-            <span className="text-gf-pink">G</span>-Fitness
-          </h1>
+          <h1 className="text-2xl font-bold">{PLATFORM_NAME}</h1>
         </Link>
 
         <div className="flex flex-col gap-1 flex-1">

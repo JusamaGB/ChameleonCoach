@@ -6,6 +6,7 @@ import { createClient } from "@/lib/supabase/client"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
+import { PLATFORM_NAME } from "@/lib/platform"
 
 export default function RegisterForm() {
   const router = useRouter()
@@ -63,7 +64,7 @@ export default function RegisterForm() {
     <div className="min-h-screen flex items-center justify-center px-6">
       <div className="w-full max-w-sm">
         <h1 className="text-3xl font-bold text-center mb-2">
-          <span className="text-gf-pink">G</span>-Fitness
+          {PLATFORM_NAME}
         </h1>
         <p className="text-gf-muted text-center text-sm mb-8">
           Create your account

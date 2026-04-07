@@ -1,12 +1,11 @@
 import { createServerClient } from "@supabase/ssr"
 import { NextResponse, type NextRequest } from "next/server"
 
-const publicPaths = ["/login", "/register", "/onboarding", "/api/auth/callback", "/api/invite/accept"]
+const publicPaths = ["/login", "/register", "/onboarding", "/api/auth", "/api/invite/accept"]
 
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl
 
-  // Allow public paths and API routes
   if (
     publicPaths.some((p) => pathname.startsWith(p)) ||
     pathname === "/" ||
@@ -48,14 +47,30 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(loginUrl)
   }
 
-  // Block non-admin from admin routes
   if (pathname.startsWith("/admin")) {
-    const adminEmails = ["kris.deane93@gmail.com"]
-    const isAdmin =
-      user.app_metadata?.role === "admin" ||
-      (user.email && adminEmails.includes(user.email.toLowerCase()))
-    if (!isAdmin) {
+    const { data: role } = await supabase
+      .from("user_roles")
+      .select("role, stripe_subscription_status, trial_ends_at")
+      .eq("user_id", user.id)
+      .single()
+
+    const isCoach = role?.role === "coach" || role?.role === "admin"
+    if (!isCoach) {
       return NextResponse.redirect(new URL("/dashboard", request.url))
+    }
+
+    // Subscription gate — expired trial or cancelled/unpaid subscription
+    if (pathname !== "/admin/billing" && !pathname.startsWith("/admin/billing")) {
+      const status = role?.stripe_subscription_status as string | undefined
+      const trialEnds = role?.trial_ends_at as string | undefined
+      const isLapsed =
+        (status === "canceled" || status === "unpaid") &&
+        trialEnds &&
+        new Date(trialEnds) < new Date()
+
+      if (isLapsed) {
+        return NextResponse.redirect(new URL("/admin/billing", request.url))
+      }
     }
   }
 

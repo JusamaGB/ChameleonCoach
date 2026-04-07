@@ -1,19 +1,12 @@
 import { NextResponse, type NextRequest } from "next/server"
-import { createClient } from "@/lib/supabase/server"
+import { verifyCoach, isCoachResult } from "@/lib/auth-helpers"
 import { sendInviteEmail } from "@/lib/resend"
 import { generateToken } from "@/lib/utils"
 
-const adminEmails = ["kris.deane93@gmail.com"]
-
 export async function POST(request: NextRequest) {
-  const supabase = await createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user || !user.email || !adminEmails.includes(user.email.toLowerCase())) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-  }
+  const result = await verifyCoach()
+  if (!isCoachResult(result)) return result
+  const { user, supabase } = result
 
   const { name, email } = await request.json()
 
@@ -24,11 +17,11 @@ export async function POST(request: NextRequest) {
     )
   }
 
-  // Check if client already exists
   const { data: existing } = await supabase
     .from("clients")
     .select("id, onboarding_completed")
     .eq("email", email)
+    .eq("coach_id", user.id)
     .single()
 
   if (existing?.onboarding_completed) {
@@ -42,7 +35,6 @@ export async function POST(request: NextRequest) {
   const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString()
 
   if (existing) {
-    // Resend invite
     await supabase
       .from("clients")
       .update({
@@ -53,10 +45,10 @@ export async function POST(request: NextRequest) {
       })
       .eq("id", existing.id)
   } else {
-    // New client
     await supabase.from("clients").insert({
       name,
       email,
+      coach_id: user.id,
       invite_token: token,
       invite_expires_at: expiresAt,
     })

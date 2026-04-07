@@ -60,7 +60,7 @@ export async function POST(request: NextRequest) {
   // Validate token
   const { data: client } = await supabase
     .from("clients")
-    .select("*")
+    .select("*, coach_id")
     .eq("invite_token", token)
     .single()
 
@@ -97,10 +97,12 @@ export async function POST(request: NextRequest) {
     )
   }
 
-  // Create Google Sheet
+  // Create Google Sheet (scoped to the coach's Google account)
   let sheetId: string | null = null
   try {
-    sheetId = await createClientSheet(onboarding.name, onboarding)
+    if (client.coach_id) {
+      sheetId = await createClientSheet(onboarding.name, onboarding, client.coach_id)
+    }
   } catch {
     // Google might not be connected yet — continue without sheet
   }

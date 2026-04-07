@@ -1,28 +1,13 @@
 import { NextResponse, type NextRequest } from "next/server"
-import { createClient } from "@/lib/supabase/server"
-
-const adminEmails = ["kris.deane93@gmail.com"]
-
-async function verifyAdmin() {
-  const supabase = await createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user || !user.email || !adminEmails.includes(user.email.toLowerCase())) {
-    return { user: null, supabase }
-  }
-  return { user, supabase }
-}
+import { verifyCoach, isCoachResult } from "@/lib/auth-helpers"
 
 export async function GET(
   _request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const { user, supabase } = await verifyAdmin()
-  if (!user) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-  }
+  const result = await verifyCoach()
+  if (!isCoachResult(result)) return result
+  const { supabase } = result
 
   const { id } = await params
 
@@ -43,15 +28,13 @@ export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const { user, supabase } = await verifyAdmin()
-  if (!user) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-  }
+  const result = await verifyCoach()
+  if (!isCoachResult(result)) return result
+  const { supabase } = result
 
   const { id } = await params
   const body = await request.json()
 
-  // Only allow updating specific fields
   const allowedFields = ["name", "email", "sheet_id", "onboarding_completed"]
   const updates: Record<string, unknown> = {}
   for (const field of allowedFields) {
@@ -79,10 +62,9 @@ export async function DELETE(
   _request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const { user, supabase } = await verifyAdmin()
-  if (!user) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-  }
+  const result = await verifyCoach()
+  if (!isCoachResult(result)) return result
+  const { supabase } = result
 
   const { id } = await params
 

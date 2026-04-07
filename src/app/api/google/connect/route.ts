@@ -1,16 +1,12 @@
 import { NextResponse, type NextRequest } from "next/server"
-import { createClient, createAdmin } from "@/lib/supabase/server"
+import { verifyCoach, isCoachResult } from "@/lib/auth-helpers"
+import { createAdmin } from "@/lib/supabase/server"
 import { getAuthUrl } from "@/lib/google/auth"
 
 export async function GET(request: NextRequest) {
-  const supabase = await createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user || user.email !== process.env.ADMIN_EMAIL) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-  }
+  const result = await verifyCoach()
+  if (!isCoachResult(result)) return result
+  const { user } = result
 
   const action = request.nextUrl.searchParams.get("action")
 
@@ -19,7 +15,6 @@ export async function GET(request: NextRequest) {
     return NextResponse.redirect(url)
   }
 
-  // Check connection status
   const admin = createAdmin()
   const { data: settings } = await admin
     .from("admin_settings")

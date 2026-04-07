@@ -1,6 +1,7 @@
 export interface Client {
   id: string
   user_id: string | null
+  coach_id: string | null
   name: string
   email: string
   sheet_id: string | null
@@ -8,6 +9,18 @@ export interface Client {
   invite_expires_at: string | null
   invite_accepted_at: string | null
   onboarding_completed: boolean
+  created_at: string
+  updated_at: string
+}
+
+export interface Appointment {
+  id: string
+  coach_id: string
+  client_id: string
+  status: 'pending' | 'confirmed' | 'declined' | 'cancelled'
+  requested_note: string | null
+  confirmed_at: string | null
+  coach_note: string | null
   created_at: string
   updated_at: string
 }

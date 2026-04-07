@@ -23,9 +23,9 @@ export default async function MealPlanPage() {
 
   let mealPlan: MealPlanDay[] = []
 
-  if (client?.sheet_id) {
+  if (client?.sheet_id && client?.coach_id) {
     try {
-      mealPlan = await getMealPlan(client.sheet_id)
+      mealPlan = await getMealPlan(client.sheet_id, client.coach_id)
     } catch {
       // Sheet not accessible
     }

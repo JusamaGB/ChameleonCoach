@@ -14,16 +14,16 @@ export async function GET() {
 
   const { data: client } = await supabase
     .from("clients")
-    .select("sheet_id")
+    .select("sheet_id, coach_id")
     .eq("user_id", user.id)
     .single()
 
-  if (!client?.sheet_id) {
+  if (!client?.sheet_id || !client?.coach_id) {
     return NextResponse.json({ progress: [] })
   }
 
   try {
-    const progress = await getProgress(client.sheet_id)
+    const progress = await getProgress(client.sheet_id, client.coach_id)
     return NextResponse.json({ progress })
   } catch {
     return NextResponse.json({ progress: [] })
@@ -42,18 +42,18 @@ export async function POST(request: NextRequest) {
 
   const { data: client } = await supabase
     .from("clients")
-    .select("sheet_id")
+    .select("sheet_id, coach_id")
     .eq("user_id", user.id)
     .single()
 
-  if (!client?.sheet_id) {
+  if (!client?.sheet_id || !client?.coach_id) {
     return NextResponse.json({ error: "No sheet found" }, { status: 400 })
   }
 
   const entry = await request.json()
 
   try {
-    await addProgressEntry(client.sheet_id, entry)
+    await addProgressEntry(client.sheet_id, entry, client.coach_id)
     return NextResponse.json({ ok: true })
   } catch {
     return NextResponse.json(

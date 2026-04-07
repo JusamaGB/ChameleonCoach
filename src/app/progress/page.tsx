@@ -24,9 +24,9 @@ export default async function ProgressPage() {
 
   let progress: ProgressEntry[] = []
 
-  if (client?.sheet_id) {
+  if (client?.sheet_id && client?.coach_id) {
     try {
-      progress = await getProgress(client.sheet_id)
+      progress = await getProgress(client.sheet_id, client.coach_id)
     } catch {
       // Sheet not accessible
     }

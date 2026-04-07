@@ -14,16 +14,16 @@ export async function GET() {
 
   const { data: client } = await supabase
     .from("clients")
-    .select("sheet_id")
+    .select("sheet_id, coach_id")
     .eq("user_id", user.id)
     .single()
 
-  if (!client?.sheet_id) {
+  if (!client?.sheet_id || !client?.coach_id) {
     return NextResponse.json({ profile: null })
   }
 
   try {
-    const profile = await getProfile(client.sheet_id)
+    const profile = await getProfile(client.sheet_id, client.coach_id)
     return NextResponse.json({ profile })
   } catch {
     return NextResponse.json({ profile: null })

@@ -12,22 +12,16 @@ export async function GET(request: NextRequest) {
   }
 
   const supabase = await createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
+  const { data: { user } } = await supabase.auth.getUser()
 
-  if (!user || user.email !== process.env.ADMIN_EMAIL) {
-    return NextResponse.redirect(
-      new URL("/login", request.url)
-    )
+  if (!user || user.app_metadata?.role !== "coach") {
+    return NextResponse.redirect(new URL("/login", request.url))
   }
 
   try {
     const tokens = await exchangeCode(code)
-
     const admin = createAdmin()
 
-    // Upsert admin settings
     const { data: existing } = await admin
       .from("admin_settings")
       .select("id")
@@ -45,20 +39,13 @@ export async function GET(request: NextRequest) {
     }
 
     if (existing) {
-      await admin
-        .from("admin_settings")
-        .update(settingsData)
-        .eq("id", existing.id)
+      await admin.from("admin_settings").update(settingsData).eq("id", existing.id)
     } else {
       await admin.from("admin_settings").insert(settingsData)
     }
 
-    return NextResponse.redirect(
-      new URL("/admin/settings?connected=true", request.url)
-    )
+    return NextResponse.redirect(new URL("/admin/settings?connected=true", request.url))
   } catch {
-    return NextResponse.redirect(
-      new URL("/admin/settings?error=auth_failed", request.url)
-    )
+    return NextResponse.redirect(new URL("/admin/settings?error=auth_failed", request.url))
   }
 }

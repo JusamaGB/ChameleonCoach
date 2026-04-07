@@ -26,11 +26,11 @@ export default async function DashboardPage() {
   let mealPlan: MealPlanDay[] = []
   let progress: ProgressEntry[] = []
 
-  if (client?.sheet_id) {
+  if (client?.sheet_id && client?.coach_id) {
     try {
       ;[mealPlan, progress] = await Promise.all([
-        getMealPlan(client.sheet_id),
-        getProgress(client.sheet_id),
+        getMealPlan(client.sheet_id, client.coach_id),
+        getProgress(client.sheet_id, client.coach_id),
       ])
     } catch {
       // Sheet not accessible yet

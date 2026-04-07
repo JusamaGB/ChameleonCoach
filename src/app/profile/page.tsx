@@ -23,9 +23,9 @@ export default async function ProfilePage() {
 
   let profile = null
 
-  if (client?.sheet_id) {
+  if (client?.sheet_id && client?.coach_id) {
     try {
-      profile = await getProfile(client.sheet_id)
+      profile = await getProfile(client.sheet_id, client.coach_id)
     } catch {
       // Sheet not accessible
     }
