@@ -30,11 +30,25 @@ export async function GET(request: NextRequest) {
 
     if (!next && user) {
       // Route coaches to admin, clients to dashboard
-      const { data: role } = await supabase
+      let { data: role } = await supabase
         .from("user_roles")
         .select("role")
         .eq("user_id", user.id)
         .single()
+
+      // Self-heal: if role row is missing, recover it from app_metadata
+      if (!role) {
+        const metaRole = user.app_metadata?.role as string | undefined
+        if (metaRole && ["coach", "admin", "client"].includes(metaRole)) {
+          await supabase.from("user_roles").upsert({
+            user_id: user.id,
+            role: metaRole,
+            stripe_subscription_status: "trialing",
+          }, { onConflict: "user_id", ignoreDuplicates: true })
+          role = { role: metaRole }
+        }
+      }
+
       const destination = (role?.role === "coach" || role?.role === "admin") ? "/admin" : "/dashboard"
       return NextResponse.redirect(new URL(destination, request.url))
     }

@@ -25,10 +25,13 @@ export async function POST(request: NextRequest) {
   }
 
   // Create auth user — email_confirm omitted so Supabase sends a confirmation email
+  // app_metadata.role is set at creation time so the callback can self-heal
+  // if the user_roles insert below ever fails
   const { data: authData, error: authError } = await supabase.auth.admin.createUser({
     email,
     password,
     user_metadata: { name },
+    app_metadata: { role: "coach" },
   })
 
   if (authError || !authData.user) {
@@ -66,11 +69,6 @@ export async function POST(request: NextRequest) {
     await supabase.auth.admin.deleteUser(authData.user.id)
     return NextResponse.json({ error: `Failed to assign coach role: ${roleError.message} (code: ${roleError.code})` }, { status: 500 })
   }
-
-  // Set app_metadata so JWT contains role without needing a DB trigger
-  await supabase.auth.admin.updateUserById(authData.user.id, {
-    app_metadata: { role: "coach" },
-  })
 
   return NextResponse.json({ ok: true })
 }
