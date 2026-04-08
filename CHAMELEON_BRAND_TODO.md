@@ -42,3 +42,11 @@ Status:
 
 - No further code change is required just to leave these defaults undecided.
 - The current V1 branding flow can continue using temporary fallback values until brand defaults are formally approved.
+
+## Functional Follow-Ups
+
+1. Verify and harden the full post-onboarding client workspace handoff.
+   - Confirm onboarding completion creates the client folder and workbook in the coach-owned `Clients` hierarchy.
+   - Confirm the workbook is shared to the invited client email successfully.
+   - Confirm `Sheet pending` flips to a linked/usable state and both coach/client views become operational after onboarding.
+   - Add clearer failure handling if workbook creation, sharing, or sheet reads fail late in the flow.

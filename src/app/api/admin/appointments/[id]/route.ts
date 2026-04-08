@@ -1,6 +1,9 @@
 import { NextResponse, type NextRequest } from "next/server"
 import { verifyCoach, isCoachResult } from "@/lib/auth-helpers"
-import { createAppointmentCalendarEvent } from "@/lib/google/calendar"
+import {
+  createAppointmentCalendarEvent,
+  updateAppointmentCalendarEvent,
+} from "@/lib/google/calendar"
 import { sendAppointmentConfirmedEmail, sendAppointmentDeclinedEmail } from "@/lib/resend"
 
 export async function PATCH(
@@ -47,11 +50,7 @@ export async function PATCH(
     updateData.confirmed_at = confirmed_at
   }
 
-  if (
-    status === "confirmed" &&
-    confirmed_at &&
-    !existingAppointment.google_calendar_event_id
-  ) {
+  if (status === "confirmed" && confirmed_at) {
     if (!existingAppointment.clients?.email) {
       return NextResponse.json(
         { error: "Client email is required for Calendar sync" },
@@ -60,15 +59,46 @@ export async function PATCH(
     }
 
     try {
-      const calendarEvent = await createAppointmentCalendarEvent({
-        coachId: user.id,
-        clientName: existingAppointment.clients.name || "Client",
-        clientEmail: existingAppointment.clients.email,
-        confirmedAt: confirmed_at,
-        durationMinutes: existingAppointment.duration_minutes ?? 60,
-        coachNote: coach_note ?? null,
-        requestedNote: existingAppointment.requested_note ?? null,
-      })
+      let calendarEvent
+      if (existingAppointment.google_calendar_event_id) {
+        try {
+          calendarEvent = await updateAppointmentCalendarEvent({
+            coachId: user.id,
+            eventId: existingAppointment.google_calendar_event_id,
+            clientName: existingAppointment.clients.name || "Client",
+            clientEmail: existingAppointment.clients.email,
+            confirmedAt: confirmed_at,
+            durationMinutes: existingAppointment.duration_minutes ?? 60,
+            coachNote: coach_note ?? null,
+            requestedNote: existingAppointment.requested_note ?? null,
+          })
+        } catch (error) {
+          const googleError = error as { code?: number; status?: number; message?: string }
+          if (googleError?.code === 404 || googleError?.status === 404) {
+            calendarEvent = await createAppointmentCalendarEvent({
+              coachId: user.id,
+              clientName: existingAppointment.clients.name || "Client",
+              clientEmail: existingAppointment.clients.email,
+              confirmedAt: confirmed_at,
+              durationMinutes: existingAppointment.duration_minutes ?? 60,
+              coachNote: coach_note ?? null,
+              requestedNote: existingAppointment.requested_note ?? null,
+            })
+          } else {
+            throw error
+          }
+        }
+      } else {
+        calendarEvent = await createAppointmentCalendarEvent({
+          coachId: user.id,
+          clientName: existingAppointment.clients.name || "Client",
+          clientEmail: existingAppointment.clients.email,
+          confirmedAt: confirmed_at,
+          durationMinutes: existingAppointment.duration_minutes ?? 60,
+          coachNote: coach_note ?? null,
+          requestedNote: existingAppointment.requested_note ?? null,
+        })
+      }
 
       updateData.google_calendar_event_id = calendarEvent.id
       updateData.google_calendar_event_link = calendarEvent.htmlLink
