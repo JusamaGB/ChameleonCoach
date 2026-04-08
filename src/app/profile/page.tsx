@@ -4,6 +4,7 @@ import { ClientNav } from "@/components/layout/client-nav"
 import { PoweredBy } from "@/components/branding/powered-by"
 import { Card } from "@/components/ui/card"
 import { LogoutButton } from "@/components/logout-button"
+import { DeleteAccountCard } from "@/components/account/delete-account-card"
 import { redirect } from "next/navigation"
 import { getCoachBrandingByCoachId } from "@/lib/branding-server"
 
@@ -84,6 +85,11 @@ export default async function ProfilePage() {
           )}
 
           <LogoutButton />
+          <DeleteAccountCard
+            title="Delete Account"
+            warning="This permanently deletes your client account, platform profile, and appointment history tied to this portal."
+            details="You will lose access immediately and can re-register later with the same email once deletion completes."
+          />
           {branding.show_powered_by && <PoweredBy className="mt-8" />}
         </div>
       </main>

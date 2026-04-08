@@ -9,6 +9,7 @@ import { Badge } from "@/components/ui/badge"
 import { Link2, CheckCircle, AlertCircle } from "lucide-react"
 import { DEFAULT_COACH_BRANDING } from "@/lib/branding"
 import { MODULE_LABELS, type CoachTypePreset, type EnableableModule } from "@/lib/modules"
+import { DeleteAccountCard } from "@/components/account/delete-account-card"
 
 const COACH_TYPE_LABELS: Record<CoachTypePreset, string> = {
   personal_trainer: "Personal trainer",
@@ -478,6 +479,12 @@ export default function SettingsPage() {
           </div>
         </div>
       </Card>
+
+      <DeleteAccountCard
+        title="Delete Workspace"
+        warning="This permanently deletes your coach account, workspace settings, clients, appointments, modules, branding, and other platform data for this workspace."
+        details="Account access is removed immediately after deletion. You can create a new workspace later with the same email, but Google Sheets and files already stored in your Google Drive are retained."
+      />
     </div>
   )
 }
