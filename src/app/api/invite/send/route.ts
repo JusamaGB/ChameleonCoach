@@ -3,6 +3,8 @@ import { verifyCoach, isCoachResult } from "@/lib/auth-helpers"
 import { sendInviteEmail } from "@/lib/resend"
 import { generateToken } from "@/lib/utils"
 import { getCoachBrandingByCoachId } from "@/lib/branding-server"
+import { resolveActiveModules } from "@/lib/modules"
+import { getCoachDriveWorkspaceHealth } from "@/lib/google/template"
 
 export async function POST(request: NextRequest) {
   const result = await verifyCoach()
@@ -16,6 +18,32 @@ export async function POST(request: NextRequest) {
       { error: "Name and email are required" },
       { status: 400 }
     )
+  }
+
+  const { data: settings } = await supabase
+    .from("admin_settings")
+    .select("google_refresh_token, coach_type_preset, active_modules, managed_workspace_sheet_id, managed_workspace_sheet_url, managed_workspace_sheet_modules, managed_workspace_sheet_provisioned_at, managed_workspace_root_folder_id, managed_workspace_root_folder_url, managed_clients_folder_id, managed_clients_folder_url, managed_pt_library_sheet_id, managed_pt_library_sheet_url, managed_nutrition_library_sheet_id, managed_nutrition_library_sheet_url")
+    .eq("user_id", user.id)
+    .maybeSingle()
+
+  const modules = resolveActiveModules(settings ?? {})
+  const workspaceHealth = await getCoachDriveWorkspaceHealth({
+    coachId: user.id,
+    activeModules: modules.enableable_modules,
+    settings,
+  })
+
+  if (workspaceHealth.status !== "healthy") {
+    const reason =
+      workspaceHealth.status === "disconnected"
+        ? "Connect Google and create Chameleon Sheets before inviting clients."
+        : workspaceHealth.status === "not_provisioned"
+          ? "Create Chameleon Sheets before inviting clients."
+          : workspaceHealth.missingArtifacts.length > 0
+            ? `Repair the managed Drive workspace before inviting clients. Missing: ${workspaceHealth.missingArtifacts.join(", ")}.`
+            : "Client invites are blocked until the managed Drive workspace is healthy."
+
+    return NextResponse.json({ error: reason }, { status: 400 })
   }
 
   const { data: existing } = await supabase

@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server"
 import { createAdmin } from "@/lib/supabase/server"
-import { createClientSheet } from "@/lib/google/template"
+import { createClientSheet, getCoachDriveWorkspaceHealth } from "@/lib/google/template"
 import type { OnboardingData } from "@/types"
 import { getCoachBrandingByCoachId } from "@/lib/branding-server"
 import { normalizeCoachTypePreset, resolveActiveModules } from "@/lib/modules"
@@ -86,6 +86,38 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Invite expired" }, { status: 400 })
   }
 
+  const { data: settings } = client.coach_id
+    ? await supabase
+        .from("admin_settings")
+        .select("google_refresh_token, coach_type_preset, active_modules, managed_workspace_sheet_id, managed_workspace_sheet_url, managed_workspace_root_folder_id, managed_workspace_root_folder_url, managed_clients_folder_id, managed_clients_folder_url, managed_pt_library_sheet_id, managed_pt_library_sheet_url, managed_nutrition_library_sheet_id, managed_nutrition_library_sheet_url, managed_workspace_sheet_modules, managed_workspace_sheet_provisioned_at")
+        .eq("user_id", client.coach_id)
+        .maybeSingle()
+    : { data: null }
+
+  const modules = resolveActiveModules(settings ?? {})
+
+  if (client.coach_id) {
+    const workspaceHealth = await getCoachDriveWorkspaceHealth({
+      coachId: client.coach_id,
+      activeModules: modules.enableable_modules,
+      settings,
+    })
+
+    if (workspaceHealth.status !== "healthy") {
+      return NextResponse.json(
+        {
+          error:
+            workspaceHealth.status === "disconnected"
+              ? "Your coach needs to reconnect Google before onboarding can finish."
+              : workspaceHealth.status === "not_provisioned"
+                ? "Your coach still needs to create the Chameleon client workspace before onboarding can finish."
+                : `Your coach's client workspace is incomplete. Missing: ${workspaceHealth.missingArtifacts.join(", ")}.`,
+        },
+        { status: 409 }
+      )
+    }
+  }
+
   // Create Supabase auth user
   const { data: authData, error: authError } =
     await supabase.auth.admin.createUser({
@@ -100,16 +132,6 @@ export async function POST(request: NextRequest) {
       { status: 500 }
     )
   }
-
-  const { data: settings } = client.coach_id
-    ? await supabase
-        .from("admin_settings")
-        .select("coach_type_preset, active_modules, managed_workspace_sheet_id, managed_workspace_sheet_url, managed_workspace_root_folder_id, managed_workspace_root_folder_url, managed_clients_folder_id, managed_clients_folder_url, managed_pt_library_sheet_id, managed_pt_library_sheet_url, managed_nutrition_library_sheet_id, managed_nutrition_library_sheet_url")
-        .eq("user_id", client.coach_id)
-        .maybeSingle()
-    : { data: null }
-
-  const modules = resolveActiveModules(settings ?? {})
 
   // Create client workspace in the coach-owned Google Drive hierarchy.
   let sheetId: string | null = null
@@ -140,7 +162,7 @@ export async function POST(request: NextRequest) {
       sheetSharedPermissionId = clientWorkspace.sheet_shared_permission_id ?? null
       sheetSharedAt = clientWorkspace.sheet_shared_at ?? null
 
-      await supabase
+      const { error: adminSettingsError } = await supabase
         .from("admin_settings")
         .upsert(
           {
@@ -168,29 +190,46 @@ export async function POST(request: NextRequest) {
           },
           { onConflict: "user_id" }
         )
-    }
-  } catch {
-    // Google might not be connected yet — continue without sheet
-  }
 
-  // Update client record
-  await supabase
-    .from("clients")
-    .update({
-      user_id: authData.user.id,
-      name: onboarding.name,
-      sheet_id: sheetId,
-      drive_folder_id: driveFolderId,
-      drive_folder_url: driveFolderUrl,
-      sheet_shared_email: sheetSharedEmail,
-      sheet_shared_permission_id: sheetSharedPermissionId,
-      sheet_shared_at: sheetSharedAt,
-      invite_accepted_at: new Date().toISOString(),
-      onboarding_completed: true,
-      invite_token: null,
-      updated_at: new Date().toISOString(),
-    })
-    .eq("id", client.id)
+      if (adminSettingsError) {
+        throw new Error("Failed to save coach workspace metadata.")
+      }
+    }
+
+    const { error: clientUpdateError } = await supabase
+      .from("clients")
+      .update({
+        user_id: authData.user.id,
+        name: onboarding.name,
+        sheet_id: sheetId,
+        drive_folder_id: driveFolderId,
+        drive_folder_url: driveFolderUrl,
+        sheet_shared_email: sheetSharedEmail,
+        sheet_shared_permission_id: sheetSharedPermissionId,
+        sheet_shared_at: sheetSharedAt,
+        invite_accepted_at: new Date().toISOString(),
+        onboarding_completed: true,
+        invite_token: null,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", client.id)
+
+    if (clientUpdateError) {
+      throw new Error("Failed to finish onboarding.")
+    }
+  } catch (error) {
+    await supabase.auth.admin.deleteUser(authData.user.id).catch(() => {})
+
+    return NextResponse.json(
+      {
+        error:
+          error instanceof Error && error.message
+            ? `We couldn't finish setting up your client workspace: ${error.message}`
+            : "We couldn't finish setting up your client workspace. Please ask your coach to verify the Google workspace and try again.",
+      },
+      { status: 500 }
+    )
+  }
 
   return NextResponse.json({ ok: true })
 }

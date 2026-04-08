@@ -1,12 +1,15 @@
 "use client"
 
 import { useState, useEffect, useCallback } from "react"
+import Link from "next/link"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { Card, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { Send, CheckCircle, Clock } from "lucide-react"
+import { Send, CheckCircle, Clock, AlertCircle } from "lucide-react"
 import type { Client } from "@/types"
+
+type WorkspaceStatus = "healthy" | "missing" | "not_provisioned" | "disconnected" | "unknown"
 
 export default function InvitePage() {
   const [name, setName] = useState("")
@@ -15,6 +18,11 @@ export default function InvitePage() {
   const [error, setError] = useState("")
   const [success, setSuccess] = useState("")
   const [pending, setPending] = useState<Client[]>([])
+  const [workspaceLoading, setWorkspaceLoading] = useState(true)
+  const [workspaceReady, setWorkspaceReady] = useState(false)
+  const [workspaceStatus, setWorkspaceStatus] = useState<WorkspaceStatus>("unknown")
+  const [workspaceError, setWorkspaceError] = useState("")
+  const [missingArtifacts, setMissingArtifacts] = useState<string[]>([])
 
   const loadPending = useCallback(async () => {
     try {
@@ -26,11 +34,64 @@ export default function InvitePage() {
     }
   }, [])
 
-  useEffect(() => { loadPending() }, [loadPending])
+  const loadWorkspaceReadiness = useCallback(async () => {
+    setWorkspaceLoading(true)
+    setWorkspaceError("")
+
+    try {
+      const response = await fetch("/api/google/connect")
+      const data = await response.json()
+
+      if (!response.ok) {
+        throw new Error(data.error || "Failed to load workspace readiness")
+      }
+
+      const status = (data.workspace_status ?? "unknown") as WorkspaceStatus
+      setWorkspaceStatus(status)
+      setMissingArtifacts(Array.isArray(data.missing_artifacts) ? data.missing_artifacts : [])
+      setWorkspaceReady(Boolean(data.connected) && status === "healthy")
+    } catch (err) {
+      setWorkspaceStatus("unknown")
+      setWorkspaceReady(false)
+      setMissingArtifacts([])
+      setWorkspaceError(err instanceof Error ? err.message : "Failed to load workspace readiness")
+    } finally {
+      setWorkspaceLoading(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    loadPending()
+    loadWorkspaceReadiness()
+  }, [loadPending, loadWorkspaceReadiness])
+
+  function workspaceMessage() {
+    if (workspaceError) {
+      return workspaceError
+    }
+
+    if (workspaceLoading) {
+      return "Checking whether your Chameleon client workspace is ready for invites."
+    }
+
+    switch (workspaceStatus) {
+      case "healthy":
+        return "Your Chameleon workspace is ready. New client invites can provision a client folder and workbook during onboarding."
+      case "disconnected":
+        return "Connect Google first, then create Chameleon Sheets before inviting clients."
+      case "not_provisioned":
+        return "Create Chameleon Sheets first so client invites have a ready workspace template."
+      case "missing":
+        return `Part of the managed Drive workspace is missing${missingArtifacts.length > 0 ? `: ${missingArtifacts.join(", ")}` : ""}. Repair it in Settings before inviting clients.`
+      default:
+        return "Invite readiness could not be confirmed. Open Settings to verify the Google workspace."
+    }
+  }
 
   async function handleInvite(e: React.FormEvent) {
     e.preventDefault()
     if (!name.trim() || !email.trim()) return
+    if (!workspaceReady) return
 
     setLoading(true)
     setError("")
@@ -62,6 +123,7 @@ export default function InvitePage() {
   async function resend(clientName: string, clientEmail: string) {
     setError("")
     setSuccess("")
+    if (!workspaceReady) return
     try {
       const res = await fetch("/api/invite/send", {
         method: "POST",
@@ -87,6 +149,38 @@ export default function InvitePage() {
       <p className="text-gf-muted mb-8">
         Send an onboarding invite to a new client
       </p>
+
+      <Card className="mb-8">
+        <CardTitle>Client Workspace Readiness</CardTitle>
+        <div className="mt-4 flex items-start justify-between gap-4">
+          <div className="space-y-2">
+            <div className="flex items-center gap-2">
+              {workspaceLoading ? (
+                <Badge>Checking...</Badge>
+              ) : workspaceReady ? (
+                <>
+                  <CheckCircle size={16} className="text-green-400" />
+                  <Badge variant="success">Ready</Badge>
+                </>
+              ) : (
+                <>
+                  <AlertCircle size={16} className="text-yellow-400" />
+                  <Badge variant="warning">Invite blocked</Badge>
+                </>
+              )}
+            </div>
+            <p className="text-sm text-gf-muted">{workspaceMessage()}</p>
+          </div>
+          {!workspaceReady ? (
+            <Link
+              href="/admin/settings"
+              className="inline-flex shrink-0 items-center justify-center rounded-lg border border-gf-border bg-gf-surface px-3 py-1.5 text-sm font-semibold text-white transition-colors hover:border-gf-pink/50"
+            >
+              Open Settings
+            </Link>
+          ) : null}
+        </div>
+      </Card>
 
       <Card className="mb-8">
         <CardTitle>New Invitation</CardTitle>
@@ -116,9 +210,9 @@ export default function InvitePage() {
             </div>
           )}
 
-          <Button type="submit" disabled={loading} className="w-full">
+          <Button type="submit" disabled={loading || workspaceLoading || !workspaceReady} className="w-full">
             <Send size={16} className="mr-2" />
-            {loading ? "Sending..." : "Send Invite"}
+            {loading ? "Sending..." : workspaceReady ? "Send Invite" : "Invite blocked until workspace is ready"}
           </Button>
         </form>
       </Card>
@@ -155,6 +249,7 @@ export default function InvitePage() {
                       <Button
                         size="sm"
                         variant="secondary"
+                        disabled={!workspaceReady}
                         onClick={() => resend(c.name, c.email)}
                       >
                         Resend
