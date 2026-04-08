@@ -67,6 +67,18 @@ export interface AppointmentSlot {
   updated_at: string
 }
 
+export interface Exercise {
+  id: string
+  coach_id: string
+  name: string
+  category: string
+  description: string | null
+  coaching_notes: string | null
+  media_url: string | null
+  created_at: string
+  updated_at: string
+}
+
 export interface OnboardingData {
   name: string
   age: number

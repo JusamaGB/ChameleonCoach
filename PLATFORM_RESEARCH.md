@@ -434,7 +434,7 @@ No existing platform offers native two-way Google Sheets integration as a first-
 > Unlocks the PT leads and broadens addressable market.
 
 - [ ] Workout builder (drag-and-drop, set/rep/rest)
-- [ ] Exercise library (basic, expandable)
+- [x] Exercise library (basic, expandable)
 - [ ] Program scheduling
 - [ ] Auto-progression (basic)
 
@@ -556,3 +556,4 @@ No existing platform offers native two-way Google Sheets integration as a first-
 | 2026-04-08 | Google Calendar sync is now part of the appointment confirmation flow. Confirmed sessions create/update Calendar events through the existing appointment routes alongside email notifications. |
 | 2026-04-08 | Phase 1 per-session appointment billing was implemented using the existing single platform Stripe account, shared webhook, Resend mailer, and appointment flows. Stripe Connect / coach payouts remain out of scope for this slice. Stripe test-mode end-to-end payment and webhook verification is intentionally deferred and remains a release gate before marking billing fully complete. |
 | 2026-04-08 | Chameleon Coach public-facing rebrand cleanup is complete. Chameleon Coach is now the fallback platform identity across landing, auth, onboarding, invite/public shell copy, and metadata; coach branding still overrides client-facing surfaces and Powered by Chameleon Coach remains the lower-tier default. |
+| 2026-04-08 | Phase 2 started with the smallest PT-safe slice: a coach-scoped exercise library foundation. V1 includes exercise persistence, create/list/edit admin flows, and client-side search/filtering, while workout builder, scheduling, drag-and-drop, and progression logic remain deferred. |

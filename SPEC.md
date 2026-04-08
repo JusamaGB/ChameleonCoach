@@ -133,6 +133,7 @@ Client can view meal plan, log progress, manage appointments, and pay for confir
 | `/admin/settings` | Google connection + lightweight branding settings |
 | `/admin/appointments` | Appointment management, slots, confirmation/decline, payment request action |
 | `/admin/billing` | Coach subscription billing status and portal actions |
+| `/admin/exercises` | Coach exercise library management for future PT programming |
 
 ---
 
@@ -146,6 +147,7 @@ Client can view meal plan, log progress, manage appointments, and pay for confir
 - Confirming an appointment triggers Google Calendar sync when the appointment has the required data
 - Appointment payment state is stored on the appointment record
 - Stripe webhooks update subscription and appointment payment state
+- Coaches can create, edit, search, and filter their own exercise library records
 - Mobile responsiveness remains a core requirement across client surfaces
 
 ---
@@ -159,7 +161,7 @@ Client can view meal plan, log progress, manage appointments, and pay for confir
 - Invoicing system
 - Reporting dashboards for appointment revenue
 - In-app messaging between coach and client
-- Phase 2 PT builder features such as workouts, exercise library, and program scheduling
+- Phase 2 PT builder features such as drag-and-drop workouts and program scheduling
 
 ---
 

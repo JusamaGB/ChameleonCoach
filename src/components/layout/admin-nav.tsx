@@ -5,13 +5,14 @@ import Link from "next/link"
 import { usePathname, useRouter } from "next/navigation"
 import { createClient } from "@/lib/supabase/client"
 import { cn } from "@/lib/utils"
-import { LayoutDashboard, UserPlus, Settings, LogOut, CreditCard, Calendar, Menu, X } from "lucide-react"
+import { LayoutDashboard, UserPlus, Settings, LogOut, CreditCard, Calendar, Dumbbell, Menu, X } from "lucide-react"
 import { PLATFORM_NAME } from "@/lib/platform"
 
 const navItems = [
   { href: "/admin", label: "Dashboard", icon: LayoutDashboard },
   { href: "/admin/invite", label: "Invite Client", icon: UserPlus },
   { href: "/admin/appointments", label: "Appointments", icon: Calendar },
+  { href: "/admin/exercises", label: "Exercises", icon: Dumbbell },
   { href: "/admin/settings", label: "Settings", icon: Settings },
   { href: "/admin/billing", label: "Billing", icon: CreditCard },
 ]

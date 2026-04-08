@@ -73,11 +73,24 @@ create table appointment_slots (
   updated_at timestamptz default now()
 );
 
+create table exercises (
+  id uuid primary key default gen_random_uuid(),
+  coach_id uuid not null references auth.users(id) on delete cascade,
+  name text not null,
+  category text not null,
+  description text,
+  coaching_notes text,
+  media_url text,
+  created_at timestamptz default now(),
+  updated_at timestamptz default now()
+);
+
 -- Row-level security
 alter table admin_settings enable row level security;
 alter table clients enable row level security;
 alter table appointments enable row level security;
 alter table appointment_slots enable row level security;
+alter table exercises enable row level security;
 
 -- Admin can read/write their own settings
 create policy "admin_own_settings" on admin_settings
@@ -111,6 +124,12 @@ create policy "client_request_appointment" on appointments
   );
 
 create policy "coach_own_appointment_slots" on appointment_slots
+  for all using (
+    (auth.jwt() -> 'app_metadata' ->> 'role') in ('coach', 'admin')
+    and coach_id = auth.uid()
+  );
+
+create policy "coach_own_exercises" on exercises
   for all using (
     (auth.jwt() -> 'app_metadata' ->> 'role') in ('coach', 'admin')
     and coach_id = auth.uid()
@@ -153,3 +172,6 @@ create index idx_appointments_google_calendar_event_id on appointments(google_ca
 create index idx_appointments_payment_checkout_session_id on appointments(payment_checkout_session_id);
 create index idx_appointment_slots_coach_id on appointment_slots(coach_id);
 create index idx_appointment_slots_starts_at on appointment_slots(starts_at);
+create index idx_exercises_coach_id on exercises(coach_id);
+create index idx_exercises_coach_id_category on exercises(coach_id, category);
+create index idx_exercises_coach_id_name on exercises(coach_id, name);
