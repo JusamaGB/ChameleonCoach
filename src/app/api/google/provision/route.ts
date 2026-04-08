@@ -83,9 +83,16 @@ export async function POST() {
       managed_workspace_sheet_url: workspaceSheet.sheetUrl,
       active_modules: currentModules,
     })
-  } catch {
+  } catch (error) {
+    console.error("Failed to provision Chameleon Sheets", error)
+
+    const message =
+      error instanceof Error && error.message
+        ? error.message
+        : "Failed to create Chameleon Sheets in your Google Drive."
+
     return NextResponse.json(
-      { error: "Failed to create Chameleon Sheets in your Google Drive." },
+      { error: message },
       { status: 500 }
     )
   }

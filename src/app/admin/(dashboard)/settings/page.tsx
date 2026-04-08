@@ -446,6 +446,16 @@ export default function SettingsPage() {
             initial connection is in place.
           </p>
         )}
+        {connectionError && (
+          <div className="mb-4 rounded-xl border border-yellow-500/30 bg-yellow-500/5 p-3 text-sm text-yellow-300">
+            {connectionError}
+          </div>
+        )}
+        {connectionMessage && (
+          <div className="mb-4 rounded-xl border border-green-500/30 bg-green-500/5 p-3 text-sm text-green-300">
+            {connectionMessage}
+          </div>
+        )}
 
         <div className="flex items-center justify-between gap-4">
           <div className="flex items-center gap-2">
