@@ -22,6 +22,15 @@ export interface Appointment {
   confirmed_at: string | null
   duration_minutes: number
   coach_note: string | null
+  session_price_amount: number | null
+  session_price_currency: string | null
+  payment_status: 'unpaid' | 'payment_requested' | 'paid' | 'payment_failed'
+  payment_requested_at: string | null
+  payment_checkout_session_id: string | null
+  payment_checkout_url: string | null
+  payment_checkout_expires_at: string | null
+  payment_paid_at: string | null
+  payment_failed_at: string | null
   google_calendar_event_id: string | null
   google_calendar_event_link: string | null
   created_at: string

@@ -4,7 +4,7 @@ import { PLATFORM_NAME } from "@/lib/platform"
 
 export const metadata: Metadata = {
   title: PLATFORM_NAME,
-  description: "Your personalised coaching portal",
+  description: "A coach platform built around the Google Sheets workflow you already own.",
 }
 
 export default function RootLayout({

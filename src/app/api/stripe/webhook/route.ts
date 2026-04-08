@@ -51,5 +51,54 @@ export async function POST(request: NextRequest) {
       .eq("stripe_customer_id", invoice.customer as string)
   }
 
+  if (event.type === "checkout.session.completed") {
+    const session = event.data.object as Stripe.Checkout.Session
+    const appointmentId = session.metadata?.appointment_id
+
+    if (appointmentId && session.mode === "payment") {
+      await supabase
+        .from("appointments")
+        .update({
+          payment_status: "paid",
+          payment_paid_at: new Date().toISOString(),
+          payment_failed_at: null,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", appointmentId)
+    }
+  }
+
+  if (event.type === "checkout.session.expired") {
+    const session = event.data.object as Stripe.Checkout.Session
+    const appointmentId = session.metadata?.appointment_id
+
+    if (appointmentId && session.mode === "payment") {
+      await supabase
+        .from("appointments")
+        .update({
+          payment_status: "payment_failed",
+          payment_failed_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", appointmentId)
+    }
+  }
+
+  if (event.type === "payment_intent.payment_failed") {
+    const paymentIntent = event.data.object as Stripe.PaymentIntent
+    const appointmentId = paymentIntent.metadata?.appointment_id
+
+    if (appointmentId) {
+      await supabase
+        .from("appointments")
+        .update({
+          payment_status: "payment_failed",
+          payment_failed_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", appointmentId)
+    }
+  }
+
   return NextResponse.json({ received: true })
 }

@@ -13,13 +13,19 @@ type Appointment = {
   status: "pending" | "confirmed" | "declined" | "cancelled"
   requested_note: string | null
   confirmed_at: string | null
+  duration_minutes: number
   coach_note: string | null
+  session_price_amount: number | null
+  session_price_currency: string | null
+  payment_status: "unpaid" | "payment_requested" | "paid" | "payment_failed"
+  payment_checkout_url: string | null
   created_at: string
 }
 
 type AppointmentSlot = {
   id: string
   starts_at: string
+  duration_minutes: number
 }
 
 const WEEKDAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
@@ -54,6 +60,48 @@ function formatDateTime(value: string) {
   })
 }
 
+function formatSlotRange(startsAt: string, durationMinutes: number) {
+  const start = new Date(startsAt)
+  const end = new Date(start.getTime() + durationMinutes * 60000)
+  return `${formatDateTime(startsAt)} - ${end.toLocaleTimeString("en-GB", {
+    hour: "2-digit",
+    minute: "2-digit",
+  })}`
+}
+
+function Modal({
+  open,
+  title,
+  description,
+  onClose,
+  children,
+}: {
+  open: boolean
+  title: string
+  description?: string
+  onClose: () => void
+  children: React.ReactNode
+}) {
+  if (!open) return null
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
+      <div className="w-full max-w-3xl rounded-2xl border border-gf-border bg-gf-card p-6 shadow-2xl">
+        <div className="mb-6 flex items-start justify-between gap-4">
+          <div>
+            <h2 className="text-xl font-semibold">{title}</h2>
+            {description ? <p className="mt-1 text-sm text-gf-muted">{description}</p> : null}
+          </div>
+          <button type="button" onClick={onClose} className="text-sm text-gf-muted hover:text-white">
+            Close
+          </button>
+        </div>
+        {children}
+      </div>
+    </div>
+  )
+}
+
 function statusBadge(status: Appointment["status"]) {
   switch (status) {
     case "pending": return <Badge variant="warning">Pending</Badge>
@@ -61,6 +109,23 @@ function statusBadge(status: Appointment["status"]) {
     case "declined": return <Badge variant="default">Declined</Badge>
     case "cancelled": return <Badge variant="default">Cancelled</Badge>
   }
+}
+
+function paymentBadge(status: Appointment["payment_status"]) {
+  switch (status) {
+    case "paid": return <Badge variant="success">Paid</Badge>
+    case "payment_requested": return <Badge variant="warning">Payment requested</Badge>
+    case "payment_failed": return <Badge variant="default">Payment issue</Badge>
+    case "unpaid": return <Badge variant="default">Unpaid</Badge>
+  }
+}
+
+function formatMoney(amount: number | null, currency: string | null) {
+  if (!amount || !currency) return null
+  return new Intl.NumberFormat("en-GB", {
+    style: "currency",
+    currency: currency.toUpperCase(),
+  }).format(amount / 100)
 }
 
 export default function AppointmentsPage() {
@@ -82,6 +147,7 @@ export default function AppointmentsPage() {
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState("")
   const [success, setSuccess] = useState(false)
+  const [dayDetailOpen, setDayDetailOpen] = useState(false)
 
   useEffect(() => {
     Promise.all([
@@ -250,7 +316,10 @@ export default function AppointmentsPage() {
                   <button
                     key={dayKey}
                     type="button"
-                    onClick={() => setRequestedFor((current) => withSelectedDay(current, date))}
+                    onClick={() => {
+                      setRequestedFor((current) => withSelectedDay(current, date))
+                      setDayDetailOpen(true)
+                    }}
                     className={[
                       "min-h-20 rounded-xl border p-2 text-left transition-colors",
                       isCurrentMonth
@@ -313,103 +382,6 @@ export default function AppointmentsPage() {
               {submitting ? "Sending..." : "Request Session"}
             </Button>
           </form>
-          {bookingMode === "client_request_visible_slots" && (
-            <div className="mt-6 border-t border-gf-border pt-4">
-              <h3 className="font-medium mb-2">Published Slots</h3>
-              <p className="text-xs text-gf-muted mb-3">
-                Select a day on the calendar to see any coach-published slots you can request.
-              </p>
-              {selectedSlots.length > 0 ? (
-                <div className="space-y-2">
-                  {selectedSlots.map((slot) => (
-                    <div
-                      key={slot.id}
-                      className="flex items-center justify-between gap-3 rounded-lg border border-gf-border px-3 py-2"
-                    >
-                      <p className="text-sm">{formatDateTime(slot.starts_at)}</p>
-                      <Button
-                        type="button"
-                        size="sm"
-                        disabled={submitting}
-                        onClick={() => requestVisibleSlot(slot.id, slot.starts_at)}
-                        style={{ backgroundColor: branding.brand_primary_color }}
-                      >
-                        Request Slot
-                      </Button>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <p className="text-sm text-gf-muted">No published slots for the selected day.</p>
-              )}
-            </div>
-          )}
-        </Card>
-
-        <Card className="mb-8">
-          <h2 className="text-lg font-semibold mb-2">
-            {selectedDate.toLocaleDateString("en-GB", { dateStyle: "full" })}
-          </h2>
-          <p className="text-sm text-gf-muted mb-4">
-            Review appointments and available slots for the selected day.
-          </p>
-
-          <div className="mb-4">
-            <h3 className="font-medium mb-2">Appointments</h3>
-            {selectedAppointments.length > 0 ? (
-              <div className="space-y-2">
-                {selectedAppointments.map((appointment) => (
-                  <div
-                    key={appointment.id}
-                    className="flex items-center justify-between gap-3 rounded-lg border border-gf-border px-3 py-2"
-                  >
-                    <div>
-                      <p className="text-sm font-medium">
-                        {appointment.confirmed_at
-                          ? formatDateTime(appointment.confirmed_at)
-                          : `Requested ${new Date(appointment.created_at).toLocaleDateString("en-GB")}`}
-                      </p>
-                      {appointment.requested_note && (
-                        <p className="text-xs text-gf-muted mt-1">"{appointment.requested_note}"</p>
-                      )}
-                    </div>
-                    {statusBadge(appointment.status)}
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <p className="text-sm text-gf-muted">No appointments for this day.</p>
-            )}
-          </div>
-
-          {bookingMode === "client_request_visible_slots" && (
-            <div>
-              <h3 className="font-medium mb-2">Open Slots</h3>
-              {selectedSlots.length > 0 ? (
-                <div className="space-y-2">
-                  {selectedSlots.map((slot) => (
-                    <div
-                      key={`detail-${slot.id}`}
-                      className="flex items-center justify-between gap-3 rounded-lg border border-gf-border px-3 py-2"
-                    >
-                      <p className="text-sm">{formatDateTime(slot.starts_at)}</p>
-                      <Button
-                        type="button"
-                        size="sm"
-                        disabled={submitting}
-                        onClick={() => requestVisibleSlot(slot.id, slot.starts_at)}
-                        style={{ backgroundColor: branding.brand_primary_color }}
-                      >
-                        Request Slot
-                      </Button>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <p className="text-sm text-gf-muted">No open slots for this day.</p>
-              )}
-            </div>
-          )}
         </Card>
 
         {confirmed.length > 0 && (
@@ -428,8 +400,29 @@ export default function AppointmentsPage() {
                       {a.coach_note && (
                         <p className="text-sm text-gf-muted">"{a.coach_note}"</p>
                       )}
+                      {formatMoney(a.session_price_amount, a.session_price_currency) && (
+                        <p className="text-sm text-gf-muted">
+                          Amount due: {formatMoney(a.session_price_amount, a.session_price_currency)}
+                        </p>
+                      )}
+                      {a.payment_status !== "paid" && a.payment_checkout_url && (
+                        <Button
+                          type="button"
+                          size="sm"
+                          className="mt-2"
+                          onClick={() => {
+                            window.location.href = a.payment_checkout_url!
+                          }}
+                          style={{ backgroundColor: branding.brand_primary_color }}
+                        >
+                          Pay Now
+                        </Button>
+                      )}
                     </div>
-                    {statusBadge(a.status)}
+                    <div className="flex flex-col items-end gap-2">
+                      {statusBadge(a.status)}
+                      {paymentBadge(a.payment_status)}
+                    </div>
                   </div>
                 </Card>
               ))}
@@ -486,6 +479,74 @@ export default function AppointmentsPage() {
         {appointments.length === 0 && (
           <p className="text-gf-muted text-sm">No appointments yet. Request your first session above.</p>
         )}
+
+        <Modal
+          open={dayDetailOpen}
+          title={selectedDate.toLocaleDateString("en-GB", { dateStyle: "full" })}
+          description={
+            bookingMode === "client_request_visible_slots"
+              ? "Review your appointments and request any visible slots for this day."
+              : "Review your appointments for this day."
+          }
+          onClose={() => setDayDetailOpen(false)}
+        >
+          <div className="mb-4">
+            <h3 className="mb-2 font-medium">Appointments</h3>
+            {selectedAppointments.length > 0 ? (
+              <div className="space-y-2">
+                {selectedAppointments.map((appointment) => (
+                  <div
+                    key={appointment.id}
+                    className="flex items-center justify-between gap-3 rounded-lg border border-gf-border px-3 py-2"
+                  >
+                    <div>
+                      <p className="text-sm font-medium">
+                        {appointment.confirmed_at
+                          ? formatSlotRange(appointment.confirmed_at, appointment.duration_minutes)
+                          : `Requested ${new Date(appointment.created_at).toLocaleDateString("en-GB")}`}
+                      </p>
+                      {appointment.requested_note && (
+                        <p className="mt-1 text-xs text-gf-muted">"{appointment.requested_note}"</p>
+                      )}
+                    </div>
+                    {statusBadge(appointment.status)}
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-sm text-gf-muted">No appointments for this day.</p>
+            )}
+          </div>
+
+          {bookingMode === "client_request_visible_slots" && (
+            <div>
+              <h3 className="mb-2 font-medium">Visible slots</h3>
+              {selectedSlots.length > 0 ? (
+                <div className="space-y-2">
+                  {selectedSlots.map((slot) => (
+                    <div
+                      key={`detail-${slot.id}`}
+                      className="flex items-center justify-between gap-3 rounded-lg border border-gf-border px-3 py-2"
+                    >
+                      <p className="text-sm">{formatSlotRange(slot.starts_at, slot.duration_minutes)}</p>
+                      <Button
+                        type="button"
+                        size="sm"
+                        disabled={submitting}
+                        onClick={() => requestVisibleSlot(slot.id, slot.starts_at)}
+                        style={{ backgroundColor: branding.brand_primary_color }}
+                      >
+                        Request Slot
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-sm text-gf-muted">No visible slots for this day.</p>
+              )}
+            </div>
+          )}
+        </Modal>
 
         {branding.show_powered_by && <PoweredBy className="mt-8" />}
       </main>

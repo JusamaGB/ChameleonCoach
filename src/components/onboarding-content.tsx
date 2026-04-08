@@ -53,8 +53,7 @@ export default function OnboardingContent() {
         <Card className="text-center max-w-sm">
           <h2 className="text-xl font-semibold mb-2">Invalid Invite</h2>
           <p className="text-sm text-gf-muted">
-            This invite link isn&apos;t valid. Please ask your coach to send a
-            new one.
+            This invite link isn&apos;t valid. Ask your coach to send a fresh onboarding invite.
           </p>
           {branding.show_powered_by && <PoweredBy className="mt-6" />}
         </Card>
@@ -68,8 +67,7 @@ export default function OnboardingContent() {
         <Card className="text-center max-w-sm">
           <h2 className="text-xl font-semibold mb-2">Invite Expired</h2>
           <p className="text-sm text-gf-muted">
-            This invite link has expired. Please ask your coach to send a new
-            one.
+            This invite link has expired. Ask your coach to send a new onboarding invite.
           </p>
           {branding.show_powered_by && <PoweredBy className="mt-6" />}
         </Card>
@@ -101,6 +99,9 @@ export default function OnboardingContent() {
         </h1>
         <p className="mt-2" style={{ color: branding.brand_accent_color }}>
           {branding.brand_welcome_text}
+        </p>
+        <p className="mt-3 text-sm text-gf-muted">
+          Complete your onboarding to activate your client portal.
         </p>
       </div>
       <OnboardingForm token={token!} email={email} branding={branding} />

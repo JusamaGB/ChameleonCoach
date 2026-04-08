@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 
 type BookingMode = "coach_only" | "client_request_visible_slots"
+type PaymentStatus = "unpaid" | "payment_requested" | "paid" | "payment_failed"
 
 type Appointment = {
   id: string
@@ -14,6 +15,12 @@ type Appointment = {
   confirmed_at: string | null
   duration_minutes: number
   coach_note: string | null
+  session_price_amount: number | null
+  session_price_currency: string | null
+  payment_status: PaymentStatus
+  payment_checkout_url: string | null
+  payment_paid_at: string | null
+  payment_failed_at: string | null
   created_at: string
   clients: { id: string; name: string | null; email: string } | null
 }
@@ -89,6 +96,15 @@ function eventClasses(status: Appointment["status"]) {
   }
 }
 
+function paymentBadge(status: PaymentStatus) {
+  switch (status) {
+    case "paid": return <Badge variant="success">Paid</Badge>
+    case "payment_requested": return <Badge variant="warning">Payment requested</Badge>
+    case "payment_failed": return <Badge variant="default">Payment failed</Badge>
+    case "unpaid": return <Badge variant="default">Unpaid</Badge>
+  }
+}
+
 function toLocalDateTimeValue(value: string) {
   const date = new Date(value)
   const adjusted = new Date(date.getTime() - date.getTimezoneOffset() * 60000)
@@ -109,6 +125,14 @@ function formatSlotRange(startsAt: string, durationMinutes: number) {
     hour: "2-digit",
     minute: "2-digit",
   })}`
+}
+
+function formatMoney(amount: number | null, currency: string | null) {
+  if (!amount || !currency) return null
+  return new Intl.NumberFormat("en-GB", {
+    style: "currency",
+    currency: currency.toUpperCase(),
+  }).format(amount / 100)
 }
 
 function combineDateAndTime(dateValue: string, timeValue: string) {
@@ -234,6 +258,76 @@ function DeclineForm({ id, onDone }: { id: string; onDone: () => void }) {
           Cancel
         </button>
       </div>
+    </div>
+  )
+}
+
+function PaymentRequestForm({
+  appointment,
+  onDone,
+}: {
+  appointment: Appointment
+  onDone: () => void
+}) {
+  const [amount, setAmount] = useState(
+    appointment.session_price_amount ? (appointment.session_price_amount / 100).toFixed(2) : ""
+  )
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState("")
+
+  async function submit() {
+    const value = Number(amount)
+    if (!Number.isFinite(value) || value <= 0) {
+      setError("Enter a valid amount")
+      return
+    }
+
+    setLoading(true)
+    setError("")
+
+    const res = await fetch(`/api/admin/appointments/${appointment.id}/payment-request`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ amount: Math.round(value * 100), currency: "gbp" }),
+    })
+    const data = await res.json()
+
+    if (!res.ok) {
+      setError(data.error || "Failed to send payment request")
+      setLoading(false)
+      return
+    }
+
+    if (data.emailSent === false) {
+      window.alert("Payment link created, but the email could not be sent.")
+    }
+
+    setLoading(false)
+    onDone()
+  }
+
+  return (
+    <div className="mt-3 space-y-2 border-t border-gf-border pt-3">
+      <div className="flex flex-col gap-2 sm:flex-row">
+        <input
+          type="number"
+          min="0"
+          step="0.01"
+          inputMode="decimal"
+          value={amount}
+          onChange={(e) => setAmount(e.target.value)}
+          placeholder="Session price (GBP)"
+          className="w-full rounded-lg border border-gf-border bg-gf-surface px-3 py-2 text-sm text-white placeholder-gf-muted focus:border-gf-pink focus:outline-none"
+        />
+        <Button type="button" onClick={submit} disabled={loading || !amount} className="sm:w-auto">
+          {loading
+            ? "Sending..."
+            : appointment.payment_status === "payment_requested" || appointment.payment_status === "payment_failed"
+              ? "Resend Payment Request"
+              : "Send Payment Request"}
+        </Button>
+      </div>
+      {error ? <p className="text-sm text-red-400">{error}</p> : null}
     </div>
   )
 }
@@ -643,9 +737,20 @@ export default function AdminAppointmentsPage() {
                     {a.coach_note && (
                       <p className="text-sm text-gf-muted">"{a.coach_note}"</p>
                     )}
+                    {formatMoney(a.session_price_amount, a.session_price_currency) && (
+                      <p className="text-sm text-gf-muted">
+                        {formatMoney(a.session_price_amount, a.session_price_currency)}
+                      </p>
+                    )}
                   </div>
-                  {statusBadge(a.status)}
+                  <div className="flex flex-col items-end gap-2">
+                    {statusBadge(a.status)}
+                    {paymentBadge(a.payment_status)}
+                  </div>
                 </div>
+                {a.payment_status !== "paid" ? (
+                  <PaymentRequestForm appointment={a} onDone={load} />
+                ) : null}
               </Card>
             ))}
           </div>

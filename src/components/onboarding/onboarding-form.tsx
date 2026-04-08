@@ -248,7 +248,7 @@ export function OnboardingForm({ token, email, branding }: Props) {
 
           {isLastStep ? (
             <Button onClick={handleSubmit} disabled={loading} style={{ backgroundColor: branding.brand_primary_color }}>
-              {loading ? "Setting up..." : "Complete Setup"}
+              {loading ? "Setting up..." : "Finish Onboarding"}
             </Button>
           ) : (
             <Button onClick={() => setStep(step + 1)} style={{ backgroundColor: branding.brand_primary_color }}>

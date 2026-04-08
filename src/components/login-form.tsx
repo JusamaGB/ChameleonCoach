@@ -63,15 +63,15 @@ export default function LoginForm() {
           {PLATFORM_NAME}
         </h1>
         <p className="text-gf-muted text-center text-sm mb-8">
-          Log in to your account
+          Sign in to your coaching portal
         </p>
 
         {(onboarded || registered) && (
           <div className="bg-green-900/20 border border-green-800 rounded-lg p-3 mb-6">
             <p className="text-sm text-green-400 text-center">
               {registered
-                ? "Account created! Check your email to confirm, then log in."
-                : "Account created! Log in to get started."}
+                ? "Account created. Check your email to confirm it, then sign in."
+                : "Account created. Sign in to get started."}
             </p>
           </div>
         )}
@@ -106,7 +106,7 @@ export default function LoginForm() {
         <p className="text-center text-sm text-gf-muted mt-6">
           Don&apos;t have an account?{" "}
           <a href="/register" className="text-gf-pink hover:underline">
-            Sign Up
+            Create an account
           </a>
         </p>
       </div>

@@ -61,7 +61,7 @@ export default function RegisterCoachPage() {
           {PLATFORM_NAME}
         </h1>
         <p className="text-gf-muted text-center text-sm mb-8">
-          Create your coach account
+          Create your coach workspace
         </p>
 
         <Card>
@@ -101,7 +101,7 @@ export default function RegisterCoachPage() {
             {error && <p className="text-sm text-red-400">{error}</p>}
 
             <Button type="submit" disabled={loading} className="w-full">
-              {loading ? "Creating account..." : "Create Coach Account"}
+              {loading ? "Creating account..." : "Create Coach Workspace"}
             </Button>
           </form>
         </Card>

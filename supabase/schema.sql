@@ -46,6 +46,16 @@ create table appointments (
   confirmed_at timestamptz,
   duration_minutes integer not null default 60,
   coach_note text,
+  session_price_amount integer,
+  session_price_currency text,
+  payment_status text not null default 'unpaid'
+    check (payment_status in ('unpaid', 'payment_requested', 'paid', 'payment_failed')),
+  payment_requested_at timestamptz,
+  payment_checkout_session_id text,
+  payment_checkout_url text,
+  payment_checkout_expires_at timestamptz,
+  payment_paid_at timestamptz,
+  payment_failed_at timestamptz,
   google_calendar_event_id text,
   google_calendar_event_link text,
   created_at timestamptz default now(),
@@ -140,5 +150,6 @@ create index idx_clients_user_id on clients(user_id);
 create index idx_appointments_coach_id on appointments(coach_id);
 create index idx_appointments_client_id on appointments(client_id);
 create index idx_appointments_google_calendar_event_id on appointments(google_calendar_event_id);
+create index idx_appointments_payment_checkout_session_id on appointments(payment_checkout_session_id);
 create index idx_appointment_slots_coach_id on appointment_slots(coach_id);
 create index idx_appointment_slots_starts_at on appointment_slots(starts_at);

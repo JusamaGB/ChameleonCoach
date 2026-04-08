@@ -67,7 +67,7 @@ export default function RegisterForm() {
           {PLATFORM_NAME}
         </h1>
         <p className="text-gf-muted text-center text-sm mb-8">
-          Create your account
+          Create your client account
         </p>
 
         <Card>
@@ -107,7 +107,7 @@ export default function RegisterForm() {
             {error && <p className="text-sm text-red-400">{error}</p>}
 
             <Button type="submit" disabled={loading} className="w-full">
-              {loading ? "Creating account..." : "Sign Up"}
+              {loading ? "Creating account..." : "Create Account"}
             </Button>
           </form>
         </Card>

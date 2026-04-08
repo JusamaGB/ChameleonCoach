@@ -7,16 +7,16 @@ export const dynamic = "force-dynamic"
 
 const features = [
   {
-    title: "Meal Plans",
-    description: "Build personalised weekly meal plans for each client. Templates, column fill, and instant sync to Google Sheets.",
+    title: "Google Sheets, Kept Intact",
+    description: "Keep the workflow you already run. Every client syncs to their own Sheet in your Drive, without locking your data away.",
   },
   {
-    title: "Progress Tracking",
-    description: "Clients log weight, measurements, and notes. You see the trend. All data lives in their own Google Sheet.",
+    title: "Client Portal",
+    description: "Give clients a clean portal for meal plans, progress, appointments, and onboarding while your backend stays familiar.",
   },
   {
-    title: "Appointment Booking",
-    description: "Clients request sessions, you confirm with date and time. Email notifications keep everyone in the loop.",
+    title: "Built For Early Coaching Ops",
+    description: "Invites, onboarding, appointments, billing hooks, and progress tracking are ready for a practical Phase 1 launch.",
   },
 ]
 
@@ -28,8 +28,8 @@ export default function LandingPage() {
         <h1 className="text-5xl sm:text-6xl font-bold mb-3">
           <span className="text-gf-pink">{PLATFORM_NAME}</span>
         </h1>
-        <p className="text-gf-muted text-lg max-w-md mb-8">
-          The coaching portal built for personal trainers and nutritionists who actually use Google Sheets.
+        <p className="text-gf-muted text-lg max-w-2xl mb-8">
+          Your Google Sheets workflow, with a real coach platform on top. Built for nutritionists, PTs, and coaches who want client-facing polish without giving up their data.
         </p>
         <div className="flex flex-col items-center gap-3">
           <Link href="/register/coach">
@@ -58,10 +58,9 @@ export default function LandingPage() {
 
       {/* Google Sheets callout */}
       <section className="px-6 pb-12 max-w-2xl mx-auto text-center">
-        <h2 className="text-xl font-bold mb-3">Your data, your way</h2>
+        <h2 className="text-xl font-bold mb-3">Your data stays yours</h2>
         <p className="text-gf-muted text-sm leading-relaxed">
-          Every client gets their own Google Sheet in your Drive. No proprietary exports, no lock-in.
-          Connect once and every update syncs instantly. Your clients can&apos;t see each other&apos;s data.
+          Every client gets their own Google Sheet in your Drive. No proprietary data trap, no messy shared links, and no need to rebuild your operating system from scratch.
         </p>
       </section>
     </div>

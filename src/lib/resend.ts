@@ -136,3 +136,40 @@ export async function sendAppointmentConfirmedEmail(
     `,
   })
 }
+
+export async function sendAppointmentPaymentRequestEmail(
+  clientEmail: string,
+  clientName: string,
+  confirmedAt: string,
+  amount: number,
+  currency: string,
+  checkoutUrl: string
+) {
+  const formattedAmount = new Intl.NumberFormat("en-GB", {
+    style: "currency",
+    currency: currency.toUpperCase(),
+  }).format(amount / 100)
+
+  await getResend().emails.send({
+    from: `${PLATFORM_NAME} <notifications@resend.dev>`,
+    to: clientEmail,
+    subject: "Pay for your confirmed session",
+    html: `
+      <div style="font-family: system-ui, sans-serif; max-width: 480px; margin: 0 auto; background: #0a0a0a; color: #ffffff; padding: 40px; border-radius: 12px;">
+        <h1 style="color: #ff2d8a; font-size: 24px; margin: 0 0 24px 0;">${PLATFORM_NAME}</h1>
+        <p style="font-size: 16px; line-height: 1.6; margin: 0 0 16px 0;">
+          Hi ${clientName}, your session has been confirmed and is ready for payment.
+        </p>
+        <p style="font-size: 15px; color: #cccccc; margin: 0 0 12px 0;">
+          <strong>Date &amp; Time:</strong> ${new Date(confirmedAt).toLocaleString("en-GB", { dateStyle: "full", timeStyle: "short" })}
+        </p>
+        <p style="font-size: 15px; color: #cccccc; margin: 0 0 24px 0;">
+          <strong>Amount due:</strong> ${formattedAmount}
+        </p>
+        <a href="${checkoutUrl}" style="display: inline-block; background: #ff2d8a; color: #ffffff; text-decoration: none; padding: 14px 32px; border-radius: 8px; font-weight: 600; font-size: 16px;">
+          Pay Now
+        </a>
+      </div>
+    `,
+  })
+}

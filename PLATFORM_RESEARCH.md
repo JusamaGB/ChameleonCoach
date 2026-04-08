@@ -425,10 +425,10 @@ No existing platform offers native two-way Google Sheets integration as a first-
 
 - [x] Multi-coach sign-up (remove hardcoded single-admin architecture)
 - [x] Google Sheets connection in admin settings (each coach connects their own Google account)
-- [ ] Basic appointment booking (Google Calendar sync) — app-side booking complete (request/confirm/decline + email notifications); Google Calendar sync not yet built
-- [ ] Stripe payment integration (subscription + per-session) — recurring subscription billing complete (trial + monthly + webhooks); per-session billing not yet built
+- [x] Basic appointment booking (Google Calendar sync) — request/confirm/decline flows, email notifications, coach-created bookings, slot requests, and Google Calendar sync are now live in app
+- [ ] Stripe payment integration (subscription + per-session) — recurring subscription billing complete (trial + monthly + webhooks); per-session appointment billing now implemented on the platform Stripe account; still need deferred Stripe test-mode end-to-end validation for Checkout + webhook status updates before calling this complete
 - [x] Improved meal plan builder
-- [ ] Rebrand away from G-Fitness (new name, new landing page leading with Sheets differentiator)
+- [x] Rebrand away from G-Fitness (new name, new landing page leading with Sheets differentiator) — public-facing fallback branding, landing/auth/onboarding copy, invite/public shell text, and client-facing shell cleaned up around Chameleon Coach defaults
 
 ### Phase 2 — PT Module
 > Unlocks the PT leads and broadens addressable market.
@@ -553,3 +553,6 @@ No existing platform offers native two-way Google Sheets integration as a first-
 | 2026-04-07 | Phase 1 partially complete. Multi-coach, Sheets connection, and meal plan builder done. Remaining: Google Calendar sync, per-session billing, rebrand. |
 | 2026-04-07 | Google Calendar sync and per-session billing deprioritised within Phase 1 — appointment booking works without calendar sync, and subscription billing is sufficient for initial pitches. Decision: assess whether these are needed before cold outreach or can slip to Phase 2. |
 | 2026-04-08 | Platform naming direction set to Chameleon Coach. White-label strategy formalised as coach-level customisation with V1 fields limited to title, logo, primary colour, accent colour, and welcome text; lower tiers retain Powered by Chameleon Coach branding; future implementation should reuse existing coach settings/profile storage with minimal diffs where possible. |
+| 2026-04-08 | Google Calendar sync is now part of the appointment confirmation flow. Confirmed sessions create/update Calendar events through the existing appointment routes alongside email notifications. |
+| 2026-04-08 | Phase 1 per-session appointment billing was implemented using the existing single platform Stripe account, shared webhook, Resend mailer, and appointment flows. Stripe Connect / coach payouts remain out of scope for this slice. Stripe test-mode end-to-end payment and webhook verification is intentionally deferred and remains a release gate before marking billing fully complete. |
+| 2026-04-08 | Chameleon Coach public-facing rebrand cleanup is complete. Chameleon Coach is now the fallback platform identity across landing, auth, onboarding, invite/public shell copy, and metadata; coach branding still overrides client-facing surfaces and Powered by Chameleon Coach remains the lower-tier default. |

@@ -65,7 +65,7 @@ export function ClientNav() {
               <h1 className="text-xl font-bold" style={{ color: branding.brand_primary_color }}>
                 {branding.brand_title}
               </h1>
-              <p className="text-xs text-gf-muted">Client portal</p>
+              <p className="text-xs text-gf-muted">Your coaching portal</p>
             </div>
           </div>
         </Link>
