@@ -83,10 +83,10 @@ async function lookupDriveFileById(
   try {
     const file = await drive.files.get({
       fileId,
-      fields: "id, mimeType, webViewLink",
+      fields: "id, mimeType, webViewLink, trashed",
     })
 
-    if (!file.data.id) {
+    if (!file.data.id || file.data.trashed) {
       return null
     }
 
