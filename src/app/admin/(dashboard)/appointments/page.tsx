@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react"
 import { Card } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
+import { Select } from "@/components/ui/input"
 
 type BookingMode = "coach_only" | "client_request_visible_slots"
 type PaymentStatus = "unpaid" | "payment_requested" | "paid" | "payment_failed"
@@ -337,6 +338,9 @@ export default function AdminAppointmentsPage() {
   const [slots, setSlots] = useState<AppointmentSlot[]>([])
   const [clients, setClients] = useState<ClientOption[]>([])
   const [bookingMode, setBookingMode] = useState<BookingMode>("coach_only")
+  const [bookingModeSaving, setBookingModeSaving] = useState(false)
+  const [bookingModeSaved, setBookingModeSaved] = useState(false)
+  const [bookingModeError, setBookingModeError] = useState("")
   const [confirming, setConfirming] = useState<string | null>(null)
   const [declining, setDeclining] = useState<string | null>(null)
   const [selectedSlotId, setSelectedSlotId] = useState<string | null>(null)
@@ -411,6 +415,31 @@ export default function AdminAppointmentsPage() {
       body: JSON.stringify({ client_id: slotClientId, note: slotNote }),
     })
     load()
+  }
+
+  async function saveBookingMode(e: React.FormEvent) {
+    e.preventDefault()
+    setBookingModeSaving(true)
+    setBookingModeSaved(false)
+    setBookingModeError("")
+
+    try {
+      const res = await fetch("/api/admin/profile", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ appointment_booking_mode: bookingMode }),
+      })
+
+      if (!res.ok) throw new Error()
+
+      setBookingModeSaved(true)
+      setTimeout(() => setBookingModeSaved(false), 3000)
+      load()
+    } catch {
+      setBookingModeError("Failed to save booking mode. Please try again.")
+    } finally {
+      setBookingModeSaving(false)
+    }
   }
 
   const pending = appointments.filter((a) => a.status === "pending")
@@ -550,6 +579,34 @@ export default function AdminAppointmentsPage() {
           </Button>
         </div>
       </div>
+
+      <Card className="mb-8">
+        <h2 className="text-lg font-semibold">Appointment Booking</h2>
+        <p className="mt-2 text-sm text-gf-muted">
+          Control whether clients only request sessions manually or can also see published slots.
+        </p>
+        <form onSubmit={saveBookingMode} className="mt-4 space-y-4">
+          <Select
+            label="Booking Mode"
+            value={bookingMode}
+            onChange={(e) => setBookingMode(e.target.value as BookingMode)}
+            options={[
+              { value: "coach_only", label: "Coach only" },
+              { value: "client_request_visible_slots", label: "Client request visible slots" },
+            ]}
+          />
+          <p className="text-xs text-gf-muted">
+            Clients are never auto-confirmed in this mode. Coaches still confirm or decline requests manually.
+          </p>
+          {bookingModeError ? <p className="text-sm text-red-400">{bookingModeError}</p> : null}
+          <div className="flex items-center gap-3">
+            <Button type="submit" disabled={bookingModeSaving} size="sm">
+              {bookingModeSaving ? "Saving..." : "Save Booking Mode"}
+            </Button>
+            {bookingModeSaved ? <span className="text-sm text-green-400">Saved</span> : null}
+          </div>
+        </form>
+      </Card>
 
       <section className="mb-8">
         <div className="flex items-center justify-between gap-3 mb-3">

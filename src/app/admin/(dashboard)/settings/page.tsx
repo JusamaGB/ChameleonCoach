@@ -4,7 +4,7 @@ import { useEffect, useState } from "react"
 import Link from "next/link"
 import { useSearchParams } from "next/navigation"
 import { Button } from "@/components/ui/button"
-import { Input, Select, TextArea } from "@/components/ui/input"
+import { Input, TextArea } from "@/components/ui/input"
 import { Card, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Link2, CheckCircle, AlertCircle, ArrowRight, CreditCard, Layers3 } from "lucide-react"
@@ -43,7 +43,6 @@ export default function SettingsPage() {
   const [showPoweredBy, setShowPoweredBy] = useState(true)
   const [coachTypePreset, setCoachTypePreset] = useState<CoachTypePreset | null>(null)
   const [activeModules, setActiveModules] = useState<EnableableModule[]>([])
-  const [appointmentBookingMode, setAppointmentBookingMode] = useState("coach_only")
   const [profileLoading, setProfileLoading] = useState(false)
   const [profileSaved, setProfileSaved] = useState(false)
   const [profileError, setProfileError] = useState("")
@@ -131,7 +130,6 @@ export default function SettingsPage() {
         setShowPoweredBy(data.show_powered_by ?? true)
         setCoachTypePreset(data.coach_type_preset ?? null)
         setActiveModules(Array.isArray(data.active_modules) ? data.active_modules : [])
-        setAppointmentBookingMode(data.appointment_booking_mode ?? "coach_only")
       })
       .catch(() => {})
   }
@@ -156,7 +154,6 @@ export default function SettingsPage() {
           show_powered_by: showPoweredBy,
           coach_type_preset: coachTypePreset,
           active_modules: activeModules,
-          appointment_booking_mode: appointmentBookingMode,
         }),
       })
       if (!res.ok) throw new Error()
@@ -278,98 +275,6 @@ export default function SettingsPage() {
       </Card>
 
       <Card className="mb-6">
-        <CardTitle>Client Branding</CardTitle>
-        <p className="text-sm text-gf-muted mt-2 mb-4">
-          Lightweight branding for client-facing, invite, and onboarding surfaces.
-        </p>
-        <form onSubmit={saveProfile} className="space-y-4">
-          <Input
-            label="Brand Title"
-            value={brandTitle}
-            onChange={(e) => setBrandTitle(e.target.value)}
-            placeholder="e.g. Eliot Nutrition"
-          />
-          <Input
-            label="Logo URL"
-            value={brandLogoUrl}
-            onChange={(e) => setBrandLogoUrl(e.target.value)}
-            placeholder="https://..."
-          />
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <Input
-              label="Primary Color"
-              type="color"
-              value={brandPrimaryColor}
-              onChange={(e) => setBrandPrimaryColor(e.target.value)}
-              className="h-12"
-            />
-            <Input
-              label="Accent Color"
-              type="color"
-              value={brandAccentColor}
-              onChange={(e) => setBrandAccentColor(e.target.value)}
-              className="h-12"
-            />
-          </div>
-          <TextArea
-            label="Welcome Text"
-            value={brandWelcomeText}
-            onChange={(e) => setBrandWelcomeText(e.target.value)}
-            placeholder="Short welcome shown to clients during onboarding and in the client portal."
-          />
-          <label className="flex items-center gap-3 text-sm text-white">
-            <input
-              type="checkbox"
-              checked={showPoweredBy}
-              onChange={(e) => setShowPoweredBy(e.target.checked)}
-              className="h-4 w-4 rounded border-gf-border bg-gf-surface"
-            />
-            Show "Powered by Chameleon Coach"
-          </label>
-          <div className="rounded-xl border border-gf-border bg-gf-surface p-4">
-            <div className="flex items-center gap-3">
-              {brandLogoUrl ? (
-                <img
-                  src={brandLogoUrl}
-                  alt={`${brandTitle || "Brand"} logo`}
-                  className="h-10 w-10 rounded-lg object-cover"
-                />
-              ) : (
-                <div
-                  className="flex h-10 w-10 items-center justify-center rounded-lg text-sm font-bold text-white"
-                  style={{ backgroundColor: brandPrimaryColor }}
-                >
-                  {(brandTitle || "C").slice(0, 1).toUpperCase()}
-                </div>
-              )}
-              <div>
-                <p className="font-semibold" style={{ color: brandPrimaryColor }}>
-                  {brandTitle || DEFAULT_COACH_BRANDING.brand_title}
-                </p>
-                <p className="text-sm" style={{ color: brandAccentColor }}>
-                  {brandWelcomeText || DEFAULT_COACH_BRANDING.brand_welcome_text}
-                </p>
-              </div>
-            </div>
-            {showPoweredBy && (
-              <p className="mt-4 text-xs text-gf-muted/70">Powered by Chameleon Coach</p>
-            )}
-          </div>
-          {profileError && <p className="text-sm text-red-400">{profileError}</p>}
-          <div className="flex items-center gap-3">
-            <Button type="submit" disabled={profileLoading} size="sm">
-              {profileLoading ? "Saving..." : "Save Branding"}
-            </Button>
-            {profileSaved && (
-              <span className="text-sm text-green-400 flex items-center gap-1">
-                <CheckCircle size={14} /> Saved
-              </span>
-            )}
-          </div>
-        </form>
-      </Card>
-
-      <Card className="mb-6">
         <CardTitle>Workspace Surfaces</CardTitle>
         <p className="text-sm text-gf-muted mt-2 mb-4">
           Module bundles and billing are now accessed from dedicated workspace-level surfaces instead of living in the main client workflow.
@@ -408,37 +313,105 @@ export default function SettingsPage() {
         </div>
       </Card>
 
-      <Card className="mb-6">
-        <CardTitle>Appointment Booking</CardTitle>
-        <p className="text-sm text-gf-muted mt-2 mb-4">
-          Control whether clients only request sessions manually or can also see published slots.
-        </p>
-        <form onSubmit={saveProfile} className="space-y-4">
-          <Select
-            label="Booking Mode"
-            value={appointmentBookingMode}
-            onChange={(e) => setAppointmentBookingMode(e.target.value)}
-            options={[
-              { value: "coach_only", label: "Coach only" },
-              { value: "client_request_visible_slots", label: "Client request visible slots" },
-            ]}
-          />
-          <p className="text-xs text-gf-muted">
-            Clients are never auto-confirmed in this mode. Coaches still confirm or decline requests manually.
+      <section className="mb-6">
+        <div className="mb-3">
+          <h2 className="text-lg font-semibold">Premium</h2>
+          <p className="mt-1 text-sm text-gf-muted">
+            Premium features live here so future upgrades can be added without cluttering general settings.
           </p>
-          {profileError && <p className="text-sm text-red-400">{profileError}</p>}
-          <div className="flex items-center gap-3">
-            <Button type="submit" disabled={profileLoading} size="sm">
-              {profileLoading ? "Saving..." : "Save Booking Mode"}
-            </Button>
-            {profileSaved && (
-              <span className="text-sm text-green-400 flex items-center gap-1">
-                <CheckCircle size={14} /> Saved
-              </span>
-            )}
-          </div>
-        </form>
-      </Card>
+        </div>
+        <Card>
+          <CardTitle>Client Branding</CardTitle>
+          <p className="text-sm text-gf-muted mt-2 mb-4">
+            Lightweight branding for client-facing, invite, and onboarding surfaces.
+          </p>
+          <form onSubmit={saveProfile} className="space-y-4">
+            <Input
+              label="Brand Title"
+              value={brandTitle}
+              onChange={(e) => setBrandTitle(e.target.value)}
+              placeholder="e.g. Eliot Nutrition"
+            />
+            <Input
+              label="Logo URL"
+              value={brandLogoUrl}
+              onChange={(e) => setBrandLogoUrl(e.target.value)}
+              placeholder="https://..."
+            />
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <Input
+                label="Primary Color"
+                type="color"
+                value={brandPrimaryColor}
+                onChange={(e) => setBrandPrimaryColor(e.target.value)}
+                className="h-12"
+              />
+              <Input
+                label="Accent Color"
+                type="color"
+                value={brandAccentColor}
+                onChange={(e) => setBrandAccentColor(e.target.value)}
+                className="h-12"
+              />
+            </div>
+            <TextArea
+              label="Welcome Text"
+              value={brandWelcomeText}
+              onChange={(e) => setBrandWelcomeText(e.target.value)}
+              placeholder="Short welcome shown to clients during onboarding and in the client portal."
+            />
+            <label className="flex items-center gap-3 text-sm text-white">
+              <input
+                type="checkbox"
+                checked={showPoweredBy}
+                onChange={(e) => setShowPoweredBy(e.target.checked)}
+                className="h-4 w-4 rounded border-gf-border bg-gf-surface"
+              />
+              Show "Powered by Chameleon Coach"
+            </label>
+            <div className="rounded-xl border border-gf-border bg-gf-surface p-4">
+              <div className="flex items-center gap-3">
+                {brandLogoUrl ? (
+                  <img
+                    src={brandLogoUrl}
+                    alt={`${brandTitle || "Brand"} logo`}
+                    className="h-10 w-10 rounded-lg object-cover"
+                  />
+                ) : (
+                  <div
+                    className="flex h-10 w-10 items-center justify-center rounded-lg text-sm font-bold text-white"
+                    style={{ backgroundColor: brandPrimaryColor }}
+                  >
+                    {(brandTitle || "C").slice(0, 1).toUpperCase()}
+                  </div>
+                )}
+                <div>
+                  <p className="font-semibold" style={{ color: brandPrimaryColor }}>
+                    {brandTitle || DEFAULT_COACH_BRANDING.brand_title}
+                  </p>
+                  <p className="text-sm" style={{ color: brandAccentColor }}>
+                    {brandWelcomeText || DEFAULT_COACH_BRANDING.brand_welcome_text}
+                  </p>
+                </div>
+              </div>
+              {showPoweredBy && (
+                <p className="mt-4 text-xs text-gf-muted/70">Powered by Chameleon Coach</p>
+              )}
+            </div>
+            {profileError && <p className="text-sm text-red-400">{profileError}</p>}
+            <div className="flex items-center gap-3">
+              <Button type="submit" disabled={profileLoading} size="sm">
+                {profileLoading ? "Saving..." : "Save Branding"}
+              </Button>
+              {profileSaved && (
+                <span className="text-sm text-green-400 flex items-center gap-1">
+                  <CheckCircle size={14} /> Saved
+                </span>
+              )}
+            </div>
+          </form>
+        </Card>
+      </section>
 
       <Card>
         <CardTitle>Google Sheets + Drive Connection</CardTitle>
