@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { Card, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { Send, CheckCircle, Clock, AlertCircle } from "lucide-react"
+import { Send, CheckCircle, Clock } from "lucide-react"
 import type { Client } from "@/types"
 
 type WorkspaceStatus = "healthy" | "missing" | "not_provisioned" | "disconnected" | "unknown"
@@ -156,39 +156,18 @@ export default function InvitePage() {
       </p>
 
       <Card className="mb-8">
-        <CardTitle>Client Workspace Readiness</CardTitle>
-        <div className="mt-4 flex items-start justify-between gap-4">
-          <div className="space-y-2">
-            <div className="flex items-center gap-2">
-              {workspaceLoading ? (
-                <Badge>Checking...</Badge>
-              ) : workspaceReady ? (
-                <>
-                  <CheckCircle size={16} className="text-green-400" />
-                  <Badge variant="success">Ready</Badge>
-                </>
-              ) : (
-                <>
-                  <AlertCircle size={16} className="text-yellow-400" />
-                  <Badge variant="warning">Invite blocked</Badge>
-                </>
-              )}
-            </div>
-            <p className="text-sm text-gf-muted">{workspaceMessage()}</p>
-          </div>
-          {!workspaceReady ? (
+        <CardTitle>New Invitation</CardTitle>
+        {!workspaceReady ? (
+          <div className="mt-4 rounded-xl border border-yellow-500/30 bg-yellow-500/5 p-4">
+            <p className="text-sm text-yellow-300">{workspaceMessage()}</p>
             <Link
               href="/admin/settings"
-              className="inline-flex shrink-0 items-center justify-center rounded-lg border border-gf-border bg-gf-surface px-3 py-1.5 text-sm font-semibold text-white transition-colors hover:border-gf-pink/50"
+              className="mt-3 inline-flex items-center justify-center rounded-lg border border-gf-border bg-gf-surface px-3 py-1.5 text-sm font-semibold text-white transition-colors hover:border-gf-pink/50"
             >
               Open Settings
             </Link>
-          ) : null}
-        </div>
-      </Card>
-
-      <Card className="mb-8">
-        <CardTitle>New Invitation</CardTitle>
+          </div>
+        ) : null}
         {firstInviteSetupRequired ? (
           <div className="mt-4 space-y-4">
             <p className="text-sm text-gf-muted">
