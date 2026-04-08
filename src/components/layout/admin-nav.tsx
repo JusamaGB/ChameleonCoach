@@ -1,19 +1,18 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useState } from "react"
 import Link from "next/link"
 import { usePathname, useRouter } from "next/navigation"
 import { createClient } from "@/lib/supabase/client"
-import { canAccessFeature } from "@/lib/modules"
 import { cn } from "@/lib/utils"
-import { LayoutDashboard, Users, Settings, LogOut, CreditCard, Calendar, Dumbbell, Menu, X } from "lucide-react"
+import { LayoutDashboard, Users, Settings, LogOut, Calendar, Layers3, Menu, X } from "lucide-react"
 import { PLATFORM_NAME } from "@/lib/platform"
 
 const navItems = [
   { href: "/admin", label: "Dashboard", icon: LayoutDashboard },
   { href: "/admin/clients", label: "Clients", icon: Users },
   { href: "/admin/appointments", label: "Appointments", icon: Calendar },
-  { href: "/admin/billing", label: "Billing", icon: CreditCard },
+  { href: "/admin/modules", label: "Modules", icon: Layers3 },
   { href: "/admin/settings", label: "Settings", icon: Settings },
 ]
 
@@ -21,21 +20,6 @@ export function AdminNav() {
   const pathname = usePathname()
   const router = useRouter()
   const [open, setOpen] = useState(false)
-  const [canAccessExercises, setCanAccessExercises] = useState(pathname === "/admin/exercises")
-
-  useEffect(() => {
-    fetch("/api/admin/profile")
-      .then((res) => res.json())
-      .then((data) => {
-        const activeModules: string[] = Array.isArray(data.resolved_active_modules)
-          ? data.resolved_active_modules
-          : []
-        setCanAccessExercises(canAccessFeature("exercises", activeModules))
-      })
-      .catch(() => {
-        setCanAccessExercises(pathname === "/admin/exercises")
-      })
-  }, [pathname])
 
   async function handleLogout() {
     const supabase = createClient()
@@ -83,21 +67,6 @@ export function AdminNav() {
             {label}
           </Link>
         ))}
-        {canAccessExercises ? (
-          <Link
-            href="/admin/exercises"
-            onClick={() => setOpen(false)}
-            className={cn(
-              "flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm transition-colors",
-              isActiveNavItem("/admin/exercises")
-                ? "bg-gf-pink/10 text-gf-pink font-medium"
-                : "text-gf-muted hover:text-white hover:bg-gf-surface"
-            )}
-          >
-            <Dumbbell size={18} />
-            Exercises
-          </Link>
-        ) : null}
       </div>
 
       <button

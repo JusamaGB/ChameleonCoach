@@ -18,9 +18,10 @@ export type SurfaceFeature =
   | "dashboard"
   | "clients"
   | "appointments"
-  | "billing"
+  | "modules"
   | "settings"
   | "invite"
+  | "billing"
   | "exercises"
   | "client_overview"
   | "client_meal_plan"
@@ -42,8 +43,9 @@ const FEATURE_DEFINITIONS: Record<
   dashboard: { scope: "coach", requiredModule: "shared_core" },
   clients: { scope: "coach", requiredModule: "shared_core" },
   appointments: { scope: "coach", requiredModule: "shared_core" },
-  billing: { scope: "coach", requiredModule: "shared_core" },
+  modules: { scope: "coach", requiredModule: "shared_core" },
   settings: { scope: "coach", requiredModule: "shared_core" },
+  billing: { scope: "coach", requiredModule: "shared_core" },
   invite: { scope: "coach", requiredModule: "shared_core" },
   exercises: { scope: "coach", requiredModule: "pt_core" },
   client_overview: { scope: "client", requiredModule: "shared_core" },

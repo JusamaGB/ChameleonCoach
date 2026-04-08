@@ -1,24 +1,16 @@
 "use client"
 
 import { useEffect, useState } from "react"
+import Link from "next/link"
 import { useSearchParams } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Input, Select, TextArea } from "@/components/ui/input"
 import { Card, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { Link2, CheckCircle, AlertCircle } from "lucide-react"
+import { Link2, CheckCircle, AlertCircle, ArrowRight, CreditCard, Layers3 } from "lucide-react"
 import { DEFAULT_COACH_BRANDING } from "@/lib/branding"
-import { MODULE_LABELS, type CoachTypePreset, type EnableableModule } from "@/lib/modules"
+import { type CoachTypePreset, type EnableableModule } from "@/lib/modules"
 import { DeleteAccountCard } from "@/components/account/delete-account-card"
-
-const COACH_TYPE_LABELS: Record<CoachTypePreset, string> = {
-  personal_trainer: "Personal trainer",
-  nutritionist: "Nutritionist",
-  wellness_coach: "Wellness coach",
-  sports_performance_coach: "Sports performance coach",
-  yoga_pilates_instructor: "Yoga / Pilates instructor",
-  gym_studio_owner: "Gym / studio owner",
-}
 
 export default function SettingsPage() {
   const searchParams = useSearchParams()
@@ -43,7 +35,6 @@ export default function SettingsPage() {
   const [showPoweredBy, setShowPoweredBy] = useState(true)
   const [coachTypePreset, setCoachTypePreset] = useState<CoachTypePreset | null>(null)
   const [activeModules, setActiveModules] = useState<EnableableModule[]>([])
-  const [isLegacyWorkspace, setIsLegacyWorkspace] = useState(false)
   const [appointmentBookingMode, setAppointmentBookingMode] = useState("coach_only")
   const [profileLoading, setProfileLoading] = useState(false)
   const [profileSaved, setProfileSaved] = useState(false)
@@ -118,7 +109,6 @@ export default function SettingsPage() {
         setShowPoweredBy(data.show_powered_by ?? true)
         setCoachTypePreset(data.coach_type_preset ?? null)
         setActiveModules(Array.isArray(data.active_modules) ? data.active_modules : [])
-        setIsLegacyWorkspace(Boolean(data.is_legacy_workspace))
         setAppointmentBookingMode(data.appointment_booking_mode ?? "coach_only")
       })
       .catch(() => {})
@@ -171,14 +161,6 @@ export default function SettingsPage() {
     } finally {
       setDisconnecting(false)
     }
-  }
-
-  function toggleModule(module: EnableableModule) {
-    setActiveModules((current) =>
-      current.includes(module)
-        ? current.filter((entry) => entry !== module)
-        : [...current, module]
-    )
   }
 
   return (
@@ -329,71 +311,42 @@ export default function SettingsPage() {
       </Card>
 
       <Card className="mb-6">
-        <CardTitle>Modules</CardTitle>
+        <CardTitle>Workspace Surfaces</CardTitle>
         <p className="text-sm text-gf-muted mt-2 mb-4">
-          Coach type sets your starting preset. Active modules control which niche capabilities are enabled for this workspace.
+          Module bundles and billing are now accessed from dedicated workspace-level surfaces instead of living in the main client workflow.
         </p>
-        <div className="rounded-xl border border-gf-border bg-gf-surface p-4 mb-4">
-          <p className="text-xs text-gf-muted mb-1">Coach Type Preset</p>
-          <p className="text-sm text-white">
-            {coachTypePreset ? COACH_TYPE_LABELS[coachTypePreset] : "Legacy workspace"}
-          </p>
-          <p className="text-xs text-gf-muted mt-2">
-            Preset is chosen at signup. Modules can expand access beyond the starting niche.
-          </p>
+        <div className="space-y-3">
+          <Link
+            href="/admin/modules"
+            className="flex items-center justify-between rounded-xl border border-gf-border bg-gf-surface p-4 text-sm text-white transition-colors hover:border-gf-pink/40"
+          >
+            <div className="flex items-start gap-3">
+              <Layers3 size={18} className="mt-0.5 text-gf-pink" />
+              <div>
+                <p className="font-medium">Modules</p>
+                <p className="mt-1 text-xs text-gf-muted">
+                  Enable workspace bundles here, then use them inside client workspaces.
+                </p>
+              </div>
+            </div>
+            <ArrowRight size={16} className="text-gf-muted" />
+          </Link>
+          <Link
+            href="/admin/billing"
+            className="flex items-center justify-between rounded-xl border border-gf-border bg-gf-surface p-4 text-sm text-white transition-colors hover:border-gf-pink/40"
+          >
+            <div className="flex items-start gap-3">
+              <CreditCard size={18} className="mt-0.5 text-gf-pink" />
+              <div>
+                <p className="font-medium">Billing</p>
+                <p className="mt-1 text-xs text-gf-muted">
+                  Subscription and payment-account actions remain available here without taking a primary sidebar slot.
+                </p>
+              </div>
+            </div>
+            <ArrowRight size={16} className="text-gf-muted" />
+          </Link>
         </div>
-        {isLegacyWorkspace && (
-          <div className="mb-4 rounded-xl border border-yellow-500/30 bg-yellow-500/10 p-4">
-            <p className="text-sm text-yellow-200">Legacy workspace detected.</p>
-            <p className="text-xs text-gf-muted mt-1">
-              PT Core is being preserved automatically so existing Exercises access does not disappear unexpectedly.
-            </p>
-          </div>
-        )}
-        <form onSubmit={saveProfile} className="space-y-4">
-          {(["pt_core", "nutrition_core"] as EnableableModule[]).map((module) => {
-            const enabled = activeModules.includes(module)
-
-            return (
-              <label
-                key={module}
-                className="flex items-start justify-between gap-4 rounded-xl border border-gf-border bg-gf-surface p-4"
-              >
-                <div>
-                  <p className="text-sm font-medium text-white">{MODULE_LABELS[module]}</p>
-                  <p className="text-xs text-gf-muted mt-1">
-                    {module === "pt_core"
-                      ? "Exercises and future PT programming surfaces."
-                      : "Existing nutrition-oriented coach surfaces and future nutrition expansion."}
-                  </p>
-                </div>
-                <input
-                  type="checkbox"
-                  checked={enabled}
-                  onChange={() => toggleModule(module)}
-                  className="h-4 w-4 rounded border-gf-border bg-gf-surface mt-1"
-                />
-              </label>
-            )
-          })}
-          <div className="rounded-xl border border-dashed border-gf-border p-4">
-            <p className="text-sm font-medium text-white">Other niche bundles</p>
-            <p className="text-xs text-gf-muted mt-1">
-              Wellness, sports performance, yoga / Pilates, and studio bundles remain coming soon in this Phase 2A slice.
-            </p>
-          </div>
-          {profileError && <p className="text-sm text-red-400">{profileError}</p>}
-          <div className="flex items-center gap-3">
-            <Button type="submit" disabled={profileLoading} size="sm">
-              {profileLoading ? "Saving..." : "Save Modules"}
-            </Button>
-            {profileSaved && (
-              <span className="text-sm text-green-400 flex items-center gap-1">
-                <CheckCircle size={14} /> Saved
-              </span>
-            )}
-          </div>
-        </form>
       </Card>
 
       <Card className="mb-6">

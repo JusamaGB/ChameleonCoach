@@ -239,7 +239,7 @@ export function ExerciseLibraryManager({
       <div>
         <h1 className="text-2xl font-bold mb-2">Exercises</h1>
         <p className="text-gf-muted">
-          Build the reusable exercise reference library that later PT programming can pull from.
+          PT Core workspace library for reusable exercises. Enable it from Modules, then use client-specific PT work from inside each client workspace as those surfaces expand.
         </p>
       </div>
 

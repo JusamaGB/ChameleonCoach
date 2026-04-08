@@ -56,8 +56,6 @@ export function ClientDetailView({
     { id: "progress", label: "Progress", enabled: canAccessFeature("client_progress", activeModules) },
     { id: "appointments", label: "Appointments", enabled: canAccessFeature("client_appointments", activeModules) },
   ].filter((section) => section.enabled)
-  const canAccessExercises = canAccessFeature("exercises", activeModules)
-
   async function handleDelete() {
     if (!confirm("Are you sure you want to remove this client? This cannot be undone.")) {
       return
@@ -173,7 +171,7 @@ export function ClientDetailView({
       <Card className="mb-6">
         <CardTitle>Client Workspace</CardTitle>
         <p className="mt-2 text-sm text-gf-muted">
-          Client-specific work stays here. Coach tools like exercises, workspace settings, and full calendar management stay in the main admin navigation.
+          Client-specific work stays here. Workspace-level tools like modules, exercises, billing, and settings stay outside this client context.
         </p>
         <div className="mt-4 flex flex-wrap gap-2">
           {workspaceSections.map((section) => (
@@ -187,11 +185,9 @@ export function ClientDetailView({
           ))}
         </div>
         <div className="mt-4 flex flex-wrap gap-4 text-sm text-gf-muted">
-          {canAccessExercises ? (
-            <Link href="/admin/exercises" className="text-gf-pink hover:text-gf-pink-light transition-colors">
-              Open Exercises
-            </Link>
-          ) : null}
+          <Link href="/admin/modules" className="text-gf-pink hover:text-gf-pink-light transition-colors">
+            Open modules
+          </Link>
           <Link href="/admin/appointments" className="hover:text-white transition-colors">
             Open full appointments
           </Link>

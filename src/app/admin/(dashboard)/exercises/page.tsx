@@ -29,7 +29,7 @@ export default async function AdminExercisesPage() {
         <Card className="border-yellow-500/30">
           <p className="text-sm text-yellow-300">PT Core is not active for this workspace.</p>
           <p className="mt-2 text-sm text-gf-muted">
-            Enable PT Core in Settings to use the exercise library.
+            Enable PT Core from Modules to use the exercise library.
           </p>
         </Card>
       </div>
