@@ -11,6 +11,8 @@ Chameleon Coach is a coach platform built around a workflow many coaches already
 It replaces messy shared-sheet access with a proper client portal, while keeping coach-owned data and lightweight white-labeling.
 
 This app is still being shaped as the Phase 1 MVP for early outreach, but it is no longer just a one-off G-Fitness prototype.
+Coach type is intended to be an onboarding preset and positioning layer, not a permanent product lock; the platform direction is modular entitlement by active modules, with feature pages nested inside those modules.
+That means a PT can later enable nutrition-related modules, and a nutritionist or wellness coach can later enable PT-related modules, without needing a separate product fork.
 
 ---
 
@@ -59,6 +61,49 @@ Multi-coach architecture is now part of the current product. The old single-admi
 - Each client gets one Google Sheet created from the platform template
 - Meal plans are read from the client Sheet
 - Progress entries are appended back to the client Sheet
+
+### Managed Sheets + Migration Contract
+
+- Default operating model: Chameleon-managed Google Sheets are the standard ongoing structure for each coach workspace
+- Active intake modes:
+  - Mode 1: start fresh with Chameleon-managed Google Sheets
+  - Mode 3: AI-assisted migration into Chameleon-managed Google Sheets
+- Non-default path explicitly dropped: manual guided mapping of arbitrary legacy sheet structures is not the normal product mode and should not be treated as forward planning scope
+- Workspace setup direction:
+  - coach connects Google
+  - Chameleon creates structured starter sheet/templates in the coach's Google account
+  - those sheets should remain understandable enough for coaches to use directly in Google Sheets as well as through the app
+- Legacy migration rule:
+  - legacy Google Sheets, CSVs, pasted text, notes/docs, PDFs, and similar materials are intake sources
+  - AI classifies and proposes how each source should map into the Chameleon-managed structure
+  - the coach confirms or corrects the proposal before data is written into the managed structure
+  - legacy files remain reference/intake artifacts rather than forever-live operating schemas
+- Source-of-truth rule:
+  - after migration, the ongoing source of truth becomes the Chameleon-managed sheet structure in the coach's Google account
+  - legacy sources are only re-used by running another migration/intake pass, not by treating arbitrary old formats as live runtime models
+- Commercial framing:
+  - AI-assisted migration should be positioned as a premium-style onboarding/migration service rather than the default baseline setup path
+
+### Coach-Scoped vs Client-Scoped Structure
+
+- Coach-scoped structures:
+  - exercise library
+  - recipe library
+  - reusable templates/libraries
+  - module/tool catalog
+- Client-scoped structures:
+  - meal plans
+  - progress
+  - check-ins
+  - assigned workouts/programs
+  - client-specific records
+
+### AI Migration Flow
+
+- Intake can begin from messy legacy sources rather than only clean templates
+- AI should classify each source, propose its destination in the managed structure, and support coach confirmation/correction before write-in
+- Migration planning should account for per-file or per-source progress tracking so coaches can work through intake in a controlled sequence
+- The target of migration is always the Chameleon-managed structure, not indefinite support for arbitrary source schemas
 
 ### Appointments
 
@@ -128,12 +173,13 @@ Client can view meal plan, log progress, manage appointments, and pay for confir
 | Page | Description |
 |------|-------------|
 | `/admin` | Coach dashboard |
-| `/admin/clients/[id]` | Client detail view |
+| `/admin/clients` | Coach client index and entry point into client workspaces |
+| `/admin/clients/[id]` | Client workspace shell with backed client sections |
 | `/admin/invite` | Invite management |
 | `/admin/settings` | Google connection + lightweight branding settings |
 | `/admin/appointments` | Appointment management, slots, confirmation/decline, payment request action |
 | `/admin/billing` | Coach subscription billing status and portal actions |
-| `/admin/exercises` | Coach exercise library management for future PT programming |
+| `/admin/exercises` | Coach PT Core exercise library management for future workout programming |
 
 ---
 
@@ -148,6 +194,9 @@ Client can view meal plan, log progress, manage appointments, and pay for confir
 - Appointment payment state is stored on the appointment record
 - Stripe webhooks update subscription and appointment payment state
 - Coaches can create, edit, search, and filter their own exercise library records
+- Exercise library is currently a PT Core capability, not the platform layer that defines module architecture
+- `Clients` is the coach-facing entry point into client-specific workspaces
+- Client workspaces now group only real client-backed surfaces such as overview, meal plan, progress, and appointment history, while coach-scoped tools remain in the main admin nav
 - Mobile responsiveness remains a core requirement across client surfaces
 
 ---

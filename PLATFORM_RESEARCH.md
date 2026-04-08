@@ -131,6 +131,12 @@ No existing platform offers native two-way Google Sheets integration as a first-
 
 ## Complete Module Library
 
+### Platform Layering
+- **Coach Type** is an onboarding preset and positioning layer, not a permanent access lane.
+- **Active Modules** are the enabled entitlements for a coach workspace.
+- **Module Features** are the pages and capabilities nested inside each active module.
+- Cross-niche access is intentional: a PT can later enable nutrition-related modules, and a nutritionist, wellness coach, or studio can later enable PT-related modules where relevant.
+
 ### A. Client Management
 - Client profiles (contact, health history, goals, notes)
 - Onboarding workflows and intake forms
@@ -262,6 +268,8 @@ No existing platform offers native two-way Google Sheets integration as a first-
 ---
 
 ## Module Map by Coach Type
+
+Coach type should be treated as a starting preset that suggests a default module mix. It is not intended to hard-lock a coach to one lane forever; active modules are the real entitlement layer.
 
 ### Personal Trainer
 
@@ -420,6 +428,41 @@ No existing platform offers native two-way Google Sheets integration as a first-
 
 ## Build Phases
 
+### Managed Sheets + AI Migration Contract
+
+- Default operating structure: Chameleon-managed Google Sheets are the default and ongoing operating model for each coach workspace
+- Workspace setup direction:
+  - coach connects Google
+  - Chameleon creates structured starter sheet/templates in the coach's Google account
+  - the managed sheets should be understandable enough for coaches to work in Sheets directly while the app uses the same structure
+- Active intake modes:
+  - Mode 1: start fresh with Chameleon-managed Google Sheets
+  - Mode 3: AI-assisted migration into Chameleon-managed Google Sheets
+- Superseded path:
+  - guided mapping of arbitrary existing sheet structures is not the normal product path and should be treated as superseded for forward planning
+- Legacy migration rule:
+  - legacy Google Sheets, CSVs, pasted text, notes/docs, PDFs, and similar materials are intake sources only
+  - AI should classify, route, and propose structured placement for those inputs
+  - coach confirmation/correction is part of the migration loop before writing
+  - migrated data should be written into Chameleon-managed structures rather than left in arbitrary long-term operating formats
+- Source-of-truth rule:
+  - after migration, the Chameleon-managed sheet structure in the coach's Google account becomes the ongoing source of truth
+  - legacy files remain intake/reference material unless explicitly re-run through migration
+- Scope split:
+  - coach-scoped structures include exercise library, recipe library, reusable templates/libraries, and module/tool catalog
+  - client-scoped structures include meal plans, progress, check-ins, assigned workouts/programs, and client-specific records
+- Commercial note:
+  - AI-assisted migration should be framed as a premium onboarding/migration layer, not the baseline default setup
+
+### Immediate Sequencing Correction
+
+1. Lock the managed-sheet contract.
+2. Lock the AI migration contract.
+3. Implement automatic Chameleon-managed sheet/template creation.
+4. Implement the coach-level migration/source hub shell.
+5. Implement AI-assisted migration tooling.
+6. Deepen module-specific import/edit flows only after the managed structure and migration path are in place.
+
 ### Phase 1 — Nutritionist MVP (pitch-worthy for warm leads) — In Progress
 > Target: ~15–20 hours. Unlocks the 8 frozen cold email targets.
 
@@ -430,20 +473,24 @@ No existing platform offers native two-way Google Sheets integration as a first-
 - [x] Improved meal plan builder
 - [x] Rebrand away from G-Fitness (new name, new landing page leading with Sheets differentiator) — public-facing fallback branding, landing/auth/onboarding copy, invite/public shell text, and client-facing shell cleaned up around Chameleon Coach defaults
 
-### Phase 2 — PT Module
-> Unlocks the PT leads and broadens addressable market.
-
-- [ ] Workout builder (drag-and-drop, set/rep/rest)
-- [x] Exercise library (basic, expandable)
-- [ ] Program scheduling
-- [ ] Auto-progression (basic)
-
-### Phase 3 — Module System
-> The architecture that makes this a platform, not a product.
+### Phase 2A — Module Backbone
+> The platform structure that makes coach type a preset and active modules the real entitlement layer.
 
 - [ ] Module toggle in admin settings (coach selects what their clients see)
 - [ ] Coach type selection at sign-up (pre-selects relevant modules)
 - [ ] Client portal adapts to active modules only
+
+### Phase 2B — PT Core
+> Unlocks the PT leads on top of the module backbone. The exercise library slice is already started and stays in place.
+
+- [ ] Workout builder (drag-and-drop, set/rep/rest)
+- [x] Exercise library (basic, expandable) — already started PT Core capability, not the platform-defining layer
+- [ ] Program scheduling
+- [ ] Auto-progression (basic)
+
+### Phase 3 — Platform Expansion
+> Extensions that build on the module backbone and niche modules already in motion.
+
 - [ ] Feature request system (coaches submit requests, vote on roadmap)
 
 ### Phase 4 — Sports Coach + Studio
@@ -557,3 +604,6 @@ No existing platform offers native two-way Google Sheets integration as a first-
 | 2026-04-08 | Phase 1 per-session appointment billing was implemented using the existing single platform Stripe account, shared webhook, Resend mailer, and appointment flows. Stripe Connect / coach payouts remain out of scope for this slice. Stripe test-mode end-to-end payment and webhook verification is intentionally deferred and remains a release gate before marking billing fully complete. |
 | 2026-04-08 | Chameleon Coach public-facing rebrand cleanup is complete. Chameleon Coach is now the fallback platform identity across landing, auth, onboarding, invite/public shell copy, and metadata; coach branding still overrides client-facing surfaces and Powered by Chameleon Coach remains the lower-tier default. |
 | 2026-04-08 | Phase 2 started with the smallest PT-safe slice: a coach-scoped exercise library foundation. V1 includes exercise persistence, create/list/edit admin flows, and client-side search/filtering, while workout builder, scheduling, drag-and-drop, and progression logic remain deferred. |
+| 2026-04-08 | Architectural realignment: module backbone work should precede deeper niche expansion. Coach type is a preset and positioning layer, active modules are the entitlement layer, and the already-built exercise library is retained as a PT Core feature rather than the structure-defining platform layer. |
+| 2026-04-08 | Client workspace IA slice landed with minimal scope: `Clients` is now the coach entry point for client-specific work, `/admin/clients/[id]` acts as a client workspace shell for real backed sections only, and coach-scoped tools like Exercises remain outside client context. |
+| 2026-04-08 | Managed-sheets contract locked for forward planning. Default operating modes are now (1) start fresh with Chameleon-managed Google Sheets and (3) AI-assisted migration into Chameleon-managed Google Sheets. Guided mapping of arbitrary legacy sheet layouts is superseded as a normal product path; legacy sources are intake-only and migrated data should become part of the Chameleon-managed structure in the coach's Google account. |
