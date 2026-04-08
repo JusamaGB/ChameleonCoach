@@ -109,8 +109,14 @@ export default function InvitePage() {
       })
 
       if (!res.ok) {
-        const body = await res.json()
-        throw new Error(body.error || "Failed to send invite")
+        let message = "Failed to send invite"
+        try {
+          const body = await res.json()
+          message = body.error || message
+        } catch {
+          // fall back to generic message when the server returns a non-JSON error response
+        }
+        throw new Error(message)
       }
 
       setSuccess(`Invite sent to ${email}`)
@@ -135,8 +141,14 @@ export default function InvitePage() {
         body: JSON.stringify({ name: clientName, email: clientEmail }),
       })
       if (!res.ok) {
-        const body = await res.json()
-        throw new Error(body.error || "Failed to resend invite")
+        let message = "Failed to resend invite"
+        try {
+          const body = await res.json()
+          message = body.error || message
+        } catch {
+          // fall back to generic message when the server returns a non-JSON error response
+        }
+        throw new Error(message)
       }
       setSuccess(`Invite resent to ${clientEmail}`)
       loadPending()
