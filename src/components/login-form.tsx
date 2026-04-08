@@ -63,13 +63,13 @@ export default function LoginForm() {
           {PLATFORM_NAME}
         </h1>
         <p className="text-gf-muted text-center text-sm mb-8">
-          Sign in to your coaching portal
+          Coach sign in
         </p>
 
         <div className="mb-6 rounded-lg border border-gf-border bg-gf-surface p-4 text-sm">
-          <p className="text-white">Are you a coach or a client?</p>
+          <p className="text-white">Coach workspace access</p>
           <p className="mt-1 text-gf-muted">
-            Coaches create a workspace at <a href="/register/coach" className="text-gf-pink hover:underline">coach signup</a>. Clients usually join through an invite link or the client path.
+            Coaches create a workspace at <a href="/register/coach" className="text-gf-pink hover:underline">coach signup</a>. Clients join through their invite link and branded portal context.
           </p>
         </div>
 
@@ -111,9 +111,9 @@ export default function LoginForm() {
         </Card>
 
         <p className="text-center text-sm text-gf-muted mt-6">
-          Need to get started?{" "}
-          <a href="/register" className="text-gf-pink hover:underline">
-            Choose your path
+          Need a coach workspace?{" "}
+          <a href="/register/coach" className="text-gf-pink hover:underline">
+            Create coach account
           </a>
         </p>
       </div>
