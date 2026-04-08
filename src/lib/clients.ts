@@ -3,7 +3,12 @@ export function isMissingCoachIdColumn(error: { code?: string; message?: string 
     return false
   }
 
-  return error.code === "42703" || error.message?.includes("column clients.coach_id does not exist") === true
+  return (
+    error.code === "42703"
+    || error.code === "PGRST204"
+    || error.message?.includes("column clients.coach_id does not exist") === true
+    || error.message?.includes("Could not find the 'coach_id' column of 'clients' in the schema cache") === true
+  )
 }
 
 export async function resolveLegacyCoachId(

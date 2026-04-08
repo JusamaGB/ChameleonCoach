@@ -35,7 +35,15 @@ export async function PATCH(
   const { id } = await params
   const body = await request.json()
 
-  const allowedFields = ["name", "email", "sheet_id", "onboarding_completed"]
+  const allowedFields = [
+    "name",
+    "email",
+    "sheet_id",
+    "onboarding_completed",
+    "invite_token",
+    "invite_expires_at",
+    "invite_accepted_at",
+  ]
   const updates: Record<string, unknown> = {}
   for (const field of allowedFields) {
     if (body[field] !== undefined) {

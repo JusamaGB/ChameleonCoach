@@ -1,6 +1,7 @@
 "use client"
 
 import { useState } from "react"
+import { useRouter } from "next/navigation"
 import Link from "next/link"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardTitle } from "@/components/ui/card"
@@ -14,8 +15,11 @@ interface ClientListProps {
 type SortKey = "name" | "created_at" | "status"
 
 export function ClientList({ clients }: ClientListProps) {
+  const router = useRouter()
   const [search, setSearch] = useState("")
   const [sortBy, setSortBy] = useState<SortKey>("created_at")
+  const [busyId, setBusyId] = useState<string | null>(null)
+  const [actionError, setActionError] = useState("")
 
   const filtered = clients.filter((c) => {
     const q = search.toLowerCase()
@@ -42,6 +46,60 @@ export function ClientList({ clients }: ClientListProps) {
       month: "short",
       year: "numeric",
     })
+  }
+
+  async function revokeInvite(client: Client) {
+    setBusyId(client.id)
+    setActionError("")
+
+    try {
+      const response = await fetch(`/api/admin/clients/${client.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          invite_token: null,
+          invite_expires_at: null,
+          invite_accepted_at: null,
+        }),
+      })
+
+      const data = await response.json()
+      if (!response.ok) {
+        throw new Error(data.error || "Failed to revoke invite")
+      }
+
+      router.refresh()
+    } catch (error) {
+      setActionError(error instanceof Error ? error.message : "Failed to revoke invite")
+    } finally {
+      setBusyId(null)
+    }
+  }
+
+  async function deleteClient(client: Client) {
+    if (!confirm(`Delete ${client.name}? This cannot be undone.`)) {
+      return
+    }
+
+    setBusyId(client.id)
+    setActionError("")
+
+    try {
+      const response = await fetch(`/api/admin/clients/${client.id}`, {
+        method: "DELETE",
+      })
+
+      const data = await response.json().catch(() => ({}))
+      if (!response.ok) {
+        throw new Error(data.error || "Failed to delete client")
+      }
+
+      router.refresh()
+    } catch (error) {
+      setActionError(error instanceof Error ? error.message : "Failed to delete client")
+    } finally {
+      setBusyId(null)
+    }
   }
 
   return (
@@ -81,6 +139,8 @@ export function ClientList({ clients }: ClientListProps) {
           <option value="status">Status</option>
         </select>
       </div>
+
+      {actionError ? <p className="mb-4 text-sm text-red-400">{actionError}</p> : null}
 
       {sorted.length === 0 ? (
         <p className="text-sm text-gf-muted py-4">
@@ -137,12 +197,32 @@ export function ClientList({ clients }: ClientListProps) {
                   Open workspace
                   <ArrowRight size={14} />
                 </Link>
-                <Link
-                  href={`/admin/clients/${client.id}#overview`}
-                  className="inline-flex items-center gap-1.5 rounded-lg border border-gf-border px-3 py-2 text-sm text-gf-muted transition-colors hover:border-gf-pink/40 hover:text-white"
-                >
-                  Profile
-                </Link>
+                {!client.onboarding_completed && client.invite_token ? (
+                  <button
+                    type="button"
+                    disabled={busyId === client.id}
+                    onClick={() => revokeInvite(client)}
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-gf-border px-3 py-2 text-sm text-gf-muted transition-colors hover:border-gf-pink/40 hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {busyId === client.id ? "Revoking..." : "Revoke invite"}
+                  </button>
+                ) : !client.onboarding_completed ? (
+                  <button
+                    type="button"
+                    disabled={busyId === client.id}
+                    onClick={() => deleteClient(client)}
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-red-500/40 px-3 py-2 text-sm text-red-300 transition-colors hover:border-red-400 hover:text-red-200 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {busyId === client.id ? "Deleting..." : "Delete"}
+                  </button>
+                ) : (
+                  <Link
+                    href={`/admin/clients/${client.id}#overview`}
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-gf-border px-3 py-2 text-sm text-gf-muted transition-colors hover:border-gf-pink/40 hover:text-white"
+                  >
+                    Profile
+                  </Link>
+                )}
               </div>
             </div>
           ))}
