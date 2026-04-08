@@ -10,6 +10,7 @@ import { Send, CheckCircle, Clock, AlertCircle } from "lucide-react"
 import type { Client } from "@/types"
 
 type WorkspaceStatus = "healthy" | "missing" | "not_provisioned" | "disconnected" | "unknown"
+type ClientSheetSetupChoice = "template" | "connect" | "import" | null
 
 export default function InvitePage() {
   const [name, setName] = useState("")
@@ -17,17 +18,20 @@ export default function InvitePage() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState("")
   const [success, setSuccess] = useState("")
+  const [clientCount, setClientCount] = useState(0)
   const [pending, setPending] = useState<Client[]>([])
   const [workspaceLoading, setWorkspaceLoading] = useState(true)
   const [workspaceReady, setWorkspaceReady] = useState(false)
   const [workspaceStatus, setWorkspaceStatus] = useState<WorkspaceStatus>("unknown")
   const [workspaceError, setWorkspaceError] = useState("")
   const [missingArtifacts, setMissingArtifacts] = useState<string[]>([])
+  const [setupChoice, setSetupChoice] = useState<ClientSheetSetupChoice>(null)
 
   const loadPending = useCallback(async () => {
     try {
       const data = await fetch("/api/admin/clients").then((r) => r.json())
       const clients: Client[] = data.clients ?? []
+      setClientCount(clients.length)
       setPending(clients.filter((c) => !c.onboarding_completed && c.invite_token))
     } catch {
       // ignore
@@ -142,6 +146,7 @@ export default function InvitePage() {
   }
 
   const now = new Date()
+  const firstInviteSetupRequired = workspaceReady && clientCount === 0 && setupChoice !== "template"
 
   return (
     <div className="max-w-lg mx-auto">
@@ -184,37 +189,88 @@ export default function InvitePage() {
 
       <Card className="mb-8">
         <CardTitle>New Invitation</CardTitle>
-        <form onSubmit={handleInvite} className="space-y-4 mt-4">
-          <Input
-            label="Client Name"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            placeholder="e.g. John Smith"
-            required
-          />
-          <Input
-            label="Email Address"
-            type="email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            placeholder="client@example.com"
-            required
-          />
+        {firstInviteSetupRequired ? (
+          <div className="mt-4 space-y-4">
+            <p className="text-sm text-gf-muted">
+              Before the first client invite, choose how this workspace should handle client sheets. Only the Chameleon template flow is live right now.
+            </p>
 
-          {error && <p className="text-sm text-red-400">{error}</p>}
+            <div className="grid gap-3">
+              <button
+                type="button"
+                onClick={() => setSetupChoice("template")}
+                className="rounded-xl border border-gf-pink/40 bg-gf-pink/10 p-4 text-left transition-colors hover:bg-gf-pink/15"
+              >
+                <p className="font-medium text-white">Use Chameleon template</p>
+                <p className="mt-1 text-sm text-gf-muted">
+                  New clients will get a Chameleon-managed workbook created during onboarding.
+                </p>
+              </button>
 
-          {success && (
-            <div className="flex items-center gap-2 text-sm text-green-400">
-              <CheckCircle size={16} />
-              {success}
+              <div className="rounded-xl border border-gf-border bg-gf-black/20 p-4">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <p className="font-medium text-white">Connect existing sheet</p>
+                    <p className="mt-1 text-sm text-gf-muted">
+                      Link a client-owned spreadsheet instead of creating a Chameleon workbook.
+                    </p>
+                  </div>
+                  <Badge>Coming soon</Badge>
+                </div>
+              </div>
+
+              <div className="rounded-xl border border-gf-border bg-gf-black/20 p-4">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <p className="font-medium text-white">Import sheet</p>
+                    <p className="mt-1 text-sm text-gf-muted">
+                      Import an existing spreadsheet into the client workspace flow.
+                    </p>
+                  </div>
+                  <Badge>Coming soon</Badge>
+                </div>
+              </div>
             </div>
-          )}
+          </div>
+        ) : (
+          <form onSubmit={handleInvite} className="space-y-4 mt-4">
+            {setupChoice === "template" ? (
+              <div className="rounded-xl border border-green-500/30 bg-green-500/5 p-3 text-sm text-green-300">
+                Chosen setup path: Chameleon template. The client workbook will be created when the client completes onboarding.
+              </div>
+            ) : null}
 
-          <Button type="submit" disabled={loading || workspaceLoading || !workspaceReady} className="w-full">
-            <Send size={16} className="mr-2" />
-            {loading ? "Sending..." : workspaceReady ? "Send Invite" : "Invite blocked until workspace is ready"}
-          </Button>
-        </form>
+            <Input
+              label="Client Name"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="e.g. John Smith"
+              required
+            />
+            <Input
+              label="Email Address"
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="client@example.com"
+              required
+            />
+
+            {error && <p className="text-sm text-red-400">{error}</p>}
+
+            {success && (
+              <div className="flex items-center gap-2 text-sm text-green-400">
+                <CheckCircle size={16} />
+                {success}
+              </div>
+            )}
+
+            <Button type="submit" disabled={loading || workspaceLoading || !workspaceReady} className="w-full">
+              <Send size={16} className="mr-2" />
+              {loading ? "Sending..." : workspaceReady ? "Send Invite" : "Invite blocked until workspace is ready"}
+            </Button>
+          </form>
+        )}
       </Card>
 
       <div>
