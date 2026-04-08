@@ -300,7 +300,7 @@ export default function SettingsPage() {
           <p className="text-sm text-gf-muted mb-4">
             Your coach-owned Drive workspace is provisioned. The control workbook stays private,
             coach libraries stay private, and client workbooks are created inside the dedicated
-            Clients folder.
+            Clients folder. Use the workspace folder button to view the whole Drive structure.
           </p>
         )}
         {!connected && (
@@ -369,7 +369,7 @@ export default function SettingsPage() {
                       size="sm"
                       onClick={() => window.open(managedWorkspaceRootFolderUrl, "_blank", "noopener,noreferrer")}
                     >
-                      Open Workspace Folder
+                      Open Drive Workspace Folder
                     </Button>
                   ) : null}
                   {managedWorkspaceSheetUrl ? (
