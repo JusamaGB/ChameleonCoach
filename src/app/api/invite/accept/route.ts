@@ -4,6 +4,7 @@ import { createClientSheet, getCoachDriveWorkspaceHealth } from "@/lib/google/te
 import type { OnboardingData } from "@/types"
 import { getCoachBrandingByCoachId } from "@/lib/branding-server"
 import { normalizeCoachTypePreset, resolveActiveModules } from "@/lib/modules"
+import { findClientInviteByToken } from "@/lib/clients"
 
 // GET: validate token
 export async function GET(request: NextRequest) {
@@ -14,11 +15,11 @@ export async function GET(request: NextRequest) {
   }
 
   const supabase = createAdmin()
-  const { data: client } = await supabase
-    .from("clients")
-    .select("email, invite_expires_at, onboarding_completed, coach_id")
-    .eq("invite_token", token)
-    .single()
+  const { data: client } = await findClientInviteByToken(
+    supabase,
+    token,
+    "email, invite_expires_at, onboarding_completed, coach_id"
+  )
 
   if (!client) {
     return NextResponse.json({ valid: false, reason: "invalid" })
@@ -62,11 +63,11 @@ export async function POST(request: NextRequest) {
   const supabase = createAdmin()
 
   // Validate token
-  const { data: client } = await supabase
-    .from("clients")
-    .select("*, coach_id")
-    .eq("invite_token", token)
-    .single()
+  const { data: client } = await findClientInviteByToken(
+    supabase,
+    token,
+    "*, coach_id"
+  )
 
   if (!client) {
     return NextResponse.json({ error: "Invalid invite" }, { status: 400 })

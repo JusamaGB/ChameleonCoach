@@ -5,6 +5,7 @@ import { generateToken } from "@/lib/utils"
 import { getCoachBrandingByCoachId } from "@/lib/branding-server"
 import { resolveActiveModules } from "@/lib/modules"
 import { getCoachDriveWorkspaceHealth } from "@/lib/google/template"
+import { findClientByEmailForCoach, insertClientForCoach } from "@/lib/clients"
 
 export async function POST(request: NextRequest) {
   try {
@@ -47,12 +48,15 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: reason }, { status: 400 })
     }
 
-    const { data: existing } = await supabase
-      .from("clients")
-      .select("id, onboarding_completed")
-      .eq("email", email)
-      .eq("coach_id", user.id)
-      .maybeSingle()
+    const { data: existing, error: existingError } = await findClientByEmailForCoach(
+      supabase,
+      user.id,
+      email
+    )
+
+    if (existingError) {
+      throw new Error(existingError.message || "Failed to look up existing client")
+    }
 
     if (existing?.onboarding_completed) {
       return NextResponse.json(
@@ -79,12 +83,12 @@ export async function POST(request: NextRequest) {
         throw new Error(error.message || "Failed to update client invite")
       }
     } else {
-      const { error } = await supabase.from("clients").insert({
+      const { error } = await insertClientForCoach(supabase, {
+        coachId: user.id,
         name,
         email,
-        coach_id: user.id,
-        invite_token: token,
-        invite_expires_at: expiresAt,
+        inviteToken: token,
+        inviteExpiresAt: expiresAt,
       })
 
       if (error) {
