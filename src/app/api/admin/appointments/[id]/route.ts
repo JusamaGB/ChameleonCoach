@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server"
 import { verifyCoach, isCoachResult } from "@/lib/auth-helpers"
+import { createAppointmentCalendarEvent } from "@/lib/google/calendar"
 import { sendAppointmentConfirmedEmail, sendAppointmentDeclinedEmail } from "@/lib/resend"
 
 export async function PATCH(
@@ -8,13 +9,33 @@ export async function PATCH(
 ) {
   const result = await verifyCoach()
   if (!isCoachResult(result)) return result
-  const { supabase } = result
+  const { user, supabase } = result
 
   const { id } = await params
   const { status, confirmed_at, coach_note } = await request.json()
 
   if (!status) {
     return NextResponse.json({ error: "status is required" }, { status: 400 })
+  }
+
+  if (status === "confirmed" && !confirmed_at) {
+    return NextResponse.json({ error: "confirmed_at is required" }, { status: 400 })
+  }
+
+  const { data: existingAppointment, error: existingError } = await supabase
+    .from("appointments")
+    .select(`
+      *,
+      clients (
+        name,
+        email
+      )
+    `)
+    .eq("id", id)
+    .single()
+
+  if (existingError || !existingAppointment) {
+    return NextResponse.json({ error: "Appointment not found" }, { status: 404 })
   }
 
   const updateData: Record<string, string | null> = {
@@ -24,6 +45,43 @@ export async function PATCH(
   }
   if (status === "confirmed" && confirmed_at) {
     updateData.confirmed_at = confirmed_at
+  }
+
+  if (
+    status === "confirmed" &&
+    confirmed_at &&
+    !existingAppointment.google_calendar_event_id
+  ) {
+    if (!existingAppointment.clients?.email) {
+      return NextResponse.json(
+        { error: "Client email is required for Calendar sync" },
+        { status: 400 }
+      )
+    }
+
+    try {
+      const calendarEvent = await createAppointmentCalendarEvent({
+        coachId: user.id,
+        clientName: existingAppointment.clients.name || "Client",
+        clientEmail: existingAppointment.clients.email,
+        confirmedAt: confirmed_at,
+        coachNote: coach_note ?? null,
+        requestedNote: existingAppointment.requested_note ?? null,
+      })
+
+      updateData.google_calendar_event_id = calendarEvent.id
+      updateData.google_calendar_event_link = calendarEvent.htmlLink
+    } catch (error) {
+      return NextResponse.json(
+        {
+          error:
+            error instanceof Error
+              ? `Google Calendar sync failed: ${error.message}`
+              : "Google Calendar sync failed",
+        },
+        { status: 400 }
+      )
+    }
   }
 
   const { data: appointment, error } = await supabase
@@ -51,6 +109,14 @@ export async function PATCH(
   }
 
   if (status === "declined" && appointment.clients) {
+    await supabase
+      .from("appointment_slots")
+      .update({
+        appointment_id: null,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("appointment_id", id)
+
     try {
       await sendAppointmentDeclinedEmail(
         appointment.clients.email,

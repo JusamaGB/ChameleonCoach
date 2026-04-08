@@ -21,6 +21,8 @@ export interface Appointment {
   requested_note: string | null
   confirmed_at: string | null
   coach_note: string | null
+  google_calendar_event_id: string | null
+  google_calendar_event_link: string | null
   created_at: string
   updated_at: string
 }
@@ -39,6 +41,16 @@ export interface AdminSettings {
   brand_accent_color: string | null
   brand_welcome_text: string | null
   show_powered_by: boolean | null
+  appointment_booking_mode: 'coach_only' | 'client_request_visible_slots' | null
+  created_at: string
+  updated_at: string
+}
+
+export interface AppointmentSlot {
+  id: string
+  coach_id: string
+  starts_at: string
+  appointment_id: string | null
   created_at: string
   updated_at: string
 }

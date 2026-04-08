@@ -21,7 +21,7 @@ export async function POST(request: NextRequest) {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
-  const { note } = await request.json()
+  const { note, requested_for, slot_id } = await request.json()
 
   // Get client record to find coach_id
   const { data: client } = await supabase
@@ -34,20 +34,61 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Client record not found" }, { status: 400 })
   }
 
-  const { error } = await supabase.from("appointments").insert({
-    coach_id: client.coach_id,
-    client_id: client.id,
-    requested_note: note || null,
-    status: "pending",
-  })
+  const admin = createAdmin()
+
+  let preferredTime = requested_for || null
+  if (slot_id) {
+    const { data: slot } = await admin
+      .from("appointment_slots")
+      .select("id, starts_at, appointment_id")
+      .eq("id", slot_id)
+      .eq("coach_id", client.coach_id)
+      .is("appointment_id", null)
+      .single()
+
+    if (!slot) {
+      return NextResponse.json({ error: "This slot is no longer available" }, { status: 400 })
+    }
+
+    preferredTime = slot.starts_at
+  }
+
+  const { data: appointment, error } = await supabase
+    .from("appointments")
+    .insert({
+      coach_id: client.coach_id,
+      client_id: client.id,
+      requested_note: note || null,
+      confirmed_at: preferredTime,
+      status: "pending",
+    })
+    .select("id")
+    .single()
 
   if (error) {
     return NextResponse.json({ error: "Failed to create request" }, { status: 500 })
   }
 
+  if (slot_id && appointment?.id) {
+    const { data: claimedSlot } = await admin
+      .from("appointment_slots")
+      .update({
+        appointment_id: appointment.id,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", slot_id)
+      .is("appointment_id", null)
+      .select("id")
+      .single()
+
+    if (!claimedSlot) {
+      await admin.from("appointments").delete().eq("id", appointment.id)
+      return NextResponse.json({ error: "This slot is no longer available" }, { status: 400 })
+    }
+  }
+
   // Notify coach by email
   try {
-    const admin = createAdmin()
     const { data: coachUser } = await admin.auth.admin.getUserById(client.coach_id)
     if (coachUser.user?.email) {
       await sendAppointmentRequestEmail(

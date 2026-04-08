@@ -11,7 +11,7 @@ export async function GET() {
   const admin = createAdmin()
   const { data } = await admin
     .from("admin_settings")
-    .select("display_name, business_name, brand_title, brand_logo_url, brand_primary_color, brand_accent_color, brand_welcome_text, show_powered_by")
+    .select("display_name, business_name, brand_title, brand_logo_url, brand_primary_color, brand_accent_color, brand_welcome_text, show_powered_by, appointment_booking_mode")
     .eq("user_id", user.id)
     .maybeSingle()
 
@@ -20,6 +20,7 @@ export async function GET() {
   return NextResponse.json({
     display_name: data?.display_name ?? "",
     business_name: data?.business_name ?? "",
+    appointment_booking_mode: data?.appointment_booking_mode ?? "coach_only",
     ...branding,
   })
 }
@@ -38,6 +39,7 @@ export async function PATCH(request: NextRequest) {
     brand_accent_color,
     brand_welcome_text,
     show_powered_by,
+    appointment_booking_mode,
   } = await request.json()
 
   const branding = normalizeCoachBranding({
@@ -63,6 +65,10 @@ export async function PATCH(request: NextRequest) {
         brand_accent_color: branding.brand_accent_color,
         brand_welcome_text: branding.brand_welcome_text,
         show_powered_by: branding.show_powered_by,
+        appointment_booking_mode:
+          appointment_booking_mode === "client_request_visible_slots"
+            ? "client_request_visible_slots"
+            : "coach_only",
         updated_at: new Date().toISOString(),
       },
       { onConflict: "user_id" }

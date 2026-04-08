@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react"
 import { useSearchParams } from "next/navigation"
 import { Button } from "@/components/ui/button"
-import { Input, TextArea } from "@/components/ui/input"
+import { Input, Select, TextArea } from "@/components/ui/input"
 import { Card, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Link2, CheckCircle, AlertCircle } from "lucide-react"
@@ -30,6 +30,7 @@ export default function SettingsPage() {
     DEFAULT_COACH_BRANDING.brand_welcome_text
   )
   const [showPoweredBy, setShowPoweredBy] = useState(true)
+  const [appointmentBookingMode, setAppointmentBookingMode] = useState("coach_only")
   const [profileLoading, setProfileLoading] = useState(false)
   const [profileSaved, setProfileSaved] = useState(false)
   const [profileError, setProfileError] = useState("")
@@ -44,7 +45,7 @@ export default function SettingsPage() {
     const errorParam = searchParams.get("error")
 
     if (connectedParam === "true") {
-      setConnectionMessage("Google Sheets connected successfully.")
+      setConnectionMessage("Google connected successfully for Sheets, Drive, and Calendar.")
       setConnectionError("")
       return
     }
@@ -70,7 +71,7 @@ export default function SettingsPage() {
         break
       default:
         setConnectionError(
-          "Google connection failed. Check your Google OAuth client, redirect URI, and environment variables, then try again."
+          "Google connection failed. Check your Google OAuth client, redirect URI, Calendar scope grant, and environment variables, then try again."
         )
         break
     }
@@ -101,6 +102,7 @@ export default function SettingsPage() {
           data.brand_welcome_text ?? DEFAULT_COACH_BRANDING.brand_welcome_text
         )
         setShowPoweredBy(data.show_powered_by ?? true)
+        setAppointmentBookingMode(data.appointment_booking_mode ?? "coach_only")
       })
       .catch(() => {})
   }
@@ -123,6 +125,7 @@ export default function SettingsPage() {
           brand_accent_color: brandAccentColor,
           brand_welcome_text: brandWelcomeText,
           show_powered_by: showPoweredBy,
+          appointment_booking_mode: appointmentBookingMode,
         }),
       })
       if (!res.ok) throw new Error()
@@ -298,11 +301,48 @@ export default function SettingsPage() {
         </form>
       </Card>
 
+      <Card className="mb-6">
+        <CardTitle>Appointment Booking</CardTitle>
+        <p className="text-sm text-gf-muted mt-2 mb-4">
+          Control whether clients only request sessions manually or can also see published slots.
+        </p>
+        <form onSubmit={saveProfile} className="space-y-4">
+          <Select
+            label="Booking Mode"
+            value={appointmentBookingMode}
+            onChange={(e) => setAppointmentBookingMode(e.target.value)}
+            options={[
+              { value: "coach_only", label: "Coach only" },
+              { value: "client_request_visible_slots", label: "Client request visible slots" },
+            ]}
+          />
+          <p className="text-xs text-gf-muted">
+            Clients are never auto-confirmed in this mode. Coaches still confirm or decline requests manually.
+          </p>
+          {profileError && <p className="text-sm text-red-400">{profileError}</p>}
+          <div className="flex items-center gap-3">
+            <Button type="submit" disabled={profileLoading} size="sm">
+              {profileLoading ? "Saving..." : "Save Booking Mode"}
+            </Button>
+            {profileSaved && (
+              <span className="text-sm text-green-400 flex items-center gap-1">
+                <CheckCircle size={14} /> Saved
+              </span>
+            )}
+          </div>
+        </form>
+      </Card>
+
       <Card>
         <CardTitle>Google Sheets + Drive Connection</CardTitle>
         <p className="text-sm text-gf-muted mt-2 mb-4">
           Connect your Google account so client sheets can be created and stored
-          in your Drive, and meal plans can sync through Google Sheets.
+          in your Drive, meal plans can sync through Google Sheets, and confirmed
+          appointments can be added to your Google Calendar.
+        </p>
+        <p className="text-sm text-gf-muted mb-4">
+          If you connected Google before Calendar sync was added, reconnect once
+          to grant the new Calendar permission.
         </p>
 
         <div className="flex items-center justify-between">

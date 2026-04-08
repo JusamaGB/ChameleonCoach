@@ -16,6 +16,7 @@ create table admin_settings (
   brand_accent_color text,
   brand_welcome_text text,
   show_powered_by boolean default true,
+  appointment_booking_mode text default 'coach_only',
   created_at timestamptz default now(),
   updated_at timestamptz default now()
 );
@@ -35,9 +36,35 @@ create table clients (
   updated_at timestamptz default now()
 );
 
+create table appointments (
+  id uuid primary key default gen_random_uuid(),
+  coach_id uuid not null references auth.users(id) on delete cascade,
+  client_id uuid not null references clients(id) on delete cascade,
+  status text not null default 'pending'
+    check (status in ('pending', 'confirmed', 'declined', 'cancelled')),
+  requested_note text,
+  confirmed_at timestamptz,
+  coach_note text,
+  google_calendar_event_id text,
+  google_calendar_event_link text,
+  created_at timestamptz default now(),
+  updated_at timestamptz default now()
+);
+
+create table appointment_slots (
+  id uuid primary key default gen_random_uuid(),
+  coach_id uuid not null references auth.users(id) on delete cascade,
+  starts_at timestamptz not null,
+  appointment_id uuid unique references appointments(id) on delete set null,
+  created_at timestamptz default now(),
+  updated_at timestamptz default now()
+);
+
 -- Row-level security
 alter table admin_settings enable row level security;
 alter table clients enable row level security;
+alter table appointments enable row level security;
+alter table appointment_slots enable row level security;
 
 -- Admin can read/write their own settings
 create policy "admin_own_settings" on admin_settings
@@ -52,6 +79,28 @@ create policy "clients_read_own" on clients
 create policy "admin_full_access" on clients
   for all using (
     (auth.jwt() -> 'app_metadata' ->> 'role') = 'admin'
+  );
+
+create policy "coach_own_appointments" on appointments
+  for all using (
+    (auth.jwt() -> 'app_metadata' ->> 'role') = 'coach'
+    and coach_id = auth.uid()
+  );
+
+create policy "client_own_appointments" on appointments
+  for select using (
+    client_id in (select id from clients where user_id = auth.uid())
+  );
+
+create policy "client_request_appointment" on appointments
+  for insert with check (
+    client_id in (select id from clients where user_id = auth.uid())
+  );
+
+create policy "coach_own_appointment_slots" on appointment_slots
+  for all using (
+    (auth.jwt() -> 'app_metadata' ->> 'role') in ('coach', 'admin')
+    and coach_id = auth.uid()
   );
 
 -- User roles table (source of truth for RBAC)
@@ -85,3 +134,8 @@ create trigger on_role_change
 create index idx_clients_email on clients(email);
 create index idx_clients_invite_token on clients(invite_token);
 create index idx_clients_user_id on clients(user_id);
+create index idx_appointments_coach_id on appointments(coach_id);
+create index idx_appointments_client_id on appointments(client_id);
+create index idx_appointments_google_calendar_event_id on appointments(google_calendar_event_id);
+create index idx_appointment_slots_coach_id on appointment_slots(coach_id);
+create index idx_appointment_slots_starts_at on appointment_slots(starts_at);
