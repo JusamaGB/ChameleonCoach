@@ -4,16 +4,17 @@ import { useEffect, useState } from "react"
 import Link from "next/link"
 import { usePathname, useRouter } from "next/navigation"
 import { createClient } from "@/lib/supabase/client"
+import { canAccessFeature } from "@/lib/modules"
 import { cn } from "@/lib/utils"
-import { LayoutDashboard, UserPlus, Settings, LogOut, CreditCard, Calendar, Dumbbell, Menu, X } from "lucide-react"
+import { LayoutDashboard, Users, Settings, LogOut, CreditCard, Calendar, Dumbbell, Menu, X } from "lucide-react"
 import { PLATFORM_NAME } from "@/lib/platform"
 
 const navItems = [
   { href: "/admin", label: "Dashboard", icon: LayoutDashboard },
-  { href: "/admin/invite", label: "Invite Client", icon: UserPlus },
+  { href: "/admin/clients", label: "Clients", icon: Users },
   { href: "/admin/appointments", label: "Appointments", icon: Calendar },
-  { href: "/admin/settings", label: "Settings", icon: Settings },
   { href: "/admin/billing", label: "Billing", icon: CreditCard },
+  { href: "/admin/settings", label: "Settings", icon: Settings },
 ]
 
 export function AdminNav() {
@@ -26,10 +27,10 @@ export function AdminNav() {
     fetch("/api/admin/profile")
       .then((res) => res.json())
       .then((data) => {
-        const activeModules = Array.isArray(data.resolved_active_modules)
+        const activeModules: string[] = Array.isArray(data.resolved_active_modules)
           ? data.resolved_active_modules
           : []
-        setCanAccessExercises(activeModules.includes("pt_core"))
+        setCanAccessExercises(canAccessFeature("exercises", activeModules))
       })
       .catch(() => {
         setCanAccessExercises(pathname === "/admin/exercises")
@@ -40,6 +41,14 @@ export function AdminNav() {
     const supabase = createClient()
     await supabase.auth.signOut()
     router.push("/login")
+  }
+
+  function isActiveNavItem(href: string) {
+    if (href === "/admin") {
+      return pathname === href
+    }
+
+    return pathname === href || pathname.startsWith(`${href}/`)
   }
 
   const navContent = (
@@ -65,7 +74,7 @@ export function AdminNav() {
             onClick={() => setOpen(false)}
             className={cn(
               "flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm transition-colors",
-              pathname === href
+              isActiveNavItem(href)
                 ? "bg-gf-pink/10 text-gf-pink font-medium"
                 : "text-gf-muted hover:text-white hover:bg-gf-surface"
             )}
@@ -80,7 +89,7 @@ export function AdminNav() {
             onClick={() => setOpen(false)}
             className={cn(
               "flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm transition-colors",
-              pathname === "/admin/exercises"
+              isActiveNavItem("/admin/exercises")
                 ? "bg-gf-pink/10 text-gf-pink font-medium"
                 : "text-gf-muted hover:text-white hover:bg-gf-surface"
             )}

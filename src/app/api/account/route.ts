@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server"
 import { createAdmin, createClient } from "@/lib/supabase/server"
+import { deleteClientsForCoach, findAnyClientsForCoach } from "@/lib/clients"
 
 async function deleteClientAccount(userId: string) {
   const admin = createAdmin()
@@ -41,10 +42,7 @@ async function deleteCoachWorkspace(userId: string) {
     throw new Error("Coach workspace not found")
   }
 
-  const { error: clientsDeleteError } = await admin
-    .from("clients")
-    .delete()
-    .eq("coach_id", userId)
+  const { error: clientsDeleteError } = await deleteClientsForCoach(admin, userId)
 
   if (clientsDeleteError) {
     throw new Error(`Failed to delete workspace clients: ${clientsDeleteError.message}`)
@@ -124,12 +122,7 @@ export async function DELETE() {
     .eq("user_id", user.id)
     .maybeSingle()
 
-  const { data: ownedClient } = await admin
-    .from("clients")
-    .select("id")
-    .eq("coach_id", user.id)
-    .limit(1)
-    .maybeSingle()
+  const { data: ownedClient } = await findAnyClientsForCoach(admin, user.id)
 
   try {
     if (role?.role === "coach" || role?.role === "admin" || settings || ownedClient) {

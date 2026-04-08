@@ -13,10 +13,43 @@ export const ENABLEABLE_MODULES = ["pt_core", "nutrition_core"] as const
 
 export type EnableableModule = (typeof ENABLEABLE_MODULES)[number]
 export type ModuleKey = "shared_core" | EnableableModule
+export type FeatureScope = "coach" | "client"
+export type SurfaceFeature =
+  | "dashboard"
+  | "clients"
+  | "appointments"
+  | "billing"
+  | "settings"
+  | "invite"
+  | "exercises"
+  | "client_overview"
+  | "client_meal_plan"
+  | "client_progress"
+  | "client_appointments"
 
 export const MODULE_LABELS: Record<EnableableModule, string> = {
   pt_core: "PT Core",
   nutrition_core: "Nutrition Core",
+}
+
+const FEATURE_DEFINITIONS: Record<
+  SurfaceFeature,
+  {
+    scope: FeatureScope
+    requiredModule?: ModuleKey
+  }
+> = {
+  dashboard: { scope: "coach", requiredModule: "shared_core" },
+  clients: { scope: "coach", requiredModule: "shared_core" },
+  appointments: { scope: "coach", requiredModule: "shared_core" },
+  billing: { scope: "coach", requiredModule: "shared_core" },
+  settings: { scope: "coach", requiredModule: "shared_core" },
+  invite: { scope: "coach", requiredModule: "shared_core" },
+  exercises: { scope: "coach", requiredModule: "pt_core" },
+  client_overview: { scope: "client", requiredModule: "shared_core" },
+  client_meal_plan: { scope: "client", requiredModule: "shared_core" },
+  client_progress: { scope: "client", requiredModule: "shared_core" },
+  client_appointments: { scope: "client", requiredModule: "shared_core" },
 }
 
 export function isCoachTypePreset(value: unknown): value is CoachTypePreset {
@@ -67,4 +100,21 @@ export function resolveActiveModules(input: {
     is_legacy_workspace: isLegacyWorkspace,
     has_module: (module: ModuleKey) => activeModules.includes(module),
   }
+}
+
+export function getFeatureScope(feature: SurfaceFeature): FeatureScope {
+  return FEATURE_DEFINITIONS[feature].scope
+}
+
+export function canAccessFeature(
+  feature: SurfaceFeature,
+  activeModules: readonly string[]
+) {
+  const requiredModule = FEATURE_DEFINITIONS[feature].requiredModule
+
+  if (!requiredModule) {
+    return true
+  }
+
+  return activeModules.includes(requiredModule)
 }
