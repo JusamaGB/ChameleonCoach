@@ -14,6 +14,21 @@ export function isMissingCoachIdColumn(error: { code?: string; message?: string 
 export async function resolveLegacyCoachId(
   supabase: { from: (table: string) => any }
 ) {
+  const connectedCoachQuery = await supabase
+    .from("admin_settings")
+    .select("user_id, google_refresh_token, updated_at")
+    .not("google_refresh_token", "is", null)
+    .order("updated_at", { ascending: false })
+    .limit(1)
+    .maybeSingle()
+
+  if (!connectedCoachQuery.error && connectedCoachQuery.data?.user_id) {
+    return {
+      data: connectedCoachQuery.data.user_id,
+      error: null,
+    }
+  }
+
   const coachQuery = await supabase
     .from("user_roles")
     .select("user_id")
