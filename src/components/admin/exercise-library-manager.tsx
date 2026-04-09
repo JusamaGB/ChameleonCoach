@@ -5,7 +5,7 @@ import { Card, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input, Select, TextArea } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
-import { Search, Pencil, Plus } from "lucide-react"
+import { Search, Pencil } from "lucide-react"
 import type { Exercise } from "@/types"
 
 const CATEGORY_OPTIONS = [
@@ -239,7 +239,7 @@ export function ExerciseLibraryManager({
       <div>
         <h1 className="text-2xl font-bold mb-2">Exercises</h1>
         <p className="text-gf-muted">
-          PT Core workspace library for reusable exercises. Enable it from Modules, then use client-specific PT work from inside each client workspace as those surfaces expand.
+          Build your PT exercise library here, then use these movements inside workouts and programs.
         </p>
       </div>
 
@@ -283,11 +283,16 @@ export function ExerciseLibraryManager({
           </div>
 
           {filteredExercises.length === 0 ? (
-            <p className="py-8 text-sm text-gf-muted">
-              {exercises.length === 0
-                ? "No exercises yet. Add the first entry to establish the library."
-                : "No exercises match the current search or category filter."}
-            </p>
+            <div className="rounded-xl border border-dashed border-gf-border bg-gf-black/10 px-5 py-8">
+              <p className="text-sm font-medium text-white">
+                {exercises.length === 0 ? "No exercises yet" : "No matching exercises"}
+              </p>
+              <p className="mt-2 text-sm text-gf-muted">
+                {exercises.length === 0
+                  ? "Create your first exercise on the right to start building the PT library."
+                  : "Try a different search term or clear the category filter."}
+              </p>
+            </div>
           ) : (
             <div className="space-y-3">
               {filteredExercises.map((exercise) => {
@@ -371,19 +376,6 @@ export function ExerciseLibraryManager({
           onSubmit={createExercise}
         />
       </div>
-
-      <Card>
-        <div className="flex items-start gap-3">
-          <Plus size={18} className="mt-0.5 text-gf-pink" />
-          <div>
-            <CardTitle>Why This Slice</CardTitle>
-            <p className="mt-2 text-sm text-gf-muted">
-              Each exercise now has a stable coach-owned record that can be referenced later by workout-builder blocks,
-              templates, and scheduling flows without rebuilding the admin foundation.
-            </p>
-          </div>
-        </div>
-      </Card>
     </div>
   )
 }
