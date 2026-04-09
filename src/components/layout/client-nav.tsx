@@ -12,28 +12,54 @@ import {
   User,
   Calendar,
   LogOut,
+  Dumbbell,
 } from "lucide-react"
 import { DEFAULT_COACH_BRANDING, type CoachBranding } from "@/lib/branding"
+import { canAccessFeature } from "@/lib/modules"
 
 const navItems = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
-  { href: "/meal-plan", label: "Meal Plan", icon: UtensilsCrossed },
+  { href: "/training", label: "Training", icon: Dumbbell, feature: "client_portal_training" as const },
+  { href: "/meal-plan", label: "Meal Plan", icon: UtensilsCrossed, feature: "client_portal_meal_plan" as const },
   { href: "/progress", label: "Progress", icon: TrendingUp },
   { href: "/appointments", label: "Appointments", icon: Calendar },
   { href: "/profile", label: "Profile", icon: User },
 ]
 
-export function ClientNav() {
+export function ClientNav({
+  branding: initialBranding,
+  activeModules: initialActiveModules,
+}: {
+  branding?: CoachBranding
+  activeModules?: string[]
+}) {
   const pathname = usePathname()
   const router = useRouter()
-  const [branding, setBranding] = useState<CoachBranding>(DEFAULT_COACH_BRANDING)
+  const [branding, setBranding] = useState<CoachBranding>(initialBranding ?? DEFAULT_COACH_BRANDING)
+  const [activeModules, setActiveModules] = useState<string[]>(initialActiveModules ?? ["shared_core"])
 
   useEffect(() => {
-    fetch("/api/client/branding")
-      .then((res) => (res.ok ? res.json() : DEFAULT_COACH_BRANDING))
-      .then((data) => setBranding(data))
-      .catch(() => setBranding(DEFAULT_COACH_BRANDING))
-  }, [])
+    if (initialBranding && initialActiveModules) {
+      return
+    }
+
+    fetch("/api/client/portal")
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (!data) {
+          setBranding(DEFAULT_COACH_BRANDING)
+          setActiveModules(["shared_core"])
+          return
+        }
+
+        setBranding(data)
+        setActiveModules(Array.isArray(data.active_modules) ? data.active_modules : ["shared_core"])
+      })
+      .catch(() => {
+        setBranding(DEFAULT_COACH_BRANDING)
+        setActiveModules(["shared_core"])
+      })
+  }, [initialActiveModules, initialBranding])
 
   async function handleLogout() {
     const supabase = createClient()
@@ -71,7 +97,9 @@ export function ClientNav() {
         </Link>
 
         <div className="flex flex-col gap-1 flex-1">
-          {navItems.map(({ href, label, icon: Icon }) => (
+          {navItems
+            .filter((item) => !item.feature || canAccessFeature(item.feature, activeModules))
+            .map(({ href, label, icon: Icon }) => (
             <Link
               key={href}
               href={href}
@@ -109,7 +137,9 @@ export function ClientNav() {
       {/* Mobile bottom bar */}
       <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-gf-dark border-t border-gf-border z-50">
         <div className="flex justify-around py-2">
-          {navItems.map(({ href, label, icon: Icon }) => (
+          {navItems
+            .filter((item) => !item.feature || canAccessFeature(item.feature, activeModules))
+            .map(({ href, label, icon: Icon }) => (
             <Link
               key={href}
               href={href}

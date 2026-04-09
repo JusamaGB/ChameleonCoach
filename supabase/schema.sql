@@ -105,9 +105,185 @@ create table exercises (
   coach_id uuid not null references auth.users(id) on delete cascade,
   name text not null,
   category text not null,
+  movement_pattern text,
+  primary_muscles text,
+  secondary_muscles text,
+  equipment text,
+  difficulty text,
+  default_units text default 'reps',
   description text,
   coaching_notes text,
   media_url text,
+  is_archived boolean not null default false,
+  created_at timestamptz default now(),
+  updated_at timestamptz default now()
+);
+
+create table pt_workouts (
+  id uuid primary key default gen_random_uuid(),
+  coach_id uuid not null references auth.users(id) on delete cascade,
+  name text not null,
+  description text,
+  goal text,
+  estimated_duration_minutes integer,
+  difficulty text,
+  is_template boolean not null default true,
+  is_archived boolean not null default false,
+  created_at timestamptz default now(),
+  updated_at timestamptz default now()
+);
+
+create table pt_workout_exercises (
+  id uuid primary key default gen_random_uuid(),
+  workout_id uuid not null references pt_workouts(id) on delete cascade,
+  exercise_id uuid references exercises(id) on delete set null,
+  sort_order integer not null default 0,
+  block_label text,
+  prescription_type text not null default 'reps'
+    check (prescription_type in ('reps', 'time', 'distance')),
+  sets integer,
+  reps text,
+  rep_range_min integer,
+  rep_range_max integer,
+  duration_seconds integer,
+  distance_value numeric,
+  distance_unit text,
+  rest_seconds integer,
+  tempo text,
+  load_guidance text,
+  rpe_target numeric,
+  notes text,
+  created_at timestamptz default now(),
+  updated_at timestamptz default now()
+);
+
+create table pt_programs (
+  id uuid primary key default gen_random_uuid(),
+  coach_id uuid not null references auth.users(id) on delete cascade,
+  name text not null,
+  description text,
+  goal text,
+  duration_weeks integer not null default 1,
+  difficulty text,
+  is_template boolean not null default true,
+  is_archived boolean not null default false,
+  created_at timestamptz default now(),
+  updated_at timestamptz default now()
+);
+
+create table pt_program_sessions (
+  id uuid primary key default gen_random_uuid(),
+  program_id uuid not null references pt_programs(id) on delete cascade,
+  week_number integer not null,
+  day_number integer not null,
+  sort_order integer not null default 0,
+  session_name text not null,
+  workout_id uuid references pt_workouts(id) on delete set null,
+  focus text,
+  notes text,
+  created_at timestamptz default now(),
+  updated_at timestamptz default now()
+);
+
+create table client_pt_program_assignments (
+  id uuid primary key default gen_random_uuid(),
+  coach_id uuid not null references auth.users(id) on delete cascade,
+  client_id uuid not null references clients(id) on delete cascade,
+  program_id uuid references pt_programs(id) on delete set null,
+  program_name_snapshot text not null,
+  assigned_start_date date,
+  assigned_end_date date,
+  status text not null default 'draft'
+    check (status in ('draft', 'active', 'completed', 'cancelled')),
+  current_week integer,
+  assignment_notes text,
+  last_session_completed_at timestamptz,
+  completed_sessions_count integer not null default 0,
+  total_sessions_count integer not null default 0,
+  adherence_percent numeric not null default 0,
+  created_at timestamptz default now(),
+  updated_at timestamptz default now()
+);
+
+create table client_pt_sessions (
+  id uuid primary key default gen_random_uuid(),
+  assignment_id uuid not null references client_pt_program_assignments(id) on delete cascade,
+  client_id uuid not null references clients(id) on delete cascade,
+  coach_id uuid not null references auth.users(id) on delete cascade,
+  program_id uuid references pt_programs(id) on delete set null,
+  program_session_id uuid references pt_program_sessions(id) on delete set null,
+  workout_id uuid references pt_workouts(id) on delete set null,
+  session_name text not null,
+  scheduled_date date,
+  week_number integer not null,
+  day_number integer not null,
+  sort_order integer not null default 0,
+  status text not null default 'upcoming'
+    check (status in ('upcoming', 'available', 'completed', 'skipped')),
+  completed_at timestamptz,
+  coach_note text,
+  client_note text,
+  created_at timestamptz default now(),
+  updated_at timestamptz default now()
+);
+
+create table client_pt_session_exercises (
+  id uuid primary key default gen_random_uuid(),
+  client_session_id uuid not null references client_pt_sessions(id) on delete cascade,
+  exercise_id uuid references exercises(id) on delete set null,
+  exercise_name_snapshot text not null,
+  sort_order integer not null default 0,
+  block_label text,
+  prescription_type text not null default 'reps'
+    check (prescription_type in ('reps', 'time', 'distance')),
+  sets integer,
+  reps text,
+  rep_range_min integer,
+  rep_range_max integer,
+  duration_seconds integer,
+  distance_value numeric,
+  distance_unit text,
+  rest_seconds integer,
+  tempo text,
+  load_guidance text,
+  rpe_target numeric,
+  notes text,
+  created_at timestamptz default now(),
+  updated_at timestamptz default now()
+);
+
+create table client_pt_logs (
+  id uuid primary key default gen_random_uuid(),
+  client_session_id uuid not null unique references client_pt_sessions(id) on delete cascade,
+  client_id uuid not null references clients(id) on delete cascade,
+  coach_id uuid not null references auth.users(id) on delete cascade,
+  logged_at timestamptz not null default now(),
+  completion_status text not null default 'completed'
+    check (completion_status in ('completed', 'partial', 'skipped')),
+  session_rpe numeric,
+  energy_rating integer,
+  client_feedback text,
+  coach_follow_up_note text,
+  created_at timestamptz default now(),
+  updated_at timestamptz default now()
+);
+
+create table client_pt_log_exercises (
+  id uuid primary key default gen_random_uuid(),
+  pt_log_id uuid not null references client_pt_logs(id) on delete cascade,
+  client_session_exercise_id uuid references client_pt_session_exercises(id) on delete set null,
+  exercise_id uuid references exercises(id) on delete set null,
+  exercise_name_snapshot text not null,
+  set_number integer not null default 1,
+  target_reps integer,
+  completed_reps integer,
+  weight_value numeric,
+  weight_unit text,
+  duration_seconds integer,
+  distance_value numeric,
+  distance_unit text,
+  rpe numeric,
+  notes text,
   created_at timestamptz default now(),
   updated_at timestamptz default now()
 );
@@ -118,6 +294,15 @@ alter table clients enable row level security;
 alter table appointments enable row level security;
 alter table appointment_slots enable row level security;
 alter table exercises enable row level security;
+alter table pt_workouts enable row level security;
+alter table pt_workout_exercises enable row level security;
+alter table pt_programs enable row level security;
+alter table pt_program_sessions enable row level security;
+alter table client_pt_program_assignments enable row level security;
+alter table client_pt_sessions enable row level security;
+alter table client_pt_session_exercises enable row level security;
+alter table client_pt_logs enable row level security;
+alter table client_pt_log_exercises enable row level security;
 
 -- Admin can read/write their own settings
 create policy "admin_own_settings" on admin_settings
@@ -162,6 +347,121 @@ create policy "coach_own_exercises" on exercises
     and coach_id = auth.uid()
   );
 
+create policy "coach_own_pt_workouts" on pt_workouts
+  for all using (
+    (auth.jwt() -> 'app_metadata' ->> 'role') in ('coach', 'admin')
+    and coach_id = auth.uid()
+  );
+
+create policy "coach_own_pt_workout_exercises" on pt_workout_exercises
+  for all using (
+    workout_id in (
+      select id from pt_workouts where coach_id = auth.uid()
+    )
+  );
+
+create policy "coach_own_pt_programs" on pt_programs
+  for all using (
+    (auth.jwt() -> 'app_metadata' ->> 'role') in ('coach', 'admin')
+    and coach_id = auth.uid()
+  );
+
+create policy "coach_own_pt_program_sessions" on pt_program_sessions
+  for all using (
+    program_id in (
+      select id from pt_programs where coach_id = auth.uid()
+    )
+  );
+
+create policy "coach_own_client_pt_assignments" on client_pt_program_assignments
+  for all using (
+    (auth.jwt() -> 'app_metadata' ->> 'role') in ('coach', 'admin')
+    and coach_id = auth.uid()
+  );
+
+create policy "client_read_own_pt_assignments" on client_pt_program_assignments
+  for select using (
+    client_id in (select id from clients where user_id = auth.uid())
+  );
+
+create policy "coach_own_client_pt_sessions" on client_pt_sessions
+  for all using (
+    (auth.jwt() -> 'app_metadata' ->> 'role') in ('coach', 'admin')
+    and coach_id = auth.uid()
+  );
+
+create policy "client_read_own_pt_sessions" on client_pt_sessions
+  for select using (
+    client_id in (select id from clients where user_id = auth.uid())
+  );
+
+create policy "coach_own_client_pt_session_exercises" on client_pt_session_exercises
+  for all using (
+    client_session_id in (
+      select id from client_pt_sessions where coach_id = auth.uid()
+    )
+  );
+
+create policy "client_read_own_pt_session_exercises" on client_pt_session_exercises
+  for select using (
+    client_session_id in (
+      select id from client_pt_sessions
+      where client_id in (select id from clients where user_id = auth.uid())
+    )
+  );
+
+create policy "coach_own_client_pt_logs" on client_pt_logs
+  for all using (
+    (auth.jwt() -> 'app_metadata' ->> 'role') in ('coach', 'admin')
+    and coach_id = auth.uid()
+  );
+
+create policy "client_read_own_pt_logs" on client_pt_logs
+  for select using (
+    client_id in (select id from clients where user_id = auth.uid())
+  );
+
+create policy "client_insert_own_pt_logs" on client_pt_logs
+  for insert with check (
+    client_id in (select id from clients where user_id = auth.uid())
+  );
+
+create policy "client_update_own_pt_logs" on client_pt_logs
+  for update using (
+    client_id in (select id from clients where user_id = auth.uid())
+  );
+
+create policy "coach_own_client_pt_log_exercises" on client_pt_log_exercises
+  for all using (
+    pt_log_id in (
+      select id from client_pt_logs where coach_id = auth.uid()
+    )
+  );
+
+create policy "client_read_own_pt_log_exercises" on client_pt_log_exercises
+  for select using (
+    pt_log_id in (
+      select id from client_pt_logs
+      where client_id in (select id from clients where user_id = auth.uid())
+    )
+  );
+
+create policy "client_insert_own_pt_log_exercises" on client_pt_log_exercises
+  for insert with check (
+    pt_log_id in (
+      select id from client_pt_logs
+      where client_id in (select id from clients where user_id = auth.uid())
+    )
+  );
+
+create policy "client_update_own_pt_log_exercises" on client_pt_log_exercises
+  for update using (
+    pt_log_id in (
+      select id from client_pt_logs
+      where client_id in (select id from clients where user_id = auth.uid())
+    )
+  );
+
 -- User roles table (source of truth for RBAC)
 create table user_roles (
   id uuid primary key default gen_random_uuid(),
@@ -202,3 +502,16 @@ create index idx_appointment_slots_starts_at on appointment_slots(starts_at);
 create index idx_exercises_coach_id on exercises(coach_id);
 create index idx_exercises_coach_id_category on exercises(coach_id, category);
 create index idx_exercises_coach_id_name on exercises(coach_id, name);
+create index idx_pt_workouts_coach_id on pt_workouts(coach_id);
+create index idx_pt_workout_exercises_workout_id on pt_workout_exercises(workout_id, sort_order);
+create index idx_pt_programs_coach_id on pt_programs(coach_id);
+create index idx_pt_program_sessions_program_id on pt_program_sessions(program_id, week_number, day_number, sort_order);
+create index idx_client_pt_assignments_client_id on client_pt_program_assignments(client_id);
+create index idx_client_pt_assignments_coach_id on client_pt_program_assignments(coach_id);
+create unique index idx_client_pt_assignments_one_active_per_client on client_pt_program_assignments(client_id)
+  where status = 'active';
+create index idx_client_pt_sessions_assignment_id on client_pt_sessions(assignment_id, week_number, day_number, sort_order);
+create index idx_client_pt_sessions_client_id on client_pt_sessions(client_id, status);
+create index idx_client_pt_session_exercises_session_id on client_pt_session_exercises(client_session_id, sort_order);
+create index idx_client_pt_logs_client_id on client_pt_logs(client_id, logged_at desc);
+create index idx_client_pt_log_exercises_log_id on client_pt_log_exercises(pt_log_id, set_number);

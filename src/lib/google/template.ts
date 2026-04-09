@@ -383,10 +383,37 @@ async function ensurePtLibraryWorkbookContent(
   sheets: ReturnType<typeof google.sheets>,
   spreadsheetId: string
 ) {
-  await ensureSpreadsheetTabs(sheets, spreadsheetId, ["Exercise Library"])
+  await ensureSpreadsheetTabs(sheets, spreadsheetId, [
+    "Exercise Library",
+    "PT_Exercises",
+    "PT_Workouts",
+    "PT_Workout_Exercises",
+    "PT_Programs",
+    "PT_Program_Sessions",
+  ])
   await updateValues(sheets, spreadsheetId, "Exercise Library!A1:E2", [
     ["Name", "Category", "Description", "Coaching Notes", "Media URL"],
     ["", "", "", "", ""],
+  ])
+  await updateValues(sheets, spreadsheetId, "PT_Exercises!A1:N2", [
+    ["exercise_id", "name", "category", "movement_pattern", "primary_muscles", "secondary_muscles", "equipment", "difficulty", "default_units", "description", "coaching_notes", "demo_url", "is_archived", "updated_at"],
+    ["", "", "", "", "", "", "", "", "", "", "", "", "", ""],
+  ])
+  await updateValues(sheets, spreadsheetId, "PT_Workouts!A1:H2", [
+    ["workout_id", "name", "description", "goal", "estimated_duration_minutes", "difficulty", "is_template", "updated_at"],
+    ["", "", "", "", "", "", "", ""],
+  ])
+  await updateValues(sheets, spreadsheetId, "PT_Workout_Exercises!A1:T2", [
+    ["workout_exercise_id", "workout_id", "workout_name", "sort_order", "block_label", "exercise_id", "exercise_name", "prescription_type", "sets", "reps", "rep_range_min", "rep_range_max", "duration_seconds", "distance_value", "distance_unit", "rest_seconds", "tempo", "load_guidance", "rpe_target", "notes"],
+    ["", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", ""],
+  ])
+  await updateValues(sheets, spreadsheetId, "PT_Programs!A1:I2", [
+    ["program_id", "name", "description", "goal", "duration_weeks", "difficulty", "is_template", "is_archived", "updated_at"],
+    ["", "", "", "", "", "", "", "", ""],
+  ])
+  await updateValues(sheets, spreadsheetId, "PT_Program_Sessions!A1:L2", [
+    ["program_session_id", "program_id", "program_name", "week_number", "day_number", "sort_order", "session_name", "workout_id", "workout_name", "focus", "notes", "updated_at"],
+    ["", "", "", "", "", "", "", "", "", "", "", ""],
   ])
 }
 
@@ -407,12 +434,18 @@ async function ensureClientWorkbookContent(
   {
     clientEmail,
     onboarding,
+    activeModules,
   }: {
     clientEmail: string
     onboarding: OnboardingData
+    activeModules: EnableableModule[]
   }
 ) {
-  await ensureSpreadsheetTabs(sheets, spreadsheetId, ["Profile", "Meal Plan", "Progress"])
+  const clientTabs = ["Profile", "Meal Plan", "Progress"]
+  if (activeModules.includes("pt_core")) {
+    clientTabs.push("Training_Plan", "Training_Plan_Exercises", "Workout_Log", "Workout_Log_Exercises")
+  }
+  await ensureSpreadsheetTabs(sheets, spreadsheetId, clientTabs)
 
   await updateValues(sheets, spreadsheetId, "Profile!A1:B12", [
     ["Name", onboarding.name],
@@ -443,6 +476,25 @@ async function ensureClientWorkbookContent(
   await updateValues(sheets, spreadsheetId, "Progress!A1:D1", [
     ["Date", "Weight", "Measurements", "Notes"],
   ])
+
+  if (activeModules.includes("pt_core")) {
+    await updateValues(sheets, spreadsheetId, "Training_Plan!A1:O2", [
+      ["client_session_id", "assignment_id", "program_id", "program_name", "week_number", "day_number", "sort_order", "session_name", "workout_id", "workout_name", "scheduled_date", "status", "coach_note", "completed_at", "updated_at"],
+      ["", "", "", "", "", "", "", "", "", "", "", "", "", "", ""],
+    ])
+    await updateValues(sheets, spreadsheetId, "Training_Plan_Exercises!A1:U2", [
+      ["client_session_exercise_id", "client_session_id", "session_name", "sort_order", "block_label", "exercise_id", "exercise_name", "prescription_type", "sets", "reps", "rep_range_min", "rep_range_max", "duration_seconds", "distance_value", "distance_unit", "rest_seconds", "tempo", "load_guidance", "rpe_target", "notes", "updated_at"],
+      ["", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", ""],
+    ])
+    await updateValues(sheets, spreadsheetId, "Workout_Log!A1:L2", [
+      ["pt_log_id", "client_session_id", "assignment_id", "program_name", "session_name", "logged_at", "completion_status", "session_rpe", "energy_rating", "client_feedback", "coach_follow_up_note", "updated_at"],
+      ["", "", "", "", "", "", "", "", "", "", "", ""],
+    ])
+    await updateValues(sheets, spreadsheetId, "Workout_Log_Exercises!A1:Q2", [
+      ["pt_log_exercise_id", "pt_log_id", "client_session_id", "client_session_exercise_id", "exercise_id", "exercise_name", "set_number", "target_reps", "completed_reps", "weight_value", "weight_unit", "duration_seconds", "distance_value", "distance_unit", "rpe", "notes", "logged_at"],
+      ["", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", ""],
+    ])
+  }
 }
 
 async function upsertClientIndexRow(
@@ -801,6 +853,7 @@ export async function createClientSheet({
   await ensureClientWorkbookContent(sheets, clientWorkbook.id, {
     clientEmail,
     onboarding,
+    activeModules,
   })
 
   let permissionId = clientWorkspace?.sheet_shared_permission_id ?? null

@@ -1,0 +1,344 @@
+"use client"
+
+import { useState } from "react"
+import { Badge } from "@/components/ui/badge"
+import { Button } from "@/components/ui/button"
+import { Card, CardTitle } from "@/components/ui/card"
+import { Input, Select, TextArea } from "@/components/ui/input"
+import type { PTProgram, PTWorkout } from "@/types"
+
+type ProgramSessionRow = {
+  week_number: string
+  day_number: string
+  sort_order: number
+  session_name: string
+  workout_id: string | null
+  focus: string
+  notes: string
+}
+
+type ProgramRecord = PTProgram & {
+  sessions: Array<ProgramSessionRow & { id: string; workout_name?: string | null }>
+}
+
+const EMPTY_SESSION: ProgramSessionRow = {
+  week_number: "1",
+  day_number: "1",
+  sort_order: 1,
+  session_name: "",
+  workout_id: null,
+  focus: "",
+  notes: "",
+}
+
+const EMPTY_PROGRAM = {
+  name: "",
+  description: "",
+  goal: "",
+  duration_weeks: "4",
+  difficulty: "",
+  sessions: [{ ...EMPTY_SESSION }],
+}
+
+export function ProgramsManager({
+  initialPrograms,
+  workouts,
+}: {
+  initialPrograms: ProgramRecord[]
+  workouts: PTWorkout[]
+}) {
+  const [programs, setPrograms] = useState(initialPrograms)
+  const [editingId, setEditingId] = useState<string | null>(null)
+  const [form, setForm] = useState(EMPTY_PROGRAM)
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState("")
+
+  function resetForm() {
+    setEditingId(null)
+    setForm(EMPTY_PROGRAM)
+    setError("")
+  }
+
+  function updateSession(index: number, field: keyof ProgramSessionRow, value: string) {
+    setForm((current) => ({
+      ...current,
+      sessions: current.sessions.map((session, sessionIndex) =>
+        sessionIndex === index
+          ? {
+              ...session,
+              [field]: value,
+              sort_order: sessionIndex + 1,
+            }
+          : session
+      ),
+    }))
+  }
+
+  function addSession() {
+    setForm((current) => ({
+      ...current,
+      sessions: [...current.sessions, { ...EMPTY_SESSION, sort_order: current.sessions.length + 1 }],
+    }))
+  }
+
+  function removeSession(index: number) {
+    setForm((current) => ({
+      ...current,
+      sessions: current.sessions
+        .filter((_, sessionIndex) => sessionIndex !== index)
+        .map((session, sessionIndex) => ({ ...session, sort_order: sessionIndex + 1 })),
+    }))
+  }
+
+  function startEdit(program: ProgramRecord) {
+    setEditingId(program.id)
+    setForm({
+      name: program.name,
+      description: program.description ?? "",
+      goal: program.goal ?? "",
+      duration_weeks: program.duration_weeks.toString(),
+      difficulty: program.difficulty ?? "",
+      sessions: program.sessions.length
+        ? program.sessions.map((session, index) => ({
+            week_number: session.week_number,
+            day_number: session.day_number,
+            sort_order: index + 1,
+            session_name: session.session_name ?? "",
+            workout_id: session.workout_id,
+            focus: session.focus ?? "",
+            notes: session.notes ?? "",
+          }))
+        : [{ ...EMPTY_SESSION }],
+    })
+    setError("")
+  }
+
+  async function submit(event: React.FormEvent) {
+    event.preventDefault()
+    setSaving(true)
+    setError("")
+
+    const payload = {
+      name: form.name,
+      description: form.description,
+      goal: form.goal,
+      duration_weeks: form.duration_weeks,
+      difficulty: form.difficulty,
+      sessions: form.sessions
+        .filter((session) => session.session_name.trim().length > 0)
+        .map((session, index) => ({
+          ...session,
+          sort_order: index + 1,
+        })),
+    }
+
+    const url = editingId ? `/api/admin/programs/${editingId}` : "/api/admin/programs"
+    const method = editingId ? "PATCH" : "POST"
+
+    try {
+      const response = await fetch(url, {
+        method,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      })
+      const data = await response.json()
+      if (!response.ok) {
+        setError(data.error || "Failed to save program")
+        return
+      }
+
+      const refreshed = await fetch("/api/admin/programs").then((res) => res.json())
+      setPrograms(refreshed.programs ?? [])
+      resetForm()
+    } catch {
+      setError("Failed to save program")
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <div className="mx-auto max-w-6xl space-y-6">
+      <div>
+        <h1 className="text-2xl font-bold">Programs</h1>
+        <p className="mt-2 text-gf-muted">
+          Group reusable workouts into coach-owned training plans that can be assigned to clients and materialized into session rows.
+        </p>
+      </div>
+
+      <div className="grid gap-6 xl:grid-cols-[minmax(0,1.1fr)_minmax(340px,0.9fr)]">
+        <Card>
+          <div className="mb-4 flex items-center justify-between">
+            <div>
+              <CardTitle>Program Library</CardTitle>
+              <p className="mt-1 text-sm text-gf-muted">
+                Reusable templates with week/day/session structure.
+              </p>
+            </div>
+            <Badge variant={programs.length > 0 ? "success" : "default"}>
+              {programs.length} program{programs.length === 1 ? "" : "s"}
+            </Badge>
+          </div>
+
+          {programs.length === 0 ? (
+            <p className="text-sm text-gf-muted">No programs yet. Build the first reusable plan on the right.</p>
+          ) : (
+            <div className="space-y-4">
+              {programs.map((program) => (
+                <div key={program.id} className="rounded-xl border border-gf-border bg-gf-black/20 p-4">
+                  <div className="flex items-start justify-between gap-4">
+                    <div>
+                      <p className="font-medium text-white">{program.name}</p>
+                      {program.goal ? <p className="mt-1 text-sm text-gf-muted">{program.goal}</p> : null}
+                    </div>
+                    <Button type="button" variant="ghost" size="sm" onClick={() => startEdit(program)}>
+                      Edit
+                    </Button>
+                  </div>
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    <Badge>{program.duration_weeks} weeks</Badge>
+                    <Badge variant="default">{program.sessions.length} sessions</Badge>
+                    {program.difficulty ? <Badge>{program.difficulty}</Badge> : null}
+                  </div>
+                  {program.description ? <p className="mt-3 text-sm text-gf-muted">{program.description}</p> : null}
+                  <div className="mt-4 space-y-2">
+                    {program.sessions.map((session) => (
+                      <div key={session.id} className="rounded-lg border border-gf-border px-3 py-2">
+                        <p className="text-sm font-medium text-white">
+                          Week {session.week_number} • Day {session.day_number} • {session.session_name}
+                        </p>
+                        <p className="mt-1 text-xs text-gf-muted">
+                          {session.workout_name || "No workout linked"}
+                          {session.focus ? ` • ${session.focus}` : ""}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </Card>
+
+        <Card>
+          <div className="mb-4 flex items-center justify-between">
+            <CardTitle>{editingId ? "Edit Program" : "Build Program"}</CardTitle>
+            {editingId ? (
+              <Button type="button" variant="ghost" size="sm" onClick={resetForm}>
+                Cancel
+              </Button>
+            ) : null}
+          </div>
+
+          <form onSubmit={submit} className="space-y-4">
+            <Input
+              label="Program name"
+              value={form.name}
+              onChange={(event) => setForm((current) => ({ ...current, name: event.target.value }))}
+              placeholder="e.g. 8 Week PT Starter"
+              required
+            />
+            <TextArea
+              label="Description"
+              value={form.description}
+              onChange={(event) => setForm((current) => ({ ...current, description: event.target.value }))}
+              placeholder="Short overview of the plan."
+            />
+            <Input
+              label="Goal"
+              value={form.goal}
+              onChange={(event) => setForm((current) => ({ ...current, goal: event.target.value }))}
+              placeholder="e.g. general strength and consistency"
+            />
+            <div className="grid gap-4 sm:grid-cols-2">
+              <Input
+                label="Duration (weeks)"
+                type="number"
+                value={form.duration_weeks}
+                onChange={(event) => setForm((current) => ({ ...current, duration_weeks: event.target.value }))}
+              />
+              <Input
+                label="Difficulty"
+                value={form.difficulty}
+                onChange={(event) => setForm((current) => ({ ...current, difficulty: event.target.value }))}
+                placeholder="Beginner / Intermediate / Advanced"
+              />
+            </div>
+
+            <div className="space-y-3 border-t border-gf-border pt-4">
+              <div className="flex items-center justify-between">
+                <p className="text-sm font-medium text-white">Program sessions</p>
+                <Button type="button" variant="secondary" size="sm" onClick={addSession}>
+                  Add session
+                </Button>
+              </div>
+              {form.sessions.map((session, index) => (
+                <div key={`${editingId ?? "new"}-${index}`} className="rounded-xl border border-gf-border bg-gf-black/20 p-4">
+                  <div className="mb-3 flex items-center justify-between">
+                    <p className="text-sm font-medium text-white">Session {index + 1}</p>
+                    {form.sessions.length > 1 ? (
+                      <Button type="button" variant="ghost" size="sm" onClick={() => removeSession(index)}>
+                        Remove
+                      </Button>
+                    ) : null}
+                  </div>
+                  <div className="grid gap-4">
+                    <div className="grid gap-4 sm:grid-cols-3">
+                      <Input
+                        label="Week"
+                        type="number"
+                        value={session.week_number}
+                        onChange={(event) => updateSession(index, "week_number", event.target.value)}
+                      />
+                      <Input
+                        label="Day"
+                        type="number"
+                        value={session.day_number}
+                        onChange={(event) => updateSession(index, "day_number", event.target.value)}
+                      />
+                      <Input
+                        label="Session name"
+                        value={session.session_name}
+                        onChange={(event) => updateSession(index, "session_name", event.target.value)}
+                        placeholder="e.g. Lower A"
+                      />
+                    </div>
+                    <Select
+                      label="Workout"
+                      value={session.workout_id ?? ""}
+                      onChange={(event) => updateSession(index, "workout_id", event.target.value)}
+                      options={[
+                        { value: "", label: "Select workout..." },
+                        ...workouts.map((workout) => ({
+                          value: workout.id,
+                          label: workout.name,
+                        })),
+                      ]}
+                    />
+                    <Input
+                      label="Focus"
+                      value={session.focus}
+                      onChange={(event) => updateSession(index, "focus", event.target.value)}
+                      placeholder="e.g. hinge + posterior chain"
+                    />
+                    <TextArea
+                      label="Notes"
+                      value={session.notes}
+                      onChange={(event) => updateSession(index, "notes", event.target.value)}
+                      placeholder="Optional coach note for this session."
+                    />
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {error ? <p className="text-sm text-red-400">{error}</p> : null}
+            <Button type="submit" disabled={saving}>
+              {saving ? "Saving..." : editingId ? "Save program" : "Create program"}
+            </Button>
+          </form>
+        </Card>
+      </div>
+    </div>
+  )
+}

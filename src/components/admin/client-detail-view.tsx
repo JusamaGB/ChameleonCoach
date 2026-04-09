@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation"
 import { Card, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
+import { Input, Select, TextArea } from "@/components/ui/input"
 import { canAccessFeature } from "@/lib/modules"
 import { MealPlanView } from "@/components/meal-plan/meal-plan-view"
 import { ProgressChart, ProgressHistory } from "@/components/progress/progress-chart"
@@ -12,7 +13,15 @@ import { ClientProfileEditor } from "./client-profile-editor"
 import { MealPlanEditor } from "./meal-plan-editor"
 import Link from "next/link"
 import { ArrowLeft, ExternalLink, Pencil, Trash2 } from "lucide-react"
-import type { Client, ProfileData, MealPlanDay, ProgressEntry } from "@/types"
+import type {
+  Client,
+  ClientPTLog,
+  ClientPTProgramAssignment,
+  ClientPTSession,
+  MealPlanDay,
+  ProfileData,
+  ProgressEntry,
+} from "@/types"
 
 interface ClientDetailViewProps {
   client: Client
@@ -32,6 +41,12 @@ interface ClientDetailViewProps {
     created_at: string
   }[]
   activeModules: string[]
+  ptOverview: {
+    assignment: ClientPTProgramAssignment | null
+    sessions: ClientPTSession[]
+    logs: ClientPTLog[]
+  } | null
+  ptPrograms: Array<{ id: string; name: string; duration_weeks: number }>
 }
 
 export function ClientDetailView({
@@ -41,11 +56,18 @@ export function ClientDetailView({
   progress,
   appointments,
   activeModules,
+  ptOverview,
+  ptPrograms,
 }: ClientDetailViewProps) {
   const router = useRouter()
   const [editingProfile, setEditingProfile] = useState(false)
   const [editingMealPlan, setEditingMealPlan] = useState(false)
   const [deleting, setDeleting] = useState(false)
+  const [assignmentProgramId, setAssignmentProgramId] = useState("")
+  const [assignmentStartDate, setAssignmentStartDate] = useState("")
+  const [assignmentNote, setAssignmentNote] = useState("")
+  const [assigningProgram, setAssigningProgram] = useState(false)
+  const [assignmentError, setAssignmentError] = useState("")
 
   const sheetUrl = client.sheet_id
     ? `https://docs.google.com/spreadsheets/d/${client.sheet_id}`
@@ -56,6 +78,7 @@ export function ClientDetailView({
     { id: "meal-plan", label: "Meal Plan", enabled: canAccessFeature("client_meal_plan", activeModules) },
     { id: "progress", label: "Progress", enabled: canAccessFeature("client_progress", activeModules) },
     { id: "appointments", label: "Appointments", enabled: canAccessFeature("client_appointments", activeModules) },
+    { id: "training", label: "Training", enabled: canAccessFeature("client_training", activeModules) },
   ].filter((section) => section.enabled)
   async function handleDelete() {
     if (!confirm("Are you sure you want to remove this client? This cannot be undone.")) {
@@ -79,6 +102,38 @@ export function ClientDetailView({
     setEditingProfile(false)
     setEditingMealPlan(false)
     router.refresh()
+  }
+
+  async function handleAssignProgram(event: React.FormEvent) {
+    event.preventDefault()
+    if (!assignmentProgramId) return
+
+    setAssigningProgram(true)
+    setAssignmentError("")
+    try {
+      const response = await fetch(`/api/admin/clients/${client.id}/pt-assignment`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          program_id: assignmentProgramId,
+          assigned_start_date: assignmentStartDate || null,
+          assignment_notes: assignmentNote || null,
+        }),
+      })
+      const data = await response.json()
+      if (!response.ok) {
+        setAssignmentError(data.error || "Failed to assign program")
+        return
+      }
+      setAssignmentProgramId("")
+      setAssignmentStartDate("")
+      setAssignmentNote("")
+      router.refresh()
+    } catch {
+      setAssignmentError("Failed to assign program")
+    } finally {
+      setAssigningProgram(false)
+    }
   }
 
   function formatAppointmentDateTime(value: string | null, createdAt: string) {
@@ -436,6 +491,153 @@ export function ClientDetailView({
               ) : (
                 <p className="text-sm text-gf-muted">No appointments for this client yet.</p>
               )}
+            </Card>
+          </section>
+        ) : null}
+
+        {canAccessFeature("client_training", activeModules) ? (
+          <section id="training" className="scroll-mt-24">
+            <Card>
+              <div className="flex items-center justify-between gap-4 mb-4">
+                <div>
+                  <CardTitle>Training</CardTitle>
+                  <p className="mt-2 text-sm text-gf-muted">
+                    Assign the active PT program here, then review training adherence and recent workout activity in context.
+                  </p>
+                </div>
+                <a href="/training" className="text-sm text-gf-pink hover:text-gf-pink-light transition-colors">
+                  Client portal view
+                </a>
+              </div>
+
+              <div className="grid gap-6 lg:grid-cols-[1fr,0.95fr]">
+                <div className="space-y-4">
+                  <div className="rounded-xl border border-gf-border bg-gf-surface p-4">
+                    <p className="text-xs uppercase tracking-wide text-gf-muted">Active assignment</p>
+                    {ptOverview?.assignment ? (
+                      <>
+                        <p className="mt-2 text-lg font-semibold text-white">
+                          {ptOverview.assignment.program_name_snapshot}
+                        </p>
+                        <div className="mt-3 flex flex-wrap gap-2">
+                          <Badge variant="success">{ptOverview.assignment.status}</Badge>
+                          <Badge variant="default">
+                            {ptOverview.assignment.completed_sessions_count}/{ptOverview.assignment.total_sessions_count} sessions completed
+                          </Badge>
+                          <Badge variant="default">{ptOverview.assignment.adherence_percent}% adherence</Badge>
+                        </div>
+                        {ptOverview.assignment.assigned_start_date ? (
+                          <p className="mt-3 text-sm text-gf-muted">
+                            Start date: {new Date(ptOverview.assignment.assigned_start_date).toLocaleDateString("en-GB")}
+                          </p>
+                        ) : null}
+                        {ptOverview.assignment.assignment_notes ? (
+                          <p className="mt-2 text-sm text-gf-muted">{ptOverview.assignment.assignment_notes}</p>
+                        ) : null}
+                        {ptOverview.assignment.last_session_completed_at ? (
+                          <p className="mt-2 text-sm text-gf-muted">
+                            Last completed: {new Date(ptOverview.assignment.last_session_completed_at).toLocaleString("en-GB")}
+                          </p>
+                        ) : null}
+                      </>
+                    ) : (
+                      <p className="mt-2 text-sm text-gf-muted">No PT program assigned yet.</p>
+                    )}
+                  </div>
+
+                  <div className="rounded-xl border border-gf-border bg-gf-surface p-4">
+                    <p className="text-xs uppercase tracking-wide text-gf-muted">Recent sessions</p>
+                    {ptOverview?.sessions?.length ? (
+                      <div className="mt-3 space-y-2">
+                        {ptOverview.sessions.slice(0, 6).map((session) => (
+                          <div key={session.id} className="rounded-lg border border-gf-border px-3 py-2">
+                            <div className="flex items-center justify-between gap-3">
+                              <div>
+                                <p className="text-sm font-medium text-white">{session.session_name}</p>
+                                <p className="text-xs text-gf-muted">
+                                  Week {session.week_number} • Day {session.day_number}
+                                  {session.scheduled_date ? ` • ${new Date(session.scheduled_date).toLocaleDateString("en-GB")}` : ""}
+                                </p>
+                              </div>
+                              <Badge variant={session.status === "completed" ? "success" : "default"}>
+                                {session.status}
+                              </Badge>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="mt-2 text-sm text-gf-muted">No PT sessions materialized yet.</p>
+                    )}
+                  </div>
+
+                  <div className="rounded-xl border border-gf-border bg-gf-surface p-4">
+                    <p className="text-xs uppercase tracking-wide text-gf-muted">Recent workout logs</p>
+                    {ptOverview?.logs?.length ? (
+                      <div className="mt-3 space-y-2">
+                        {ptOverview.logs.slice(0, 5).map((log) => (
+                          <div key={log.id} className="rounded-lg border border-gf-border px-3 py-2">
+                            <div className="flex items-center justify-between gap-3">
+                              <div>
+                                <p className="text-sm font-medium text-white">
+                                  {new Date(log.logged_at).toLocaleString("en-GB")}
+                                </p>
+                                <p className="text-xs text-gf-muted">
+                                  {log.completion_status}
+                                  {log.session_rpe ? ` • Session RPE ${log.session_rpe}` : ""}
+                                  {log.energy_rating ? ` • Energy ${log.energy_rating}/10` : ""}
+                                </p>
+                              </div>
+                              <Badge variant={log.completion_status === "completed" ? "success" : "default"}>
+                                {log.completion_status}
+                              </Badge>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="mt-2 text-sm text-gf-muted">No workout logs recorded yet.</p>
+                    )}
+                  </div>
+                </div>
+
+                <div className="rounded-xl border border-gf-border bg-gf-surface p-4">
+                  <CardTitle>Assign program</CardTitle>
+                  <p className="mt-2 text-sm text-gf-muted">
+                    Assign one active PT program for this client. The plan is materialized into client sessions rather than recomputed on every load.
+                  </p>
+                  <form onSubmit={handleAssignProgram} className="mt-4 space-y-4">
+                    <Select
+                      label="Program"
+                      value={assignmentProgramId}
+                      onChange={(event) => setAssignmentProgramId(event.target.value)}
+                      options={[
+                        { value: "", label: "Select program..." },
+                        ...ptPrograms.map((program) => ({
+                          value: program.id,
+                          label: `${program.name} (${program.duration_weeks} weeks)`,
+                        })),
+                      ]}
+                    />
+                    <Input
+                      label="Start date"
+                      type="date"
+                      value={assignmentStartDate}
+                      onChange={(event) => setAssignmentStartDate(event.target.value)}
+                    />
+                    <TextArea
+                      label="Assignment note"
+                      value={assignmentNote}
+                      onChange={(event) => setAssignmentNote(event.target.value)}
+                      placeholder="Optional coach note for this assignment."
+                    />
+                    {assignmentError ? <p className="text-sm text-red-400">{assignmentError}</p> : null}
+                    <Button type="submit" disabled={assigningProgram || !assignmentProgramId}>
+                      {assigningProgram ? "Assigning..." : "Assign program"}
+                    </Button>
+                  </form>
+                </div>
+              </div>
             </Card>
           </section>
         ) : null}

@@ -2,6 +2,7 @@ import { createClient } from "@/lib/supabase/server"
 import { getProfile, getMealPlan, getProgress } from "@/lib/google/sheets"
 import { ClientDetailView } from "@/components/admin/client-detail-view"
 import { resolveActiveModules } from "@/lib/modules"
+import { getClientPTOverviewForCoach, listPTProgramsForCoach } from "@/lib/pt"
 import { redirect } from "next/navigation"
 import type { MealPlanDay, ProgressEntry, ProfileData } from "@/types"
 
@@ -70,6 +71,8 @@ export default async function ClientDetailPage({
   let profile: ProfileData | null = null
   let mealPlan: MealPlanDay[] = []
   let progress: ProgressEntry[] = []
+  let ptOverview = { assignment: null, sessions: [], logs: [] }
+  let ptPrograms: any[] = []
 
   if (client.sheet_id) {
     try {
@@ -83,6 +86,17 @@ export default async function ClientDetailPage({
     }
   }
 
+  if (activeModules.includes("pt_core")) {
+    try {
+      ;[ptOverview, ptPrograms] = await Promise.all([
+        getClientPTOverviewForCoach(supabase, user.id, id) as Promise<any>,
+        listPTProgramsForCoach(supabase, user.id),
+      ])
+    } catch {
+      // PT data may not be available yet
+    }
+  }
+
   return (
     <ClientDetailView
       client={client}
@@ -91,6 +105,8 @@ export default async function ClientDetailPage({
       progress={progress}
       appointments={appointments}
       activeModules={activeModules}
+      ptOverview={ptOverview}
+      ptPrograms={ptPrograms}
     />
   )
 }

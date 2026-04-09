@@ -98,9 +98,180 @@ export interface Exercise {
   coach_id: string
   name: string
   category: string
+  movement_pattern: string | null
+  primary_muscles: string | null
+  secondary_muscles: string | null
+  equipment: string | null
+  difficulty: string | null
+  default_units: string | null
   description: string | null
   coaching_notes: string | null
   media_url: string | null
+  is_archived: boolean
+  created_at: string
+  updated_at: string
+}
+
+export interface PTWorkout {
+  id: string
+  coach_id: string
+  name: string
+  description: string | null
+  goal: string | null
+  estimated_duration_minutes: number | null
+  difficulty: string | null
+  is_template: boolean
+  is_archived: boolean
+  created_at: string
+  updated_at: string
+}
+
+export interface PTWorkoutExercise {
+  id: string
+  workout_id: string
+  exercise_id: string | null
+  sort_order: number
+  block_label: string | null
+  prescription_type: "reps" | "time" | "distance"
+  sets: number | null
+  reps: string | null
+  rep_range_min: number | null
+  rep_range_max: number | null
+  duration_seconds: number | null
+  distance_value: number | null
+  distance_unit: string | null
+  rest_seconds: number | null
+  tempo: string | null
+  load_guidance: string | null
+  rpe_target: number | null
+  notes: string | null
+  created_at: string
+  updated_at: string
+}
+
+export interface PTProgram {
+  id: string
+  coach_id: string
+  name: string
+  description: string | null
+  goal: string | null
+  duration_weeks: number
+  difficulty: string | null
+  is_template: boolean
+  is_archived: boolean
+  created_at: string
+  updated_at: string
+}
+
+export interface PTProgramSession {
+  id: string
+  program_id: string
+  week_number: number
+  day_number: number
+  sort_order: number
+  session_name: string
+  workout_id: string | null
+  focus: string | null
+  notes: string | null
+  created_at: string
+  updated_at: string
+}
+
+export interface ClientPTProgramAssignment {
+  id: string
+  coach_id: string
+  client_id: string
+  program_id: string | null
+  program_name_snapshot: string
+  assigned_start_date: string | null
+  assigned_end_date: string | null
+  status: "draft" | "active" | "completed" | "cancelled"
+  current_week: number | null
+  assignment_notes: string | null
+  last_session_completed_at: string | null
+  completed_sessions_count: number
+  total_sessions_count: number
+  adherence_percent: number
+  created_at: string
+  updated_at: string
+}
+
+export interface ClientPTSession {
+  id: string
+  assignment_id: string
+  client_id: string
+  coach_id: string
+  program_id: string | null
+  program_session_id: string | null
+  workout_id: string | null
+  session_name: string
+  scheduled_date: string | null
+  week_number: number
+  day_number: number
+  sort_order: number
+  status: "upcoming" | "available" | "completed" | "skipped"
+  completed_at: string | null
+  coach_note: string | null
+  client_note: string | null
+  created_at: string
+  updated_at: string
+}
+
+export interface ClientPTSessionExercise {
+  id: string
+  client_session_id: string
+  exercise_id: string | null
+  exercise_name_snapshot: string
+  sort_order: number
+  block_label: string | null
+  prescription_type: "reps" | "time" | "distance"
+  sets: number | null
+  reps: string | null
+  rep_range_min: number | null
+  rep_range_max: number | null
+  duration_seconds: number | null
+  distance_value: number | null
+  distance_unit: string | null
+  rest_seconds: number | null
+  tempo: string | null
+  load_guidance: string | null
+  rpe_target: number | null
+  notes: string | null
+  created_at: string
+  updated_at: string
+}
+
+export interface ClientPTLog {
+  id: string
+  client_session_id: string
+  client_id: string
+  coach_id: string
+  logged_at: string
+  completion_status: "completed" | "partial" | "skipped"
+  session_rpe: number | null
+  energy_rating: number | null
+  client_feedback: string | null
+  coach_follow_up_note: string | null
+  created_at: string
+  updated_at: string
+}
+
+export interface ClientPTLogExercise {
+  id: string
+  pt_log_id: string
+  client_session_exercise_id: string | null
+  exercise_id: string | null
+  exercise_name_snapshot: string
+  set_number: number
+  target_reps: number | null
+  completed_reps: number | null
+  weight_value: number | null
+  weight_unit: string | null
+  duration_seconds: number | null
+  distance_value: number | null
+  distance_unit: string | null
+  rpe: number | null
+  notes: string | null
   created_at: string
   updated_at: string
 }

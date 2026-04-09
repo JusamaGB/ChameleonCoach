@@ -6,7 +6,7 @@ import { PoweredBy } from "@/components/branding/powered-by"
 import { ProgressForm } from "@/components/progress/progress-form"
 import { ProgressChart, ProgressHistory } from "@/components/progress/progress-chart"
 import { redirect } from "next/navigation"
-import { getCoachBrandingByCoachId } from "@/lib/branding-server"
+import { getClientPortalContext } from "@/lib/client-portal"
 
 export const dynamic = 'force-dynamic'
 
@@ -23,6 +23,7 @@ export default async function ProgressPage() {
     .select("*")
     .eq("user_id", user.id)
     .single()
+  const portal = await getClientPortalContext(user.id)
 
   let progress: ProgressEntry[] = []
 
@@ -33,11 +34,11 @@ export default async function ProgressPage() {
       // Sheet not accessible
     }
   }
-  const branding = await getCoachBrandingByCoachId(client?.coach_id)
+  const branding = portal.branding
 
   return (
     <div className="flex min-h-screen">
-      <ClientNav />
+      <ClientNav branding={branding} activeModules={portal.modules.active_modules} />
       <main className="flex-1 p-6 md:p-10 pb-24 md:pb-10">
         <div className="max-w-3xl mx-auto">
           <h1 className="text-2xl font-bold mb-2" style={{ color: branding.brand_primary_color }}>

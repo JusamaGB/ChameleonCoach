@@ -32,10 +32,16 @@ export type SurfaceFeature =
   | "invite"
   | "billing"
   | "exercises"
+  | "workouts"
+  | "programs"
   | "client_overview"
   | "client_meal_plan"
   | "client_progress"
   | "client_appointments"
+  | "client_training"
+  | "client_training_history"
+  | "client_portal_meal_plan"
+  | "client_portal_training"
 
 export const MODULE_LABELS: Record<EnableableModule, string> = {
   pt_core: "PT Core",
@@ -57,10 +63,16 @@ const FEATURE_DEFINITIONS: Record<
   billing: { scope: "coach", requiredModule: "shared_core" },
   invite: { scope: "coach", requiredModule: "shared_core" },
   exercises: { scope: "coach", requiredModule: "pt_core" },
+  workouts: { scope: "coach", requiredModule: "pt_core" },
+  programs: { scope: "coach", requiredModule: "pt_core" },
   client_overview: { scope: "client", requiredModule: "shared_core" },
-  client_meal_plan: { scope: "client", requiredModule: "shared_core" },
+  client_meal_plan: { scope: "client", requiredModule: "nutrition_core" },
   client_progress: { scope: "client", requiredModule: "shared_core" },
   client_appointments: { scope: "client", requiredModule: "shared_core" },
+  client_training: { scope: "client", requiredModule: "pt_core" },
+  client_training_history: { scope: "client", requiredModule: "pt_core" },
+  client_portal_meal_plan: { scope: "client", requiredModule: "nutrition_core" },
+  client_portal_training: { scope: "client", requiredModule: "pt_core" },
 }
 
 export function isCoachTypePreset(value: unknown): value is CoachTypePreset {

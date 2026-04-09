@@ -12,6 +12,7 @@ export default async function AdminLayout({
 }) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
+  let activeModules = ["shared_core"]
 
   if (user) {
     const admin = createAdmin()
@@ -20,9 +21,10 @@ export default async function AdminLayout({
       .select("google_refresh_token, active_modules, coach_type_preset, managed_workspace_sheet_id, managed_workspace_sheet_url, managed_workspace_sheet_modules, managed_workspace_sheet_provisioned_at, managed_workspace_root_folder_id, managed_workspace_root_folder_url, managed_clients_folder_id, managed_clients_folder_url, managed_pt_library_sheet_id, managed_pt_library_sheet_url, managed_nutrition_library_sheet_id, managed_nutrition_library_sheet_url")
       .eq("user_id", user.id)
       .maybeSingle()
+    const modules = resolveActiveModules(settings ?? {})
+    activeModules = modules.active_modules
 
     if (settings?.google_refresh_token) {
-      const modules = resolveActiveModules(settings)
       try {
         await getCoachDriveWorkspaceHealth({
           coachId: user.id,
@@ -37,7 +39,7 @@ export default async function AdminLayout({
 
   return (
     <div className="flex min-h-screen">
-      <AdminNav />
+      <AdminNav activeModules={activeModules} />
       <main className="flex-1 p-6 md:p-10 pt-20 md:pt-6">{children}</main>
     </div>
   )

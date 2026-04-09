@@ -5,7 +5,8 @@ import { ClientNav } from "@/components/layout/client-nav"
 import { PoweredBy } from "@/components/branding/powered-by"
 import { MealPlanView } from "@/components/meal-plan/meal-plan-view"
 import { redirect } from "next/navigation"
-import { getCoachBrandingByCoachId } from "@/lib/branding-server"
+import { getClientPortalContext } from "@/lib/client-portal"
+import { canAccessFeature } from "@/lib/modules"
 
 export const dynamic = 'force-dynamic'
 
@@ -22,6 +23,10 @@ export default async function MealPlanPage() {
     .select("*")
     .eq("user_id", user.id)
     .single()
+  const portal = await getClientPortalContext(user.id)
+  if (!canAccessFeature("client_portal_meal_plan", portal.modules.active_modules)) {
+    redirect("/dashboard")
+  }
 
   let mealPlan: MealPlanDay[] = []
 
@@ -32,11 +37,11 @@ export default async function MealPlanPage() {
       // Sheet not accessible
     }
   }
-  const branding = await getCoachBrandingByCoachId(client?.coach_id)
+  const branding = portal.branding
 
   return (
     <div className="flex min-h-screen">
-      <ClientNav />
+      <ClientNav branding={branding} activeModules={portal.modules.active_modules} />
       <main className="flex-1 p-6 md:p-10 pb-24 md:pb-10">
         <div className="max-w-3xl mx-auto">
           <h1 className="text-2xl font-bold mb-2" style={{ color: branding.brand_primary_color }}>

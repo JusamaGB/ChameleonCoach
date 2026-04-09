@@ -7,6 +7,7 @@ import { Card } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { DEFAULT_COACH_BRANDING, type CoachBranding } from "@/lib/branding"
+import { canAccessFeature } from "@/lib/modules"
 
 type Appointment = {
   id: string
@@ -133,6 +134,7 @@ export default function AppointmentsPage() {
   const [bookingMode, setBookingMode] = useState("coach_only")
   const [visibleSlots, setVisibleSlots] = useState<AppointmentSlot[]>([])
   const [branding, setBranding] = useState<CoachBranding>(DEFAULT_COACH_BRANDING)
+  const [activeModules, setActiveModules] = useState<string[]>(["shared_core"])
   const [note, setNote] = useState("")
   const [requestedFor, setRequestedFor] = useState(() => {
     const initial = new Date()
@@ -152,12 +154,13 @@ export default function AppointmentsPage() {
   useEffect(() => {
     Promise.all([
       fetch("/api/appointments").then((r) => r.json()),
-      fetch("/api/client/branding").then((r) => (r.ok ? r.json() : DEFAULT_COACH_BRANDING)),
+      fetch("/api/client/portal").then((r) => (r.ok ? r.json() : null)),
       fetch("/api/appointment-slots").then((r) => r.json()),
     ])
-      .then(([appointmentsData, brandingData, slotsData]) => {
+      .then(([appointmentsData, portalData, slotsData]) => {
         setAppointments(appointmentsData.appointments ?? [])
-        setBranding(brandingData)
+        setBranding(portalData ?? DEFAULT_COACH_BRANDING)
+        setActiveModules(Array.isArray(portalData?.active_modules) ? portalData.active_modules : ["shared_core"])
         setBookingMode(slotsData.mode ?? "coach_only")
         setVisibleSlots(slotsData.slots ?? [])
       })
@@ -255,7 +258,7 @@ export default function AppointmentsPage() {
 
   return (
     <div className="flex min-h-screen bg-gf-bg">
-      <ClientNav />
+      <ClientNav branding={branding} activeModules={activeModules} />
       <main className="flex-1 p-6 md:p-8 pb-24 md:pb-8">
         <h1 className="text-2xl font-bold mb-6" style={{ color: branding.brand_primary_color }}>
           Appointments
@@ -548,6 +551,13 @@ export default function AppointmentsPage() {
           )}
         </Modal>
 
+        {canAccessFeature("client_portal_training", activeModules) ? (
+          <Card className="mt-8">
+            <p className="text-sm text-gf-muted">
+              PT Core is active for this workspace. Training plans and workout logging live in the training portal.
+            </p>
+          </Card>
+        ) : null}
         {branding.show_powered_by && <PoweredBy className="mt-8" />}
       </main>
     </div>
