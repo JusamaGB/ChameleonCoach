@@ -52,6 +52,12 @@ export function ProgramsManager({
   const [form, setForm] = useState(EMPTY_PROGRAM)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState("")
+  const [expandedProgramId, setExpandedProgramId] = useState<string | null>(null)
+
+  async function refreshPrograms() {
+    const refreshed = await fetch("/api/admin/programs").then((res) => res.json())
+    setPrograms(refreshed.programs ?? [])
+  }
 
   function resetForm() {
     setEditingId(null)
@@ -147,11 +153,94 @@ export function ProgramsManager({
         return
       }
 
-      const refreshed = await fetch("/api/admin/programs").then((res) => res.json())
-      setPrograms(refreshed.programs ?? [])
+      await refreshPrograms()
       resetForm()
     } catch {
       setError("Failed to save program")
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  async function duplicateProgram(program: ProgramRecord) {
+    setSaving(true)
+    setError("")
+
+    try {
+      const response = await fetch("/api/admin/programs", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: `${program.name} Copy`,
+          description: program.description ?? "",
+          goal: program.goal ?? "",
+          duration_weeks: program.duration_weeks,
+          difficulty: program.difficulty ?? "",
+          sessions: program.sessions.map((session, index) => ({
+            week_number: Number(session.week_number),
+            day_number: Number(session.day_number),
+            sort_order: index + 1,
+            session_name: session.session_name,
+            workout_id: session.workout_id,
+            focus: session.focus ?? "",
+            notes: session.notes ?? "",
+          })),
+        }),
+      })
+      const data = await response.json()
+      if (!response.ok) {
+        setError(data.error || "Failed to duplicate program")
+        return
+      }
+
+      await refreshPrograms()
+    } catch {
+      setError("Failed to duplicate program")
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  async function archiveProgram(program: ProgramRecord) {
+    if (!confirm(`Archive "${program.name}"?`)) return
+
+    setSaving(true)
+    setError("")
+
+    try {
+      const response = await fetch(`/api/admin/programs/${program.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: program.name,
+          description: program.description ?? "",
+          goal: program.goal ?? "",
+          duration_weeks: program.duration_weeks,
+          difficulty: program.difficulty ?? "",
+          is_archived: true,
+          sessions: program.sessions.map((session, index) => ({
+            week_number: Number(session.week_number),
+            day_number: Number(session.day_number),
+            sort_order: index + 1,
+            session_name: session.session_name,
+            workout_id: session.workout_id,
+            focus: session.focus ?? "",
+            notes: session.notes ?? "",
+          })),
+        }),
+      })
+      const data = await response.json()
+      if (!response.ok) {
+        setError(data.error || "Failed to archive program")
+        return
+      }
+
+      if (editingId === program.id) {
+        resetForm()
+      }
+      await refreshPrograms()
+    } catch {
+      setError("Failed to archive program")
     } finally {
       setSaving(false)
     }
@@ -191,9 +280,27 @@ export function ProgramsManager({
                       <p className="font-medium text-white">{program.name}</p>
                       {program.goal ? <p className="mt-1 text-sm text-gf-muted">{program.goal}</p> : null}
                     </div>
-                    <Button type="button" variant="ghost" size="sm" onClick={() => startEdit(program)}>
-                      Edit
-                    </Button>
+                    <div className="flex items-center gap-2">
+                      <Button type="button" variant="ghost" size="sm" onClick={() => duplicateProgram(program)} disabled={saving}>
+                        Duplicate
+                      </Button>
+                      <Button type="button" variant="ghost" size="sm" onClick={() => startEdit(program)}>
+                        Edit
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={() =>
+                          setExpandedProgramId((current) => (current === program.id ? null : program.id))
+                        }
+                      >
+                        {expandedProgramId === program.id ? "Hide plan" : "View plan"}
+                      </Button>
+                      <Button type="button" variant="ghost" size="sm" onClick={() => archiveProgram(program)} disabled={saving}>
+                        Archive
+                      </Button>
+                    </div>
                   </div>
                   <div className="mt-3 flex flex-wrap gap-2">
                     <Badge>{program.duration_weeks} weeks</Badge>
@@ -214,6 +321,49 @@ export function ProgramsManager({
                       </div>
                     ))}
                   </div>
+                  {expandedProgramId === program.id ? (
+                    <div className="mt-4 rounded-xl border border-gf-border bg-gf-surface p-4">
+                      <p className="text-xs uppercase tracking-wide text-gf-muted">Program plan</p>
+                      <div className="mt-3 space-y-4">
+                        {Array.from(new Set(program.sessions.map((session) => Number(session.week_number))))
+                          .sort((a, b) => a - b)
+                          .map((weekNumber) => {
+                            const weekSessions = program.sessions.filter(
+                              (session) => Number(session.week_number) === weekNumber
+                            )
+
+                            return (
+                              <div key={`${program.id}-week-${weekNumber}`}>
+                                <p className="text-sm font-medium text-white">Week {weekNumber}</p>
+                                <div className="mt-2 space-y-2">
+                                  {weekSessions.map((session) => (
+                                    <div
+                                      key={`${program.id}-${session.id}-expanded`}
+                                      className="rounded-lg border border-gf-border/80 px-3 py-2"
+                                    >
+                                      <div className="flex items-start justify-between gap-3">
+                                        <div>
+                                          <p className="text-sm font-medium text-white">
+                                            Day {session.day_number} • {session.session_name}
+                                          </p>
+                                          <p className="mt-1 text-xs text-gf-muted">
+                                            {session.workout_name || "No workout linked"}
+                                            {session.focus ? ` • ${session.focus}` : ""}
+                                          </p>
+                                        </div>
+                                      </div>
+                                      {session.notes ? (
+                                        <p className="mt-2 text-xs text-gf-muted">{session.notes}</p>
+                                      ) : null}
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            )
+                          })}
+                      </div>
+                    </div>
+                  ) : null}
                 </div>
               ))}
             </div>

@@ -86,6 +86,11 @@ export function WorkoutBuilder({
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState("")
 
+  async function refreshWorkouts() {
+    const refreshed = await fetch("/api/admin/workouts").then((res) => res.json())
+    setWorkouts(refreshed.workouts ?? [])
+  }
+
   function resetForm() {
     setEditingId(null)
     setForm(EMPTY_WORKOUT)
@@ -177,11 +182,110 @@ export function WorkoutBuilder({
         return
       }
 
-      const refreshed = await fetch("/api/admin/workouts").then((res) => res.json())
-      setWorkouts(refreshed.workouts ?? [])
+      await refreshWorkouts()
       resetForm()
     } catch {
       setError("Failed to save workout")
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  async function duplicateWorkout(workout: WorkoutRecord) {
+    setSaving(true)
+    setError("")
+
+    try {
+      const response = await fetch("/api/admin/workouts", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: `${workout.name} Copy`,
+          description: workout.description ?? "",
+          goal: workout.goal ?? "",
+          estimated_duration_minutes: workout.estimated_duration_minutes ?? "",
+          difficulty: workout.difficulty ?? "",
+          exercises: workout.exercises.map((exercise, index) => ({
+            exercise_id: exercise.exercise_id,
+            sort_order: index + 1,
+            block_label: exercise.block_label ?? "",
+            prescription_type: exercise.prescription_type,
+            sets: exercise.sets ?? "",
+            reps: exercise.reps ?? "",
+            duration_seconds: exercise.duration_seconds ?? "",
+            distance_value: exercise.distance_value ?? "",
+            distance_unit: exercise.distance_unit ?? "",
+            rest_seconds: exercise.rest_seconds ?? "",
+            tempo: exercise.tempo ?? "",
+            load_guidance: exercise.load_guidance ?? "",
+            rpe_target: exercise.rpe_target ?? "",
+            notes: exercise.notes ?? "",
+          })),
+        }),
+      })
+
+      const data = await response.json()
+      if (!response.ok) {
+        setError(data.error || "Failed to duplicate workout")
+        return
+      }
+
+      await refreshWorkouts()
+    } catch {
+      setError("Failed to duplicate workout")
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  async function archiveWorkout(workout: WorkoutRecord) {
+    if (!confirm(`Archive "${workout.name}"?`)) return
+
+    setSaving(true)
+    setError("")
+
+    try {
+      const response = await fetch(`/api/admin/workouts/${workout.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: workout.name,
+          description: workout.description ?? "",
+          goal: workout.goal ?? "",
+          estimated_duration_minutes: workout.estimated_duration_minutes ?? "",
+          difficulty: workout.difficulty ?? "",
+          is_archived: true,
+          exercises: workout.exercises.map((exercise, index) => ({
+            exercise_id: exercise.exercise_id,
+            sort_order: index + 1,
+            block_label: exercise.block_label ?? "",
+            prescription_type: exercise.prescription_type,
+            sets: exercise.sets ?? "",
+            reps: exercise.reps ?? "",
+            duration_seconds: exercise.duration_seconds ?? "",
+            distance_value: exercise.distance_value ?? "",
+            distance_unit: exercise.distance_unit ?? "",
+            rest_seconds: exercise.rest_seconds ?? "",
+            tempo: exercise.tempo ?? "",
+            load_guidance: exercise.load_guidance ?? "",
+            rpe_target: exercise.rpe_target ?? "",
+            notes: exercise.notes ?? "",
+          })),
+        }),
+      })
+
+      const data = await response.json()
+      if (!response.ok) {
+        setError(data.error || "Failed to archive workout")
+        return
+      }
+
+      if (editingId === workout.id) {
+        resetForm()
+      }
+      await refreshWorkouts()
+    } catch {
+      setError("Failed to archive workout")
     } finally {
       setSaving(false)
     }
@@ -221,9 +325,17 @@ export function WorkoutBuilder({
                       <p className="font-medium text-white">{workout.name}</p>
                       {workout.goal ? <p className="mt-1 text-sm text-gf-muted">{workout.goal}</p> : null}
                     </div>
-                    <Button type="button" variant="ghost" size="sm" onClick={() => startEdit(workout)}>
-                      Edit
-                    </Button>
+                    <div className="flex items-center gap-2">
+                      <Button type="button" variant="ghost" size="sm" onClick={() => duplicateWorkout(workout)} disabled={saving}>
+                        Duplicate
+                      </Button>
+                      <Button type="button" variant="ghost" size="sm" onClick={() => startEdit(workout)}>
+                        Edit
+                      </Button>
+                      <Button type="button" variant="ghost" size="sm" onClick={() => archiveWorkout(workout)} disabled={saving}>
+                        Archive
+                      </Button>
+                    </div>
                   </div>
                   <div className="mt-3 flex flex-wrap gap-2">
                     {workout.estimated_duration_minutes ? (

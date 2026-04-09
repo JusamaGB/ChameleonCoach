@@ -21,6 +21,48 @@ async function getSheetsApi(coachId: string) {
   return google.sheets({ version: "v4", auth })
 }
 
+async function getSheetTitles(
+  sheetId: string,
+  coachId: string
+) {
+  const sheets = await getSheetsApi(coachId)
+  const spreadsheet = await sheets.spreadsheets.get({
+    spreadsheetId: sheetId,
+    fields: "sheets.properties.title",
+  })
+
+  return new Set(
+    (spreadsheet.data.sheets ?? [])
+      .map((sheet) => sheet.properties?.title)
+      .filter((title): title is string => Boolean(title))
+  )
+}
+
+async function ensureSpreadsheetTabs(
+  sheetId: string,
+  tabTitles: string[],
+  coachId: string
+) {
+  const existingTitles = await getSheetTitles(sheetId, coachId)
+  const missingTitles = tabTitles.filter((title) => !existingTitles.has(title))
+
+  if (missingTitles.length === 0) {
+    return
+  }
+
+  const sheets = await getSheetsApi(coachId)
+  await sheets.spreadsheets.batchUpdate({
+    spreadsheetId: sheetId,
+    requestBody: {
+      requests: missingTitles.map((title) => ({
+        addSheet: {
+          properties: { title },
+        },
+      })),
+    },
+  })
+}
+
 async function overwriteTab(
   sheetId: string,
   tabName: string,
@@ -183,6 +225,12 @@ export async function syncCoachPTLibrarySheets(
     programs: Array<PTProgram & { sessions?: PTProgramSession[] }>
   }
 ) {
+  await ensureSpreadsheetTabs(
+    sheetId,
+    ["PT_Exercises", "PT_Workouts", "PT_Workout_Exercises", "PT_Programs", "PT_Program_Sessions"],
+    coachId
+  )
+
   const workoutExerciseRows = payload.workouts.flatMap((workout) =>
     (workout.exercises ?? []).map((exercise) => [
       exercise.id,
@@ -321,6 +369,12 @@ export async function syncClientPTSheets(
     logExercises: ClientPTLogExercise[]
   }
 ) {
+  await ensureSpreadsheetTabs(
+    sheetId,
+    ["Training_Plan", "Training_Plan_Exercises", "Workout_Log", "Workout_Log_Exercises"],
+    coachId
+  )
+
   const sessionNameById = new Map(payload.sessions.map((session) => [session.id, session.session_name]))
   const logBySessionId = new Map(payload.logs.map((log) => [log.client_session_id, log]))
   const logExerciseRows = payload.logExercises.map((exercise) => [

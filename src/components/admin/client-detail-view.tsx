@@ -45,6 +45,7 @@ interface ClientDetailViewProps {
     assignment: ClientPTProgramAssignment | null
     sessions: ClientPTSession[]
     logs: ClientPTLog[]
+    assignment_history: ClientPTProgramAssignment[]
   } | null
   ptPrograms: Array<{ id: string; name: string; duration_weeks: number }>
 }
@@ -67,6 +68,7 @@ export function ClientDetailView({
   const [assignmentStartDate, setAssignmentStartDate] = useState("")
   const [assignmentNote, setAssignmentNote] = useState("")
   const [assigningProgram, setAssigningProgram] = useState(false)
+  const [cancellingAssignment, setCancellingAssignment] = useState(false)
   const [assignmentError, setAssignmentError] = useState("")
 
   const sheetUrl = client.sheet_id
@@ -136,6 +138,30 @@ export function ClientDetailView({
     }
   }
 
+  async function handleCancelAssignment() {
+    if (!confirm("Cancel the active PT assignment for this client?")) {
+      return
+    }
+
+    setCancellingAssignment(true)
+    setAssignmentError("")
+    try {
+      const response = await fetch(`/api/admin/clients/${client.id}/pt-assignment`, {
+        method: "DELETE",
+      })
+      const data = await response.json()
+      if (!response.ok) {
+        setAssignmentError(data.error || "Failed to cancel assignment")
+        return
+      }
+      router.refresh()
+    } catch {
+      setAssignmentError("Failed to cancel assignment")
+    } finally {
+      setCancellingAssignment(false)
+    }
+  }
+
   function formatAppointmentDateTime(value: string | null, createdAt: string) {
     return new Date(value || createdAt).toLocaleString("en-GB", {
       dateStyle: "medium",
@@ -177,6 +203,19 @@ export function ClientDetailView({
         return "Payment failed"
       case "unpaid":
         return "Unpaid"
+    }
+  }
+
+  function assignmentStatusBadge(status: ClientPTProgramAssignment["status"]) {
+    switch (status) {
+      case "active":
+        return <Badge variant="success">Active</Badge>
+      case "completed":
+        return <Badge>Completed</Badge>
+      case "cancelled":
+        return <Badge variant="warning">Cancelled</Badge>
+      case "draft":
+        return <Badge>Draft</Badge>
     }
   }
 
@@ -525,6 +564,9 @@ export function ClientDetailView({
                             {ptOverview.assignment.completed_sessions_count}/{ptOverview.assignment.total_sessions_count} sessions completed
                           </Badge>
                           <Badge variant="default">{ptOverview.assignment.adherence_percent}% adherence</Badge>
+                          {ptOverview.assignment.current_week ? (
+                            <Badge variant="default">Current week {ptOverview.assignment.current_week}</Badge>
+                          ) : null}
                         </div>
                         {ptOverview.assignment.assigned_start_date ? (
                           <p className="mt-3 text-sm text-gf-muted">
@@ -534,11 +576,23 @@ export function ClientDetailView({
                         {ptOverview.assignment.assignment_notes ? (
                           <p className="mt-2 text-sm text-gf-muted">{ptOverview.assignment.assignment_notes}</p>
                         ) : null}
-                        {ptOverview.assignment.last_session_completed_at ? (
+                      {ptOverview.assignment.last_session_completed_at ? (
                           <p className="mt-2 text-sm text-gf-muted">
                             Last completed: {new Date(ptOverview.assignment.last_session_completed_at).toLocaleString("en-GB")}
                           </p>
                         ) : null}
+                        <div className="mt-4">
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            onClick={handleCancelAssignment}
+                            disabled={cancellingAssignment}
+                            className="text-red-400 hover:text-red-300"
+                          >
+                            {cancellingAssignment ? "Cancelling..." : "Cancel assignment"}
+                          </Button>
+                        </div>
                       </>
                     ) : (
                       <p className="mt-2 text-sm text-gf-muted">No PT program assigned yet.</p>
@@ -599,6 +653,34 @@ export function ClientDetailView({
                       <p className="mt-2 text-sm text-gf-muted">No workout logs recorded yet.</p>
                     )}
                   </div>
+
+                  <div className="rounded-xl border border-gf-border bg-gf-surface p-4">
+                    <p className="text-xs uppercase tracking-wide text-gf-muted">Assignment history</p>
+                    {ptOverview?.assignment_history?.length ? (
+                      <div className="mt-3 space-y-2">
+                        {ptOverview.assignment_history.map((assignment) => (
+                          <div key={assignment.id} className="rounded-lg border border-gf-border px-3 py-2">
+                            <div className="flex items-start justify-between gap-3">
+                              <div>
+                                <p className="text-sm font-medium text-white">
+                                  {assignment.program_name_snapshot}
+                                </p>
+                                <p className="mt-1 text-xs text-gf-muted">
+                                  Created {new Date(assignment.created_at).toLocaleDateString("en-GB")}
+                                  {assignment.assigned_start_date
+                                    ? ` • Start ${new Date(assignment.assigned_start_date).toLocaleDateString("en-GB")}`
+                                    : ""}
+                                </p>
+                              </div>
+                              {assignmentStatusBadge(assignment.status)}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="mt-2 text-sm text-gf-muted">No PT assignment history yet.</p>
+                    )}
+                  </div>
                 </div>
 
                 <div className="rounded-xl border border-gf-border bg-gf-surface p-4">
@@ -606,6 +688,11 @@ export function ClientDetailView({
                   <p className="mt-2 text-sm text-gf-muted">
                     Assign one active PT program for this client. The plan is materialized into client sessions rather than recomputed on every load.
                   </p>
+                  {ptOverview?.assignment ? (
+                    <p className="mt-2 text-xs text-gf-muted">
+                      Assigning a new program will replace the current active assignment.
+                    </p>
+                  ) : null}
                   <form onSubmit={handleAssignProgram} className="mt-4 space-y-4">
                     <Select
                       label="Program"

@@ -687,6 +687,44 @@ export async function assignPTProgramToClient(
   return assignment
 }
 
+export async function cancelActivePTAssignmentForClient(
+  supabase: { from: (table: string) => any },
+  coachId: string,
+  clientId: string
+) {
+  const client = await getCoachClientRecord(supabase, coachId, clientId)
+  if (!client) {
+    throw new Error("Client not found")
+  }
+
+  const { data: assignment, error } = await supabase
+    .from("client_pt_program_assignments")
+    .select("*")
+    .eq("client_id", clientId)
+    .eq("coach_id", coachId)
+    .eq("status", "active")
+    .maybeSingle()
+
+  if (error) throw error
+  if (!assignment) {
+    return { ok: true, assignment: null }
+  }
+
+  const { error: updateError } = await supabase
+    .from("client_pt_program_assignments")
+    .update({
+      status: "cancelled",
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", assignment.id)
+
+  if (updateError) throw updateError
+
+  await syncClientPTWorkbook(supabase, coachId, clientId)
+
+  return { ok: true, assignmentId: assignment.id }
+}
+
 export async function getClientPTOverviewForCoach(
   supabase: { from: (table: string) => any },
   coachId: string,
@@ -703,11 +741,20 @@ export async function getClientPTOverviewForCoach(
     .eq("status", "active")
     .maybeSingle()
 
+  const { data: assignmentHistory } = await supabase
+    .from("client_pt_program_assignments")
+    .select("*")
+    .eq("client_id", clientId)
+    .eq("coach_id", coachId)
+    .order("created_at", { ascending: false })
+    .limit(6)
+
   if (!assignment) {
     return {
       assignment: null,
       sessions: [],
       logs: [],
+      assignment_history: (assignmentHistory ?? []) as ClientPTProgramAssignment[],
     }
   }
 
@@ -731,6 +778,7 @@ export async function getClientPTOverviewForCoach(
     assignment: assignment as ClientPTProgramAssignment,
     sessions: (sessions ?? []) as ClientPTSession[],
     logs: (logs ?? []) as ClientPTLog[],
+    assignment_history: (assignmentHistory ?? []) as ClientPTProgramAssignment[],
   }
 }
 

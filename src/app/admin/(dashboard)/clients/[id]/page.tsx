@@ -71,7 +71,7 @@ export default async function ClientDetailPage({
   let profile: ProfileData | null = null
   let mealPlan: MealPlanDay[] = []
   let progress: ProgressEntry[] = []
-  let ptOverview = { assignment: null, sessions: [], logs: [] }
+  let ptOverview = { assignment: null, sessions: [], logs: [], assignment_history: [] }
   let ptPrograms: any[] = []
 
   if (client.sheet_id) {
