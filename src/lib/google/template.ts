@@ -421,10 +421,22 @@ async function ensureNutritionLibraryWorkbookContent(
   sheets: ReturnType<typeof google.sheets>,
   spreadsheetId: string
 ) {
-  await ensureSpreadsheetTabs(sheets, spreadsheetId, ["Recipe Library"])
-  await updateValues(sheets, spreadsheetId, "Recipe Library!A1:D2", [
-    ["Recipe Name", "Category", "Ingredients", "Notes"],
-    ["", "", "", ""],
+  await ensureSpreadsheetTabs(sheets, spreadsheetId, [
+    "Recipe Library",
+    "Nutrition_Templates",
+    "Nutrition_Template_Days",
+  ])
+  await updateValues(sheets, spreadsheetId, "Recipe Library!A1:J2", [
+    ["recipe_id", "name", "category", "ingredients", "notes", "calories_kcal", "protein_grams", "carbs_grams", "fats_grams", "meal_slot"],
+    ["", "", "", "", "", "", "", "", "", ""],
+  ])
+  await updateValues(sheets, spreadsheetId, "Nutrition_Templates!A1:I2", [
+    ["template_id", "name", "description", "goal", "target_calories_kcal", "target_protein_grams", "target_carbs_grams", "target_fats_grams", "updated_at"],
+    ["", "", "", "", "", "", "", "", ""],
+  ])
+  await updateValues(sheets, spreadsheetId, "Nutrition_Template_Days!A1:H2", [
+    ["template_day_id", "template_id", "day", "breakfast", "lunch", "dinner", "snacks", "notes"],
+    ["", "", "", "", "", "", "", ""],
   ])
 }
 

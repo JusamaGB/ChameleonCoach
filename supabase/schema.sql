@@ -294,6 +294,52 @@ create table client_pt_log_exercises (
   updated_at timestamptz default now()
 );
 
+create table nutrition_recipes (
+  id uuid primary key default gen_random_uuid(),
+  coach_id uuid not null references auth.users(id) on delete cascade,
+  name text not null,
+  category text not null default 'general',
+  ingredients text,
+  notes text,
+  calories_kcal integer,
+  protein_grams numeric,
+  carbs_grams numeric,
+  fats_grams numeric,
+  meal_slot text not null default 'any'
+    check (meal_slot in ('breakfast', 'lunch', 'dinner', 'snacks', 'any')),
+  is_archived boolean not null default false,
+  created_at timestamptz default now(),
+  updated_at timestamptz default now()
+);
+
+create table nutrition_meal_plan_templates (
+  id uuid primary key default gen_random_uuid(),
+  coach_id uuid not null references auth.users(id) on delete cascade,
+  name text not null,
+  description text,
+  goal text,
+  target_calories_kcal integer,
+  target_protein_grams numeric,
+  target_carbs_grams numeric,
+  target_fats_grams numeric,
+  is_archived boolean not null default false,
+  created_at timestamptz default now(),
+  updated_at timestamptz default now()
+);
+
+create table nutrition_meal_plan_template_days (
+  id uuid primary key default gen_random_uuid(),
+  template_id uuid not null references nutrition_meal_plan_templates(id) on delete cascade,
+  day text not null,
+  breakfast text,
+  lunch text,
+  dinner text,
+  snacks text,
+  notes text,
+  created_at timestamptz default now(),
+  updated_at timestamptz default now()
+);
+
 create table product_requests (
   id uuid primary key default gen_random_uuid(),
   title text not null,
@@ -442,6 +488,9 @@ alter table client_pt_sessions enable row level security;
 alter table client_pt_session_exercises enable row level security;
 alter table client_pt_logs enable row level security;
 alter table client_pt_log_exercises enable row level security;
+alter table nutrition_recipes enable row level security;
+alter table nutrition_meal_plan_templates enable row level security;
+alter table nutrition_meal_plan_template_days enable row level security;
 alter table product_requests enable row level security;
 alter table product_request_votes enable row level security;
 alter table product_request_comments enable row level security;
@@ -607,6 +656,25 @@ create policy "client_update_own_pt_log_exercises" on client_pt_log_exercises
     )
   );
 
+create policy "coach_own_nutrition_recipes" on nutrition_recipes
+  for all using (
+    (auth.jwt() -> 'app_metadata' ->> 'role') in ('coach', 'admin')
+    and coach_id = auth.uid()
+  );
+
+create policy "coach_own_nutrition_templates" on nutrition_meal_plan_templates
+  for all using (
+    (auth.jwt() -> 'app_metadata' ->> 'role') in ('coach', 'admin')
+    and coach_id = auth.uid()
+  );
+
+create policy "coach_own_nutrition_template_days" on nutrition_meal_plan_template_days
+  for all using (
+    template_id in (
+      select id from nutrition_meal_plan_templates where coach_id = auth.uid()
+    )
+  );
+
 create policy "authenticated_read_product_requests" on product_requests
   for select using (auth.uid() is not null);
 
@@ -717,6 +785,10 @@ create index idx_client_pt_sessions_client_id on client_pt_sessions(client_id, s
 create index idx_client_pt_session_exercises_session_id on client_pt_session_exercises(client_session_id, sort_order);
 create index idx_client_pt_logs_client_id on client_pt_logs(client_id, logged_at desc);
 create index idx_client_pt_log_exercises_log_id on client_pt_log_exercises(pt_log_id, set_number);
+create index idx_nutrition_recipes_coach_id on nutrition_recipes(coach_id, name);
+create index idx_nutrition_recipes_meal_slot on nutrition_recipes(coach_id, meal_slot);
+create index idx_nutrition_templates_coach_id on nutrition_meal_plan_templates(coach_id, name);
+create index idx_nutrition_template_days_template_id on nutrition_meal_plan_template_days(template_id, day);
 create index idx_product_requests_status on product_requests(status, created_at desc);
 create index idx_product_requests_module_area on product_requests(module_area, created_at desc);
 create index idx_product_requests_requester on product_requests(requester_user_id, created_at desc);

@@ -303,6 +303,51 @@ export interface MealPlanDay {
   snacks: string
 }
 
+export interface NutritionRecipe {
+  id: string
+  coach_id: string
+  name: string
+  category: string
+  ingredients: string | null
+  notes: string | null
+  calories_kcal: number | null
+  protein_grams: number | null
+  carbs_grams: number | null
+  fats_grams: number | null
+  meal_slot: "breakfast" | "lunch" | "dinner" | "snacks" | "any"
+  is_archived: boolean
+  created_at: string
+  updated_at: string
+}
+
+export interface NutritionMealPlanTemplate {
+  id: string
+  coach_id: string
+  name: string
+  description: string | null
+  goal: string | null
+  target_calories_kcal: number | null
+  target_protein_grams: number | null
+  target_carbs_grams: number | null
+  target_fats_grams: number | null
+  is_archived: boolean
+  created_at: string
+  updated_at: string
+}
+
+export interface NutritionMealPlanTemplateDay {
+  id: string
+  template_id: string
+  day: string
+  breakfast: string | null
+  lunch: string | null
+  dinner: string | null
+  snacks: string | null
+  notes: string | null
+  created_at: string
+  updated_at: string
+}
+
 export interface ProgressEntry {
   date: string
   weight: string

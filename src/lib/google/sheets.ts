@@ -8,6 +8,9 @@ import type {
   ClientPTSessionExercise,
   Exercise,
   MealPlanDay,
+  NutritionMealPlanTemplate,
+  NutritionMealPlanTemplateDay,
+  NutritionRecipe,
   ProgressEntry,
   ProfileData,
   PTProgram,
@@ -487,6 +490,83 @@ export async function syncClientPTSheets(
     [
       ["pt_log_exercise_id", "pt_log_id", "session_name", "client_session_exercise_id", "exercise_id", "exercise_name", "set_number", "target_reps", "completed_reps", "weight_value", "weight_unit", "duration_seconds", "distance_value", "distance_unit", "rpe", "notes", "updated_at"],
       ...logExerciseRows,
+    ],
+    coachId
+  )
+}
+
+export async function syncCoachNutritionLibrarySheets(
+  sheetId: string,
+  coachId: string,
+  payload: {
+    recipes: NutritionRecipe[]
+    templates: Array<NutritionMealPlanTemplate & { days?: NutritionMealPlanTemplateDay[] }>
+  }
+) {
+  await ensureSpreadsheetTabs(
+    sheetId,
+    ["Recipe Library", "Nutrition_Templates", "Nutrition_Template_Days"],
+    coachId
+  )
+
+  await overwriteTab(
+    sheetId,
+    "Recipe Library",
+    [
+      ["recipe_id", "name", "category", "ingredients", "notes", "calories_kcal", "protein_grams", "carbs_grams", "fats_grams", "meal_slot"],
+      ...payload.recipes.map((recipe) => [
+        recipe.id,
+        recipe.name,
+        recipe.category,
+        recipe.ingredients ?? "",
+        recipe.notes ?? "",
+        recipe.calories_kcal ?? "",
+        recipe.protein_grams ?? "",
+        recipe.carbs_grams ?? "",
+        recipe.fats_grams ?? "",
+        recipe.meal_slot,
+      ]),
+    ],
+    coachId
+  )
+
+  await overwriteTab(
+    sheetId,
+    "Nutrition_Templates",
+    [
+      ["template_id", "name", "description", "goal", "target_calories_kcal", "target_protein_grams", "target_carbs_grams", "target_fats_grams", "updated_at"],
+      ...payload.templates.map((template) => [
+        template.id,
+        template.name,
+        template.description ?? "",
+        template.goal ?? "",
+        template.target_calories_kcal ?? "",
+        template.target_protein_grams ?? "",
+        template.target_carbs_grams ?? "",
+        template.target_fats_grams ?? "",
+        template.updated_at,
+      ]),
+    ],
+    coachId
+  )
+
+  await overwriteTab(
+    sheetId,
+    "Nutrition_Template_Days",
+    [
+      ["template_day_id", "template_id", "day", "breakfast", "lunch", "dinner", "snacks", "notes"],
+      ...payload.templates.flatMap((template) =>
+        (template.days ?? []).map((day) => [
+          day.id,
+          template.id,
+          day.day,
+          day.breakfast ?? "",
+          day.lunch ?? "",
+          day.dinner ?? "",
+          day.snacks ?? "",
+          day.notes ?? "",
+        ])
+      ),
     ],
     coachId
   )

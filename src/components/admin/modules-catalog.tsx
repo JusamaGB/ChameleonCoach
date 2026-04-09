@@ -58,6 +58,10 @@ const MODULE_TOOL_LINKS: Partial<Record<EnableableModule, Array<{ href: string; 
     { href: "/admin/workouts", label: "Workout builder" },
     { href: "/admin/programs", label: "Programs" },
   ],
+  nutrition_core: [
+    { href: "/admin/recipes", label: "Recipe library" },
+    { href: "/admin/nutrition-templates", label: "Meal plan templates" },
+  ],
 }
 
 export function ModulesCatalog() {
@@ -208,25 +212,25 @@ export function ModulesCatalog() {
                 </p>
               </div>
 
-              {module === "pt_core" ? (
+              {enabled || profile.is_legacy_workspace ? (
                 <div className="mt-4 space-y-3">
                   <p className="text-xs text-gf-muted">
-                    PT tools live inside the module layer instead of the main sidebar. Client-specific PT delivery still happens from each client workspace.
+                    {module === "pt_core"
+                      ? "PT tools live inside the module layer instead of the main sidebar. Client-specific PT delivery still happens from each client workspace."
+                      : "Nutrition tools live inside the module layer instead of the main sidebar. Client-specific nutrition delivery still happens from each client workspace."}
                   </p>
-                  {enabled || profile.is_legacy_workspace ? (
-                    <div className="flex flex-wrap gap-3">
-                      {(MODULE_TOOL_LINKS[module] ?? []).map((tool) => (
-                        <Link
-                          key={tool.href}
-                          href={tool.href}
-                          className="inline-flex items-center gap-1.5 text-sm text-gf-pink hover:text-gf-pink-light transition-colors"
-                        >
-                          {tool.label}
-                          <ArrowRight size={14} />
-                        </Link>
-                      ))}
-                    </div>
-                  ) : null}
+                  <div className="flex flex-wrap gap-3">
+                    {(MODULE_TOOL_LINKS[module] ?? []).map((tool) => (
+                      <Link
+                        key={tool.href}
+                        href={tool.href}
+                        className="inline-flex items-center gap-1.5 text-sm text-gf-pink hover:text-gf-pink-light transition-colors"
+                      >
+                        {tool.label}
+                        <ArrowRight size={14} />
+                      </Link>
+                    ))}
+                  </div>
                 </div>
               ) : null}
 
