@@ -483,10 +483,602 @@ Coach type should be treated as a starting preset that suggests a default module
 ### Phase 2B — PT Core
 > Unlocks the PT leads on top of the module backbone. The exercise library slice is already started and stays in place.
 
-- [ ] Workout builder (drag-and-drop, set/rep/rest)
+- [ ] Lock the PT Core managed-sheet contract
+- [ ] Workout builder (sets, reps, rest, tempo, order, notes)
 - [x] Exercise library (basic, expandable) — already started PT Core capability, not the platform-defining layer
+- [ ] Programs and templates
+- [ ] Client training plan delivery
+- [ ] Workout logging / session feedback
+- [ ] Coach training overview inside client workspaces
 - [ ] Program scheduling
 - [ ] Auto-progression (basic)
+
+### PT Core Build Order
+
+1. Lock the PT Core Google Sheets structure for coach-scoped and client-scoped tabs.
+2. Build the workout builder on top of the existing exercise library.
+3. Add reusable programs/templates so workouts can be grouped and assigned.
+4. Add the client training-plan surface so assigned PT work is visible in the portal.
+5. Add workout logging/session feedback so training data writes back into the managed structure.
+6. Add the coach training overview inside client workspaces so adherence and recent training context are reviewable.
+7. Harden the full PT Core flow end to end before adding another coach core.
+
+### PT Core Managed-Sheet Direction
+
+- Coach-scoped PT structures should hold:
+  - exercise library
+  - reusable workouts
+  - reusable program templates
+- Client-scoped PT structures should hold:
+  - assigned training plan
+  - workout log / completed sessions
+  - PT-specific notes or performance markers where needed
+- PT Core should be treated as the first full proof of the module model:
+  - coach library/build tools live at the workspace level
+  - assigned plan and logging live in the client workspace
+  - app pages and Google Sheets should reflect the same structure clearly enough for direct manual use in Sheets
+
+### Nutrition Core Follow-Through
+
+- Nutrition Core remains the other active foundation module and still needs hardening around managed-sheet reliability, read/write consistency, and end-to-end onboarding validation.
+- No new coach core should be added until PT Core and Nutrition Core both feel structurally complete and stable in app + Sheets.
+
+### PT Core Exact Schema
+
+This section defines the exact V1 PT Core contract to use for implementation. It should act as the pattern for future modules: first define the app entities, then define the managed Google Sheets tabs, then define sync ownership between workspace-level and client-level structures.
+
+#### PT Core V1 Principles
+
+- Exercise library remains coach-scoped.
+- Workout and program authoring remain coach-scoped.
+- Program assignment, plan delivery, and workout logging are client-scoped.
+- Google Sheets should stay readable and usable directly by a coach without requiring the app to interpret opaque JSON blobs.
+- The app database should own identity, relationships, assignment state, and permissions.
+- Google Sheets should mirror the operational coaching data in a tabular structure that is understandable and editable.
+
+#### App-Level PT Entities
+
+##### 1. `pt_exercises`
+
+Purpose: coach-scoped exercise library entries.
+
+Fields:
+- `id`
+- `coach_id`
+- `name`
+- `category`
+- `movement_pattern`
+- `primary_muscles`
+- `secondary_muscles`
+- `equipment`
+- `difficulty`
+- `default_units`
+- `description`
+- `coaching_notes`
+- `demo_url`
+- `is_archived`
+- `created_at`
+- `updated_at`
+
+Notes:
+- This extends the current exercise library direction rather than replacing it.
+- `default_units` should support values such as `reps`, `seconds`, `distance`, or `calories` where needed later.
+
+##### 2. `pt_workouts`
+
+Purpose: reusable coach-scoped workout definitions.
+
+Fields:
+- `id`
+- `coach_id`
+- `name`
+- `description`
+- `goal`
+- `estimated_duration_minutes`
+- `difficulty`
+- `is_template`
+- `is_archived`
+- `created_at`
+- `updated_at`
+
+##### 3. `pt_workout_exercises`
+
+Purpose: ordered exercise blocks inside a workout.
+
+Fields:
+- `id`
+- `workout_id`
+- `exercise_id`
+- `sort_order`
+- `block_label`
+- `prescription_type`
+- `sets`
+- `reps`
+- `rep_range_min`
+- `rep_range_max`
+- `duration_seconds`
+- `distance_value`
+- `distance_unit`
+- `rest_seconds`
+- `tempo`
+- `load_guidance`
+- `rpe_target`
+- `notes`
+- `created_at`
+- `updated_at`
+
+Notes:
+- `prescription_type` allows the same row model to support rep-based, time-based, and distance-based work.
+- `block_label` can later support simple groupings like warm-up, main work, finisher, without requiring a more complex builder yet.
+
+##### 4. `pt_programs`
+
+Purpose: reusable coach-scoped program definitions built from workouts.
+
+Fields:
+- `id`
+- `coach_id`
+- `name`
+- `description`
+- `goal`
+- `duration_weeks`
+- `difficulty`
+- `is_template`
+- `is_archived`
+- `created_at`
+- `updated_at`
+
+##### 5. `pt_program_sessions`
+
+Purpose: ordered sessions inside a reusable program.
+
+Fields:
+- `id`
+- `program_id`
+- `week_number`
+- `day_number`
+- `sort_order`
+- `session_name`
+- `workout_id`
+- `focus`
+- `notes`
+- `created_at`
+- `updated_at`
+
+Notes:
+- `week_number` + `day_number` should be sufficient for V1 program structure.
+- `session_name` supports cases where the displayed training day label differs from the workout name.
+
+##### 6. `client_pt_program_assignments`
+
+Purpose: active or historical PT program assignment for a client.
+
+Fields:
+- `id`
+- `coach_id`
+- `client_id`
+- `program_id`
+- `program_name_snapshot`
+- `assigned_start_date`
+- `assigned_end_date`
+- `status`
+- `current_week`
+- `assignment_notes`
+- `last_session_completed_at`
+- `completed_sessions_count`
+- `total_sessions_count`
+- `adherence_percent`
+- `created_at`
+- `updated_at`
+
+Status values:
+- `draft`
+- `active`
+- `completed`
+- `cancelled`
+
+Notes:
+- Snapshot fields reduce breakage if the coach later edits the base program.
+- V1 should allow one primary active assignment per client, even if the table can technically store history.
+
+##### 7. `client_pt_sessions`
+
+Purpose: client-scoped assigned session rows derived from a program assignment.
+
+Fields:
+- `id`
+- `assignment_id`
+- `client_id`
+- `coach_id`
+- `program_id`
+- `program_session_id`
+- `workout_id`
+- `session_name`
+- `scheduled_date`
+- `week_number`
+- `day_number`
+- `sort_order`
+- `status`
+- `completed_at`
+- `coach_note`
+- `client_note`
+- `created_at`
+- `updated_at`
+
+Status values:
+- `upcoming`
+- `available`
+- `completed`
+- `skipped`
+
+Notes:
+- This is the delivery layer the client portal should read from.
+- These rows should be generated when a program is assigned rather than computed on every page load.
+
+##### 8. `client_pt_session_exercises`
+
+Purpose: assigned exercise-level prescription rows for a client session.
+
+Fields:
+- `id`
+- `client_session_id`
+- `exercise_id`
+- `exercise_name_snapshot`
+- `sort_order`
+- `block_label`
+- `prescription_type`
+- `sets`
+- `reps`
+- `rep_range_min`
+- `rep_range_max`
+- `duration_seconds`
+- `distance_value`
+- `distance_unit`
+- `rest_seconds`
+- `tempo`
+- `load_guidance`
+- `rpe_target`
+- `notes`
+- `created_at`
+- `updated_at`
+
+Notes:
+- Snapshotting makes client history resilient to future edits in the coach workout builder.
+
+##### 9. `client_pt_logs`
+
+Purpose: workout-level completion/logging records.
+
+Fields:
+- `id`
+- `client_session_id`
+- `client_id`
+- `coach_id`
+- `logged_at`
+- `completion_status`
+- `session_rpe`
+- `energy_rating`
+- `client_feedback`
+- `coach_follow_up_note`
+- `created_at`
+- `updated_at`
+
+Completion status values:
+- `completed`
+- `partial`
+- `skipped`
+
+##### 10. `client_pt_log_exercises`
+
+Purpose: exercise-level results captured during a logged workout.
+
+Fields:
+- `id`
+- `pt_log_id`
+- `client_session_exercise_id`
+- `exercise_id`
+- `exercise_name_snapshot`
+- `set_number`
+- `target_reps`
+- `completed_reps`
+- `weight_value`
+- `weight_unit`
+- `duration_seconds`
+- `distance_value`
+- `distance_unit`
+- `rpe`
+- `notes`
+- `created_at`
+- `updated_at`
+
+Notes:
+- V1 can start with one row per performed set if needed.
+- If a lighter V1 is required, we can collapse this to one row per exercise and add set-level granularity later, but the preferred contract is set-level.
+
+#### Google Sheets Structure
+
+The PT Core managed-sheet structure should be split into coach-scoped PT tabs and client-scoped PT tabs.
+
+##### Coach Workspace PT Tabs
+
+###### Tab: `PT_Exercises`
+
+Purpose: mirror the coach exercise library.
+
+Columns:
+- `exercise_id`
+- `name`
+- `category`
+- `movement_pattern`
+- `primary_muscles`
+- `secondary_muscles`
+- `equipment`
+- `difficulty`
+- `default_units`
+- `description`
+- `coaching_notes`
+- `demo_url`
+- `is_archived`
+- `updated_at`
+
+###### Tab: `PT_Workouts`
+
+Purpose: workout definitions.
+
+Columns:
+- `workout_id`
+- `name`
+- `description`
+- `goal`
+- `estimated_duration_minutes`
+- `difficulty`
+- `is_template`
+- `is_archived`
+- `updated_at`
+
+###### Tab: `PT_Workout_Exercises`
+
+Purpose: ordered exercise rows for each workout.
+
+Columns:
+- `workout_exercise_id`
+- `workout_id`
+- `workout_name`
+- `sort_order`
+- `block_label`
+- `exercise_id`
+- `exercise_name`
+- `prescription_type`
+- `sets`
+- `reps`
+- `rep_range_min`
+- `rep_range_max`
+- `duration_seconds`
+- `distance_value`
+- `distance_unit`
+- `rest_seconds`
+- `tempo`
+- `load_guidance`
+- `rpe_target`
+- `notes`
+- `updated_at`
+
+###### Tab: `PT_Programs`
+
+Purpose: reusable program headers.
+
+Columns:
+- `program_id`
+- `name`
+- `description`
+- `goal`
+- `duration_weeks`
+- `difficulty`
+- `is_template`
+- `is_archived`
+- `updated_at`
+
+###### Tab: `PT_Program_Sessions`
+
+Purpose: reusable sessions inside programs.
+
+Columns:
+- `program_session_id`
+- `program_id`
+- `program_name`
+- `week_number`
+- `day_number`
+- `sort_order`
+- `session_name`
+- `workout_id`
+- `workout_name`
+- `focus`
+- `notes`
+- `updated_at`
+
+##### Client Workspace PT Tabs
+
+###### Tab: `Training_Plan`
+
+Purpose: client-facing assigned session plan.
+
+Columns:
+- `client_session_id`
+- `assignment_id`
+- `program_id`
+- `program_name`
+- `week_number`
+- `day_number`
+- `sort_order`
+- `session_name`
+- `workout_id`
+- `workout_name`
+- `scheduled_date`
+- `status`
+- `coach_note`
+- `completed_at`
+- `updated_at`
+
+###### Tab: `Training_Plan_Exercises`
+
+Purpose: client-facing exercise prescription for each assigned session.
+
+Columns:
+- `client_session_exercise_id`
+- `client_session_id`
+- `session_name`
+- `sort_order`
+- `block_label`
+- `exercise_id`
+- `exercise_name`
+- `prescription_type`
+- `sets`
+- `reps`
+- `rep_range_min`
+- `rep_range_max`
+- `duration_seconds`
+- `distance_value`
+- `distance_unit`
+- `rest_seconds`
+- `tempo`
+- `load_guidance`
+- `rpe_target`
+- `notes`
+- `updated_at`
+
+###### Tab: `Workout_Log`
+
+Purpose: session-level completion records.
+
+Columns:
+- `pt_log_id`
+- `client_session_id`
+- `assignment_id`
+- `program_name`
+- `session_name`
+- `logged_at`
+- `completion_status`
+- `session_rpe`
+- `energy_rating`
+- `client_feedback`
+- `coach_follow_up_note`
+- `updated_at`
+
+###### Tab: `Workout_Log_Exercises`
+
+Purpose: exercise/set-level performance history.
+
+Columns:
+- `pt_log_exercise_id`
+- `pt_log_id`
+- `client_session_id`
+- `client_session_exercise_id`
+- `exercise_id`
+- `exercise_name`
+- `set_number`
+- `target_reps`
+- `completed_reps`
+- `weight_value`
+- `weight_unit`
+- `duration_seconds`
+- `distance_value`
+- `distance_unit`
+- `rpe`
+- `notes`
+- `logged_at`
+
+###### Optional Tab Later: `PT_Overview`
+
+Purpose: coach-readable summary/helper sheet if needed later.
+
+Note:
+- Do not make this a V1 dependency.
+- It can be derived later if the coach needs a summary tab for direct-in-Sheets review.
+
+#### Sync Ownership and Flow
+
+##### Coach-scoped writes
+
+The app should write these tabs when the coach edits PT library/builder data:
+- `PT_Exercises`
+- `PT_Workouts`
+- `PT_Workout_Exercises`
+- `PT_Programs`
+- `PT_Program_Sessions`
+
+##### Client-scoped writes
+
+The app should write these tabs when a program is assigned or a client logs work:
+- `Training_Plan`
+- `Training_Plan_Exercises`
+- `Workout_Log`
+- `Workout_Log_Exercises`
+
+##### Assignment flow
+
+When a coach assigns a program to a client:
+1. Create `client_pt_program_assignments`.
+2. Expand reusable program sessions into concrete `client_pt_sessions`.
+3. Expand workout exercises into `client_pt_session_exercises`.
+4. Write the resulting assigned plan into `Training_Plan` and `Training_Plan_Exercises`.
+
+##### Logging flow
+
+When a client logs a workout:
+1. Update the assigned session row status.
+2. Create `client_pt_logs`.
+3. Create `client_pt_log_exercises`.
+4. Write log data into `Workout_Log` and `Workout_Log_Exercises`.
+5. Update assignment rollup fields such as `last_session_completed_at`, `completed_sessions_count`, and `adherence_percent`.
+
+#### App Surface Ownership
+
+##### Workspace-level PT surfaces
+
+- `Exercises`
+- `Workouts`
+- `Programs`
+
+These should live in coach-scoped module surfaces, not inside a specific client workspace.
+
+##### Client workspace PT surfaces
+
+- `Training Plan`
+- `Workout History`
+- `Coach PT Overview`
+
+These should live inside `/admin/clients/[id]` and/or the equivalent client-facing portal areas because they depend on a specific client assignment and log history.
+
+#### V1 Read/Write Priorities
+
+V1 should support these critical loops only:
+- coach creates exercises
+- coach creates workouts from exercises
+- coach creates programs from workouts
+- coach assigns a program to a client
+- client views the assigned training plan
+- client logs completed workout results
+- coach reviews adherence and recent training context
+
+V1 should not require:
+- drag-and-drop builder
+- supersets/circuits as a hard requirement
+- auto-progression engine
+- advanced analytics
+- periodisation automation
+
+#### V1 Open Questions To Resolve During Implementation
+
+- Whether set-level logging ships immediately or starts with one row per exercise for speed
+- Whether `scheduled_date` is required per assigned session in V1 or whether week/day structure alone is enough
+- Whether a coach can run multiple simultaneous active PT assignments for one client in V1
+- Whether PT notes belong in the same client workbook tabs or remain app-only in the first pass
+
+Default implementation assumptions unless overridden:
+- set-level logging is preferred but can be simplified if it blocks delivery
+- assigned sessions should support optional `scheduled_date`
+- one primary active PT assignment per client in V1
+- PT notes can live in workbook-backed structures where they affect delivery/review
 
 ### Phase 3 — Platform Expansion
 > Extensions that build on the module backbone and niche modules already in motion.
@@ -608,3 +1200,6 @@ Coach type should be treated as a starting preset that suggests a default module
 | 2026-04-08 | Client workspace IA slice landed with minimal scope: `Clients` is now the coach entry point for client-specific work, `/admin/clients/[id]` acts as a client workspace shell for real backed sections only, and coach-scoped tools like Exercises remain outside client context. |
 | 2026-04-08 | Managed-sheets contract locked for forward planning. Default operating modes are now (1) start fresh with Chameleon-managed Google Sheets and (3) AI-assisted migration into Chameleon-managed Google Sheets. Guided mapping of arbitrary legacy sheet layouts is superseded as a normal product path; legacy sources are intake-only and migrated data should become part of the Chameleon-managed structure in the coach's Google account. |
 | 2026-04-08 | Drive hierarchy foundation landed for managed Google files. Coaches now provision a coach-owned workspace root with a control workbook, coach-private library workbook(s) only for supported active modules, a dedicated `Clients` folder, and per-client folders/workbooks provisioned at invite acceptance; workbook sharing is scoped to the individual client workbook rather than the whole workspace. |
+| 2026-04-09 | Build-direction clarification: `PLATFORM_RESEARCH.md` is the planning document for what comes next, `SPEC.md` describes current implemented product state, and `CHAMELEON_BRAND_TODO.md` tracks built slices that still need validation/hardening. |
+| 2026-04-09 | Next module priority is to deepen the two active foundations rather than add another core. PT Core is the next primary build slice and should expand from exercise library into workout builder, programs/templates, client training plan delivery, workout logging, and coach review tooling. |
+| 2026-04-09 | PT Core should be the first complete proof of the module architecture: coach-scoped build tools and libraries at workspace level, client-scoped assigned plans and logging inside client workspaces, with the managed Google Sheets structure kept clear enough to operate directly in Sheets as well as through the app. |
