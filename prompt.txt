@@ -1,1 +1,0 @@
-codex "Do not edit anything yet. Audit this project. Find the main app entrypoints, the current branding/rebrand files, and any build document, README, AGENTS.md, or planning docs. Then summarize the structure, what the rebrand already changed, what is still inconsistent, and the safest next minimal-diff steps."
