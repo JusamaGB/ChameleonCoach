@@ -76,6 +76,11 @@ export function ClientDetailView({
   const [assigningProgram, setAssigningProgram] = useState(false)
   const [cancellingAssignment, setCancellingAssignment] = useState(false)
   const [completingAssignment, setCompletingAssignment] = useState(false)
+  const [editingSessionId, setEditingSessionId] = useState<string | null>(null)
+  const [sessionScheduledDate, setSessionScheduledDate] = useState("")
+  const [sessionStatus, setSessionStatus] = useState<"upcoming" | "available" | "completed" | "skipped">("upcoming")
+  const [sessionCoachNote, setSessionCoachNote] = useState("")
+  const [savingSession, setSavingSession] = useState(false)
   const [assignmentError, setAssignmentError] = useState("")
 
   const sheetUrl = client.sheet_id
@@ -221,6 +226,48 @@ export function ClientDetailView({
       setAssignmentError("Failed to complete assignment")
     } finally {
       setCompletingAssignment(false)
+    }
+  }
+
+  function startEditSession(session: ClientPTSession) {
+    setEditingSessionId(session.id)
+    setSessionScheduledDate(session.scheduled_date ?? "")
+    setSessionStatus(session.status)
+    setSessionCoachNote(session.coach_note ?? "")
+    setAssignmentError("")
+  }
+
+  function cancelEditSession() {
+    setEditingSessionId(null)
+    setSessionScheduledDate("")
+    setSessionStatus("upcoming")
+    setSessionCoachNote("")
+  }
+
+  async function handleSaveSession(sessionId: string) {
+    setSavingSession(true)
+    setAssignmentError("")
+    try {
+      const response = await fetch(`/api/admin/clients/${client.id}/pt-sessions/${sessionId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          scheduled_date: sessionScheduledDate || null,
+          status: sessionStatus,
+          coach_note: sessionCoachNote || null,
+        }),
+      })
+      const data = await response.json()
+      if (!response.ok) {
+        setAssignmentError(data.error || "Failed to update PT session")
+        return
+      }
+      cancelEditSession()
+      router.refresh()
+    } catch {
+      setAssignmentError("Failed to update PT session")
+    } finally {
+      setSavingSession(false)
     }
   }
 
@@ -703,11 +750,70 @@ export function ClientDetailView({
                                   Week {session.week_number} • Day {session.day_number}
                                   {session.scheduled_date ? ` • ${new Date(session.scheduled_date).toLocaleDateString("en-GB")}` : ""}
                                 </p>
+                                {session.coach_note ? (
+                                  <p className="mt-1 text-xs text-gf-muted">Coach note: {session.coach_note}</p>
+                                ) : null}
                               </div>
-                              <Badge variant={session.status === "completed" ? "success" : "default"}>
-                                {session.status}
-                              </Badge>
+                              <div className="flex items-center gap-2">
+                                <Badge variant={session.status === "completed" ? "success" : "default"}>
+                                  {session.status}
+                                </Badge>
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => startEditSession(session)}
+                                >
+                                  Edit
+                                </Button>
+                              </div>
                             </div>
+                            {editingSessionId === session.id ? (
+                              <div className="mt-3 grid gap-3 rounded-lg border border-gf-border/80 bg-gf-black/20 p-3">
+                                <div className="grid gap-3 sm:grid-cols-2">
+                                  <Input
+                                    label="Scheduled date"
+                                    type="date"
+                                    value={sessionScheduledDate}
+                                    onChange={(event) => setSessionScheduledDate(event.target.value)}
+                                  />
+                                  <Select
+                                    label="Status"
+                                    value={sessionStatus}
+                                    onChange={(event) =>
+                                      setSessionStatus(
+                                        event.target.value as "upcoming" | "available" | "completed" | "skipped"
+                                      )
+                                    }
+                                    options={[
+                                      { value: "upcoming", label: "Upcoming" },
+                                      { value: "available", label: "Available" },
+                                      { value: "completed", label: "Completed" },
+                                      { value: "skipped", label: "Skipped" },
+                                    ]}
+                                  />
+                                </div>
+                                <TextArea
+                                  label="Coach note"
+                                  value={sessionCoachNote}
+                                  onChange={(event) => setSessionCoachNote(event.target.value)}
+                                  placeholder="Add or adjust the coach note for this session."
+                                />
+                                <div className="flex items-center gap-2">
+                                  <Button
+                                    type="button"
+                                    size="sm"
+                                    onClick={() => handleSaveSession(session.id)}
+                                    disabled={savingSession}
+                                  >
+                                    {savingSession ? "Saving..." : "Save session"}
+                                  </Button>
+                                  <Button type="button" variant="ghost" size="sm" onClick={cancelEditSession}>
+                                    Cancel
+                                  </Button>
+                                </div>
+                              </div>
+                            ) : null}
                           </div>
                         ))}
                       </div>

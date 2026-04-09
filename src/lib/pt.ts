@@ -812,6 +812,73 @@ export async function completeActivePTAssignmentForClient(
   return { ok: true, assignmentId: assignment.id }
 }
 
+export async function updateClientPTSessionForCoach(
+  supabase: { from: (table: string) => any },
+  coachId: string,
+  clientId: string,
+  sessionId: string,
+  payload: {
+    scheduled_date?: string | null
+    status?: "upcoming" | "available" | "completed" | "skipped"
+    coach_note?: string | null
+  }
+) {
+  const client = await getCoachClientRecord(supabase, coachId, clientId)
+  if (!client) {
+    throw new Error("Client not found")
+  }
+
+  const { data: session, error } = await supabase
+    .from("client_pt_sessions")
+    .select("*")
+    .eq("id", sessionId)
+    .eq("client_id", clientId)
+    .eq("coach_id", coachId)
+    .maybeSingle()
+
+  if (error) throw error
+  if (!session) {
+    throw new Error("PT session not found")
+  }
+
+  const nextStatus = payload.status ?? session.status
+  const nextScheduledDate =
+    payload.scheduled_date === undefined ? session.scheduled_date : payload.scheduled_date || null
+
+  const updateData: Record<string, unknown> = {
+    scheduled_date: nextScheduledDate,
+    coach_note: payload.coach_note === undefined ? session.coach_note : cleanText(payload.coach_note),
+    status: nextStatus,
+    updated_at: new Date().toISOString(),
+  }
+
+  if (nextStatus === "completed") {
+    updateData.completed_at = session.completed_at ?? new Date().toISOString()
+  } else if (nextStatus === "skipped") {
+    updateData.completed_at = null
+  } else {
+    updateData.completed_at = null
+  }
+
+  const { data: updatedSession, error: updateError } = await supabase
+    .from("client_pt_sessions")
+    .update(updateData)
+    .eq("id", sessionId)
+    .eq("client_id", clientId)
+    .eq("coach_id", coachId)
+    .select("*")
+    .single()
+
+  if (updateError || !updatedSession) {
+    throw updateError ?? new Error("Failed to update PT session")
+  }
+
+  await recalculatePTAssignmentRollup(supabase, session.assignment_id)
+  await syncClientPTWorkbook(supabase, coachId, clientId)
+
+  return updatedSession as ClientPTSession
+}
+
 export async function getClientPTOverviewForCoach(
   supabase: { from: (table: string) => any },
   coachId: string,
