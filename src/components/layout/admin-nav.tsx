@@ -15,6 +15,7 @@ import {
   Menu,
   X,
   Gem,
+  Lightbulb,
 } from "lucide-react"
 import { PLATFORM_NAME } from "@/lib/platform"
 
@@ -22,6 +23,7 @@ const navItems = [
   { href: "/admin", label: "Dashboard", icon: LayoutDashboard },
   { href: "/admin/clients", label: "Clients", icon: Users },
   { href: "/admin/appointments", label: "Appointments", icon: Calendar },
+  { href: "/admin/requests", label: "Requests", icon: Lightbulb },
   { href: "/admin/modules", label: "Modules", icon: Layers3 },
   { href: "/admin/premium", label: "Premium", icon: Gem },
   { href: "/admin/settings", label: "Settings", icon: Settings },

@@ -13,12 +13,14 @@ import {
   Calendar,
   LogOut,
   Dumbbell,
+  Lightbulb,
 } from "lucide-react"
 import { DEFAULT_COACH_BRANDING, type CoachBranding } from "@/lib/branding"
 import { canAccessFeature } from "@/lib/modules"
 
 const navItems = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
+  { href: "/requests", label: "Requests", icon: Lightbulb },
   { href: "/training", label: "Training", icon: Dumbbell, feature: "client_portal_training" as const },
   { href: "/meal-plan", label: "Meal Plan", icon: UtensilsCrossed, feature: "client_portal_meal_plan" as const },
   { href: "/progress", label: "Progress", icon: TrendingUp },

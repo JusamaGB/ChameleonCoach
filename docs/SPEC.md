@@ -172,6 +172,7 @@ Client can view meal plan, log progress, manage appointments, and pay for confir
 | `/progress` | Client progress logging + history |
 | `/appointments` | Client appointment requests, confirmed sessions, and payment CTA for unpaid confirmed appointments |
 | `/profile` | Client profile details |
+| `/requests` | Client-accessible community request board with voting, comments, and follows |
 | `/training` | Client PT training plan view and workout logging surface when PT Core is enabled |
 
 ## Current Coach Pages
@@ -184,6 +185,7 @@ Client can view meal plan, log progress, manage appointments, and pay for confir
 | `/admin/invite` | Invite management |
 | `/admin/settings` | Google connection + lightweight branding settings |
 | `/admin/modules` | Workspace-level module entitlement management |
+| `/admin/requests` | Coach request board with submission, voting, comments, follows, and moderation hooks |
 | `/admin/appointments` | Appointment management, slots, confirmation/decline, payment request action |
 | `/admin/billing` | Coach subscription billing status and portal actions |
 | `/admin/exercises` | Coach PT Core exercise library management |
@@ -210,6 +212,8 @@ Client can view meal plan, log progress, manage appointments, and pay for confir
 - Clients can view assigned PT sessions and submit workout logs through `/training` when PT Core is active
 - Coach client workspaces now include PT assignment state, recent training logs, and adherence context
 - Provisioned PT Google workbook tabs are now written during workout/program sync, assignment sync, and workout logging sync where the relevant managed workbook exists
+- Coaches and clients can now use a shared in-app requests board to submit product needs, vote, comment, follow requests, and view public status updates
+- Internal moderation hooks now support request status management, duplicate linking, and contributor rewards for implemented or high-value requests
 - `Clients` is the coach-facing entry point into client-specific workspaces
 - Client workspaces now group only real client-backed surfaces such as overview, meal plan, progress, and appointment history, while coach-scoped tools remain in the main admin nav
 - Mobile responsiveness remains a core requirement across client surfaces

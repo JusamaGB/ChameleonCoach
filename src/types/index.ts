@@ -324,3 +324,134 @@ export interface ProfileData {
   activity_level: string
   notes: string
 }
+
+export type ProductRequestUrgency =
+  | "nice_to_have"
+  | "important"
+  | "high_impact"
+  | "blocking"
+
+export type ProductRequestStatus =
+  | "submitted"
+  | "under_review"
+  | "gathering_demand"
+  | "planned"
+  | "in_design"
+  | "in_build"
+  | "released"
+  | "merged"
+  | "not_now"
+  | "declined"
+
+export type ProductRequestType =
+  | "new_feature"
+  | "module_expansion"
+  | "workflow_improvement"
+  | "ux_improvement"
+  | "bug_friction"
+  | "integration"
+  | "data_reporting"
+
+export type ProductRequestRole = "coach" | "client" | "admin"
+
+export type ProductRewardType =
+  | "account_credit"
+  | "extended_trial"
+  | "free_month"
+  | "module_unlock"
+  | "premium_access"
+  | "early_access"
+  | "contributor_badge"
+
+export interface ProductRequest {
+  id: string
+  title: string
+  summary: string | null
+  problem_statement: string
+  desired_outcome: string | null
+  requester_user_id: string | null
+  requester_role: ProductRequestRole
+  coach_id: string | null
+  client_id: string | null
+  module_area: string
+  feature_area: string | null
+  urgency: ProductRequestUrgency
+  niche: string
+  request_type: ProductRequestType
+  status: ProductRequestStatus
+  public_note: string | null
+  duplicate_of_request_id: string | null
+  reward_state: "none" | "under_review" | "eligible" | "granted"
+  implementation_note: string | null
+  implemented_at: string | null
+  created_at: string
+  updated_at: string
+}
+
+export interface ProductRequestVote {
+  id: string
+  request_id: string
+  user_id: string
+  created_at: string
+}
+
+export interface ProductRequestComment {
+  id: string
+  request_id: string
+  user_id: string
+  role: ProductRequestRole
+  body: string
+  created_at: string
+  updated_at: string
+}
+
+export interface ProductRequestFollower {
+  id: string
+  request_id: string
+  user_id: string
+  created_at: string
+}
+
+export interface ProductRequestStatusHistory {
+  id: string
+  request_id: string
+  from_status: ProductRequestStatus | null
+  to_status: ProductRequestStatus
+  note: string | null
+  changed_by_user_id: string | null
+  created_at: string
+}
+
+export interface ContributorReward {
+  id: string
+  request_id: string | null
+  user_id: string
+  reward_type: ProductRewardType
+  title: string
+  description: string | null
+  reward_value: string | null
+  granted_by_user_id: string | null
+  granted_at: string
+  expires_at: string | null
+}
+
+export interface RequestContributor {
+  user_id: string | null
+  role: ProductRequestRole
+  display_name: string
+  requests_count: number
+  implemented_count: number
+  total_votes_received: number
+}
+
+export interface ProductRequestDetail extends ProductRequest {
+  vote_count: number
+  comment_count: number
+  follower_count: number
+  viewer_has_voted: boolean
+  viewer_is_following: boolean
+  requester_display_name: string
+  comments: Array<ProductRequestComment & { author_display_name: string }>
+  status_history: ProductRequestStatusHistory[]
+  rewards: ContributorReward[]
+}
