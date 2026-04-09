@@ -3,6 +3,7 @@ import { verifyCoach, isCoachResult } from "@/lib/auth-helpers"
 import {
   assignPTProgramToClient,
   cancelActivePTAssignmentForClient,
+  completeActivePTAssignmentForClient,
   getClientPTOverviewForCoach,
   restartActivePTAssignmentForClient,
 } from "@/lib/pt"
@@ -34,6 +35,18 @@ export async function POST(
   const { id } = await params
 
   const body = await request.json()
+  if (body?.action === "complete_active") {
+    try {
+      const assignment = await completeActivePTAssignmentForClient(supabase, user.id, id)
+      return NextResponse.json({ assignment })
+    } catch (error) {
+      return NextResponse.json(
+        { error: error instanceof Error ? error.message : "Failed to complete assignment" },
+        { status: 500 }
+      )
+    }
+  }
+
   if (body?.action === "restart_active") {
     try {
       const assignment = await restartActivePTAssignmentForClient(supabase, user.id, id)

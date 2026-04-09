@@ -762,6 +762,48 @@ export async function cancelActivePTAssignmentForClient(
   return { ok: true, assignmentId: assignment.id }
 }
 
+export async function completeActivePTAssignmentForClient(
+  supabase: { from: (table: string) => any },
+  coachId: string,
+  clientId: string
+) {
+  const client = await getCoachClientRecord(supabase, coachId, clientId)
+  if (!client) {
+    throw new Error("Client not found")
+  }
+
+  const { data: assignment, error } = await supabase
+    .from("client_pt_program_assignments")
+    .select("*")
+    .eq("client_id", clientId)
+    .eq("coach_id", coachId)
+    .eq("status", "active")
+    .maybeSingle()
+
+  if (error) throw error
+  if (!assignment) {
+    return { ok: true, assignment: null }
+  }
+
+  await recalculatePTAssignmentRollup(supabase, assignment.id)
+
+  const completedAt = new Date().toISOString()
+  const { error: updateError } = await supabase
+    .from("client_pt_program_assignments")
+    .update({
+      status: "completed",
+      assigned_end_date: completedAt.slice(0, 10),
+      updated_at: completedAt,
+    })
+    .eq("id", assignment.id)
+
+  if (updateError) throw updateError
+
+  await syncClientPTWorkbook(supabase, coachId, clientId)
+
+  return { ok: true, assignmentId: assignment.id }
+}
+
 export async function getClientPTOverviewForCoach(
   supabase: { from: (table: string) => any },
   coachId: string,

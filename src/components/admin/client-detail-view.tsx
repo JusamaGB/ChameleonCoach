@@ -69,6 +69,7 @@ export function ClientDetailView({
   const [assignmentNote, setAssignmentNote] = useState("")
   const [assigningProgram, setAssigningProgram] = useState(false)
   const [cancellingAssignment, setCancellingAssignment] = useState(false)
+  const [completingAssignment, setCompletingAssignment] = useState(false)
   const [assignmentError, setAssignmentError] = useState("")
 
   const sheetUrl = client.sheet_id
@@ -185,6 +186,32 @@ export function ClientDetailView({
       setAssignmentError("Failed to restart assignment")
     } finally {
       setAssigningProgram(false)
+    }
+  }
+
+  async function handleCompleteAssignment() {
+    if (!confirm("Mark the current PT assignment as completed for this client?")) {
+      return
+    }
+
+    setCompletingAssignment(true)
+    setAssignmentError("")
+    try {
+      const response = await fetch(`/api/admin/clients/${client.id}/pt-assignment`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "complete_active" }),
+      })
+      const data = await response.json()
+      if (!response.ok) {
+        setAssignmentError(data.error || "Failed to complete assignment")
+        return
+      }
+      router.refresh()
+    } catch {
+      setAssignmentError("Failed to complete assignment")
+    } finally {
+      setCompletingAssignment(false)
     }
   }
 
@@ -624,6 +651,15 @@ export function ClientDetailView({
                             type="button"
                             variant="ghost"
                             size="sm"
+                            onClick={handleCompleteAssignment}
+                            disabled={completingAssignment}
+                          >
+                            {completingAssignment ? "Completing..." : "Mark complete"}
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
                             onClick={handleCancelAssignment}
                             disabled={cancellingAssignment}
                             className="text-red-400 hover:text-red-300"
@@ -711,10 +747,18 @@ export function ClientDetailView({
                                   {assignment.assigned_start_date
                                     ? ` • Start ${new Date(assignment.assigned_start_date).toLocaleDateString("en-GB")}`
                                     : ""}
+                                  {assignment.assigned_end_date
+                                    ? ` • End ${new Date(assignment.assigned_end_date).toLocaleDateString("en-GB")}`
+                                    : ""}
                                 </p>
                               </div>
                               {assignmentStatusBadge(assignment.status)}
                             </div>
+                            <p className="mt-2 text-xs text-gf-muted">
+                              {assignment.completed_sessions_count}/{assignment.total_sessions_count} sessions completed
+                              {" • "}
+                              {assignment.adherence_percent}% adherence
+                            </p>
                           </div>
                         ))}
                       </div>
