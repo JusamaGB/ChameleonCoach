@@ -10,6 +10,7 @@ import type {
   PTWorkout,
   PTWorkoutExercise,
 } from "@/types"
+import { syncClientPTSheets, syncCoachPTLibrarySheets } from "@/lib/google/sheets"
 
 export type WorkoutExerciseInput = {
   exercise_id: string | null
@@ -121,6 +122,135 @@ function normalizeLogExerciseInput(input: PTLogExerciseInput) {
   }
 }
 
+async function syncCoachPTWorkbook(
+  supabase: { from: (table: string) => any },
+  coachId: string
+) {
+  try {
+    const { data: settings } = await supabase
+      .from("admin_settings")
+      .select("managed_pt_library_sheet_id")
+      .eq("user_id", coachId)
+      .maybeSingle()
+
+    const sheetId = settings?.managed_pt_library_sheet_id
+    if (!sheetId) {
+      return
+    }
+
+    const { data: exercises, error: exerciseError } = await supabase
+      .from("exercises")
+      .select("*")
+      .eq("coach_id", coachId)
+      .order("name", { ascending: true })
+    if (exerciseError) throw exerciseError
+
+    const workouts = await listPTWorkoutsForCoach(supabase, coachId)
+    const programs = await listPTProgramsForCoach(supabase, coachId)
+
+    await syncCoachPTLibrarySheets(sheetId, coachId, {
+      exercises: (exercises ?? []) as Exercise[],
+      workouts,
+      programs,
+    })
+  } catch (error) {
+    console.error("PT coach workbook sync failed", error)
+  }
+}
+
+async function syncClientPTWorkbook(
+  supabase: { from: (table: string) => any },
+  coachId: string,
+  clientId: string
+) {
+  try {
+    const { data: client } = await supabase
+      .from("clients")
+      .select("sheet_id")
+      .eq("id", clientId)
+      .maybeSingle()
+
+    const sheetId = client?.sheet_id
+    if (!sheetId) {
+      return
+    }
+
+    const { data: assignment } = await supabase
+      .from("client_pt_program_assignments")
+      .select("*")
+      .eq("client_id", clientId)
+      .eq("coach_id", coachId)
+      .eq("status", "active")
+      .maybeSingle()
+
+    if (!assignment) {
+      await syncClientPTSheets(sheetId, coachId, {
+        assignment: null,
+        sessions: [],
+        sessionExercises: [],
+        logs: [],
+        logExercises: [],
+      })
+      return
+    }
+
+    const { data: sessions, error: sessionError } = await supabase
+      .from("client_pt_sessions")
+      .select("*")
+      .eq("assignment_id", assignment.id)
+      .order("week_number", { ascending: true })
+      .order("day_number", { ascending: true })
+      .order("sort_order", { ascending: true })
+    if (sessionError) throw sessionError
+
+    const sessionIds = (sessions ?? []).map((session: ClientPTSession) => session.id)
+    const { data: sessionExercises, error: sessionExerciseError } = sessionIds.length
+      ? await supabase
+          .from("client_pt_session_exercises")
+          .select("*")
+          .in("client_session_id", sessionIds)
+          .order("sort_order", { ascending: true })
+      : { data: [], error: null }
+    if (sessionExerciseError) throw sessionExerciseError
+
+    const { data: logs, error: logError } = sessionIds.length
+      ? await supabase
+          .from("client_pt_logs")
+          .select("*")
+          .in("client_session_id", sessionIds)
+          .order("logged_at", { ascending: false })
+      : { data: [], error: null }
+    if (logError) throw logError
+
+    const logIds = (logs ?? []).map((log: ClientPTLog) => log.id)
+    const { data: logExercises, error: logExerciseError } = logIds.length
+      ? await supabase
+          .from("client_pt_log_exercises")
+          .select("*")
+          .in("pt_log_id", logIds)
+          .order("set_number", { ascending: true })
+      : { data: [], error: null }
+    if (logExerciseError) throw logExerciseError
+
+    await syncClientPTSheets(sheetId, coachId, {
+      assignment: assignment as ClientPTProgramAssignment,
+      sessions: (sessions ?? []) as ClientPTSession[],
+      sessionExercises: (sessionExercises ?? []) as ClientPTSessionExercise[],
+      logs: (logs ?? []) as ClientPTLog[],
+      logExercises: (logExercises ?? []) as ClientPTLogExercise[],
+    })
+  } catch (error) {
+    console.error("Client PT workbook sync failed", error)
+  }
+}
+
+export async function syncCoachPTWorkbookForCoach(
+  supabase: { from: (table: string) => any },
+  coachId: string
+) {
+  await syncCoachPTWorkbook(supabase, coachId)
+}
+
 export async function getCoachClientRecord(
   supabase: { from: (table: string) => any },
   coachId: string,
@@ -219,6 +349,8 @@ export async function createPTWorkout(
     if (exerciseError) throw exerciseError
   }
 
+  await syncCoachPTWorkbook(supabase, coachId)
+
   return workout
 }
 
@@ -263,6 +395,8 @@ export async function updatePTWorkout(
     const { error: exerciseError } = await supabase.from("pt_workout_exercises").insert(rows)
     if (exerciseError) throw exerciseError
   }
+
+  await syncCoachPTWorkbook(supabase, coachId)
 
   return workout
 }
@@ -344,6 +478,8 @@ export async function createPTProgram(
     if (sessionError) throw sessionError
   }
 
+  await syncCoachPTWorkbook(supabase, coachId)
+
   return program
 }
 
@@ -388,6 +524,8 @@ export async function updatePTProgram(
     const { error: sessionError } = await supabase.from("pt_program_sessions").insert(rows)
     if (sessionError) throw sessionError
   }
+
+  await syncCoachPTWorkbook(supabase, coachId)
 
   return program
 }
@@ -543,6 +681,8 @@ export async function assignPTProgramToClient(
       .insert(sessionExerciseInserts)
     if (sessionExerciseError) throw sessionExerciseError
   }
+
+  await syncClientPTWorkbook(supabase, coachId, clientId)
 
   return assignment
 }
@@ -814,6 +954,7 @@ export async function logPTSessionForClient(
   if (sessionUpdateError) throw sessionUpdateError
 
   await recalculatePTAssignmentRollup(supabase, training.assignment.id)
+  await syncClientPTWorkbook(supabase, training.client.coach_id, training.client.id)
 
   return { ok: true }
 }

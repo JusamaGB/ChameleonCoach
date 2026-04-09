@@ -2,132 +2,71 @@
 
 ## Cycle Summary
 
-- Cycle focus completed:
-  - module-aware coach/client gating foundations
-  - PT Core V1 schema + shared types
-  - coach-side workouts and programs CRUD surfaces
-  - client PT assignment, training page, and workout logging loop
-  - PT workbook tab provisioning for managed Google structures
-- Release intent:
-  - testable app build for Julius to validate locally and via deployed environment
+- Production deploy completed for the current PT Core V1 app build.
+- Module backbone is now live end to end for coach/client navigation and portal visibility.
+- PT Core V1 now covers workout authoring, programs, assignment materialisation, client training delivery, workout logging, coach review context, and managed PT tab sync into linked Google workbooks.
+- Documentation was updated after deployment so planning, current product state, and remaining validation tasks stay aligned.
 
 ## Files Changed
 
-- `updatedifflog.md`
-- `src/app/admin/(dashboard)/clients/[id]/page.tsx`
-- `src/app/admin/(dashboard)/layout.tsx`
-- `src/app/admin/(dashboard)/programs/page.tsx`
-- `src/app/admin/(dashboard)/workouts/page.tsx`
-- `src/app/api/admin/clients/[id]/pt-assignment/route.ts`
-- `src/app/api/admin/programs/route.ts`
-- `src/app/api/admin/programs/[id]/route.ts`
-- `src/app/api/admin/workouts/route.ts`
-- `src/app/api/admin/workouts/[id]/route.ts`
-- `src/app/api/client/portal/route.ts`
-- `src/app/api/client/training/route.ts`
-- `src/app/appointments/page.tsx`
-- `src/app/dashboard/page.tsx`
-- `src/app/meal-plan/page.tsx`
-- `src/app/profile/page.tsx`
-- `src/app/progress/page.tsx`
-- `src/app/training/page.tsx`
-- `src/components/admin/client-detail-view.tsx`
-- `src/components/admin/programs-manager.tsx`
-- `src/components/admin/workout-builder.tsx`
-- `src/components/layout/admin-nav.tsx`
-- `src/components/layout/client-nav.tsx`
-- `src/lib/client-portal.ts`
-- `src/lib/google/template.ts`
-- `src/lib/modules.ts`
+- `src/lib/google/sheets.ts`
 - `src/lib/pt.ts`
-- `src/types/index.ts`
-- `supabase/migrations/017_pt_core_v1.sql`
-- `supabase/schema.sql`
+- `src/app/api/admin/exercises/route.ts`
+- `src/app/api/admin/exercises/[id]/route.ts`
+- `PLATFORM_RESEARCH.md`
+- `SPEC.md`
+- `CHAMELEON_BRAND_TODO.md`
+- `updatedifflog.md`
 
-## Minimal-Diff Rationale
+## Root Cause / Implementation Rationale
 
-- Reused the existing admin CRUD pattern already established by exercises and appointments.
-- Reused the existing client workspace model at `/admin/clients/[id]` instead of creating a separate coach-side PT area.
-- Reused the existing Google template/helper layer instead of inventing a separate PT sync stack.
-- Added PT Core incrementally on top of the existing exercise library rather than replacing that slice.
-- Left unrelated pre-existing dirty files untouched:
+- The previous PT Core slice provisioned the right PT tabs in Google workbooks, but the app still treated Supabase as the only operational store during PT CRUD, assignment, and workout logging actions.
+- This pass extends the existing Google helper layer instead of inventing a separate sync system.
+- PT workbook sync is best-effort and safe: if a managed workbook is not linked yet, app behavior continues instead of failing the user-facing flow.
+- Unrelated pre-existing dirty files remain untouched:
   - `package.json`
   - `package-lock.json`
 
-## Implementation Notes
-
-### Module Backbone
-
-- Added module-aware feature keys for PT and nutrition entitlements.
-- Made admin nav hide PT surfaces when PT Core is not enabled.
-- Made client nav and client portal context entitlement-aware.
-- Meal plan portal access now follows `nutrition_core`.
-- Training portal access now follows `pt_core`.
-
-### PT Core
-
-- Added PT schema tables for:
-  - workouts
-  - workout exercises
-  - programs
-  - program sessions
-  - client assignments
-  - client sessions
-  - client session exercises
-  - workout logs
-  - log exercises
-- Added coach CRUD APIs and pages for workouts and programs.
-- Added client assignment API.
-- Added client training API and `/training` page.
-- Added coach PT overview + assignment form inside the client workspace.
-
-### Managed Sheets
-
-- PT coach library workbook now provisions:
-  - `PT_Exercises`
-  - `PT_Workouts`
-  - `PT_Workout_Exercises`
-  - `PT_Programs`
-  - `PT_Program_Sessions`
-- Client workbook now provisions PT tabs when PT Core is active:
-  - `Training_Plan`
-  - `Training_Plan_Exercises`
-  - `Workout_Log`
-  - `Workout_Log_Exercises`
-
 ## Verification Evidence
+
+### Deployment
+
+- Explicit production deploy completed through Vercel CLI.
+- Deployment id: `dpl_J86SkziPnEvFj1LiMTWTUtQC92ms`
+- Production alias: `https://g-fitness-eight.vercel.app`
 
 ### Static correctness
 
 - `npx tsc --noEmit`
-  - not used as the final authority because this repo’s `tsconfig.json` includes stale `.next/types/**/*.ts` entries that fail before build-generated types exist
+  - still noisy because `tsconfig.json` includes stale `.next/types/**/*.ts` paths before those generated files exist
 - `npm run build`
-  - passed successfully after fixing:
-    - `src/app/training/page.tsx` typo
-    - missing form imports in `src/components/admin/client-detail-view.tsx`
-    - strict typing issues in `src/lib/pt.ts`
+  - passed locally after the PT Sheets sync pass
+  - passed again in Vercel production build
 
-### Runtime / release evidence
+### Behavioral evidence
 
-- Production build completed successfully and included the new routes:
+- Production build includes:
+  - `/admin/exercises`
   - `/admin/workouts`
   - `/admin/programs`
   - `/training`
-  - `/api/admin/workouts`
-  - `/api/admin/programs`
-  - `/api/admin/clients/[id]/pt-assignment`
-  - `/api/client/portal`
-  - `/api/client/training`
+  - PT admin/client API routes
+- PT Google sync paths now run after:
+  - exercise create/update
+  - workout create/update
+  - program create/update
+  - client PT assignment
+  - client workout log submission
 
-## Known Risks
+## Open Risks
 
-- PT Google tab provisioning is implemented, but full row-level PT Sheets sync for workouts/programs/assignments/logs is not yet mirrored from every CRUD/action path; the workbook structure is ready, but the app still treats the database as the primary live store for PT V1 behavior.
-- Existing live client workbooks created before this cycle will not automatically gain new PT tabs unless the provisioning/re-provisioning path is rerun.
-- `npx tsc --noEmit` remains noisy because of the repo’s current `.next/types` include behavior.
-- Nutrition flows were preserved, but the meal-plan portal is now intentionally tied to `nutrition_core`, which may change the experience for coaches who disable that module on non-legacy workspaces.
+- PT sync still needs real-workspace validation against live connected Google accounts and actual provisioned workbooks.
+- Older client workbooks created before PT tabs existed may need reprovisioning or a recovery path before PT sync can populate them cleanly.
+- The app remains database-led for PT identity and permissions; Sheets mirror the operational rows but are not yet proven under all live edge cases.
+- `npx tsc --noEmit` remains non-authoritative until the repo’s `.next/types` include behavior is cleaned up.
 
 ## Next Step
 
-- Commit only the intended PT/module files.
-- Push `main` to trigger the existing GitHub Actions Vercel deployment.
-- Julius tests the deployed build plus local migration/application behavior.
+- Julius tests the deployed build on `https://g-fitness-eight.vercel.app`.
+- Validate PT authoring, assignment, and logging on a real coach workspace with Google connected.
+- If live PT workbook sync behaves correctly, the next implementation pass should focus on workbook backfill/recovery for older client sheets and QA hardening rather than widening scope.

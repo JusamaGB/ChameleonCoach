@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server"
 import { verifyCoach, isCoachResult } from "@/lib/auth-helpers"
+import { syncCoachPTWorkbookForCoach } from "@/lib/pt"
 
 function normalizeExerciseInput(body: Record<string, unknown>) {
   const name = typeof body.name === "string" ? body.name.trim() : ""
@@ -65,6 +66,8 @@ export async function POST(request: NextRequest) {
   if (error || !exercise) {
     return NextResponse.json({ error: "Failed to create exercise" }, { status: 500 })
   }
+
+  await syncCoachPTWorkbookForCoach(supabase, user.id)
 
   return NextResponse.json({ exercise })
 }

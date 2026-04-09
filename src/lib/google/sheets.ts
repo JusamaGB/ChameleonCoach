@@ -1,10 +1,47 @@
 import { google } from "googleapis"
 import { getAuthedClient } from "./auth"
-import type { MealPlanDay, ProgressEntry, ProfileData } from "@/types"
+import type {
+  ClientPTLog,
+  ClientPTLogExercise,
+  ClientPTProgramAssignment,
+  ClientPTSession,
+  ClientPTSessionExercise,
+  Exercise,
+  MealPlanDay,
+  ProgressEntry,
+  ProfileData,
+  PTProgram,
+  PTProgramSession,
+  PTWorkout,
+  PTWorkoutExercise,
+} from "@/types"
 
 async function getSheetsApi(coachId: string) {
   const auth = await getAuthedClient(coachId)
   return google.sheets({ version: "v4", auth })
+}
+
+async function overwriteTab(
+  sheetId: string,
+  tabName: string,
+  values: Array<Array<string | number | boolean | null>>,
+  coachId: string
+) {
+  const sheets = await getSheetsApi(coachId)
+
+  await sheets.spreadsheets.values.clear({
+    spreadsheetId: sheetId,
+    range: `${tabName}!A:ZZ`,
+  })
+
+  await sheets.spreadsheets.values.update({
+    spreadsheetId: sheetId,
+    range: `${tabName}!A1`,
+    valueInputOption: "USER_ENTERED",
+    requestBody: {
+      values: values.map((row) => row.map((value) => value ?? "")),
+    },
+  })
 }
 
 export async function getMealPlan(sheetId: string, coachId: string): Promise<MealPlanDay[]> {
@@ -135,4 +172,265 @@ export async function addProgressEntry(
       values: [[entry.date, entry.weight, entry.measurements, entry.notes]],
     },
   })
+}
+
+export async function syncCoachPTLibrarySheets(
+  sheetId: string,
+  coachId: string,
+  payload: {
+    exercises: Exercise[]
+    workouts: Array<PTWorkout & { exercises?: Array<PTWorkoutExercise & { exercise?: Exercise | null }> }>
+    programs: Array<PTProgram & { sessions?: PTProgramSession[] }>
+  }
+) {
+  const workoutExerciseRows = payload.workouts.flatMap((workout) =>
+    (workout.exercises ?? []).map((exercise) => [
+      exercise.id,
+      workout.id,
+      workout.name,
+      exercise.sort_order,
+      exercise.block_label ?? "",
+      exercise.exercise_id ?? "",
+      exercise.exercise?.name ?? "",
+      exercise.prescription_type,
+      exercise.sets ?? "",
+      exercise.reps ?? "",
+      exercise.rep_range_min ?? "",
+      exercise.rep_range_max ?? "",
+      exercise.duration_seconds ?? "",
+      exercise.distance_value ?? "",
+      exercise.distance_unit ?? "",
+      exercise.rest_seconds ?? "",
+      exercise.tempo ?? "",
+      exercise.load_guidance ?? "",
+      exercise.rpe_target ?? "",
+      exercise.notes ?? "",
+    ])
+  )
+
+  const programSessionRows = payload.programs.flatMap((program) =>
+    (program.sessions ?? []).map((session) => [
+      session.id,
+      program.id,
+      program.name,
+      session.week_number,
+      session.day_number,
+      session.sort_order,
+      session.session_name,
+      session.workout_id ?? "",
+      "",
+      session.focus ?? "",
+      session.notes ?? "",
+      session.updated_at,
+    ])
+  )
+
+  await overwriteTab(
+    sheetId,
+    "PT_Exercises",
+    [
+      ["exercise_id", "name", "category", "movement_pattern", "primary_muscles", "secondary_muscles", "equipment", "difficulty", "default_units", "description", "coaching_notes", "demo_url", "is_archived", "updated_at"],
+      ...payload.exercises.map((exercise) => [
+        exercise.id,
+        exercise.name,
+        exercise.category,
+        exercise.movement_pattern ?? "",
+        exercise.primary_muscles ?? "",
+        exercise.secondary_muscles ?? "",
+        exercise.equipment ?? "",
+        exercise.difficulty ?? "",
+        exercise.default_units ?? "",
+        exercise.description ?? "",
+        exercise.coaching_notes ?? "",
+        exercise.media_url ?? "",
+        exercise.is_archived ?? false,
+        exercise.updated_at,
+      ]),
+    ],
+    coachId
+  )
+
+  await overwriteTab(
+    sheetId,
+    "PT_Workouts",
+    [
+      ["workout_id", "name", "description", "goal", "estimated_duration_minutes", "difficulty", "is_template", "updated_at"],
+      ...payload.workouts.map((workout) => [
+        workout.id,
+        workout.name,
+        workout.description ?? "",
+        workout.goal ?? "",
+        workout.estimated_duration_minutes ?? "",
+        workout.difficulty ?? "",
+        workout.is_template ?? true,
+        workout.updated_at,
+      ]),
+    ],
+    coachId
+  )
+
+  await overwriteTab(
+    sheetId,
+    "PT_Workout_Exercises",
+    [
+      ["workout_exercise_id", "workout_id", "workout_name", "sort_order", "block_label", "exercise_id", "exercise_name", "prescription_type", "sets", "reps", "rep_range_min", "rep_range_max", "duration_seconds", "distance_value", "distance_unit", "rest_seconds", "tempo", "load_guidance", "rpe_target", "notes"],
+      ...workoutExerciseRows,
+    ],
+    coachId
+  )
+
+  await overwriteTab(
+    sheetId,
+    "PT_Programs",
+    [
+      ["program_id", "name", "description", "goal", "duration_weeks", "difficulty", "is_template", "is_archived", "updated_at"],
+      ...payload.programs.map((program) => [
+        program.id,
+        program.name,
+        program.description ?? "",
+        program.goal ?? "",
+        program.duration_weeks ?? "",
+        program.difficulty ?? "",
+        program.is_template ?? true,
+        program.is_archived ?? false,
+        program.updated_at,
+      ]),
+    ],
+    coachId
+  )
+
+  await overwriteTab(
+    sheetId,
+    "PT_Program_Sessions",
+    [
+      ["program_session_id", "program_id", "program_name", "week_number", "day_number", "sort_order", "session_name", "workout_id", "workout_name", "focus", "notes", "updated_at"],
+      ...programSessionRows,
+    ],
+    coachId
+  )
+}
+
+export async function syncClientPTSheets(
+  sheetId: string,
+  coachId: string,
+  payload: {
+    assignment: ClientPTProgramAssignment | null
+    sessions: ClientPTSession[]
+    sessionExercises: ClientPTSessionExercise[]
+    logs: ClientPTLog[]
+    logExercises: ClientPTLogExercise[]
+  }
+) {
+  const sessionNameById = new Map(payload.sessions.map((session) => [session.id, session.session_name]))
+  const logBySessionId = new Map(payload.logs.map((log) => [log.client_session_id, log]))
+  const logExerciseRows = payload.logExercises.map((exercise) => [
+    exercise.id,
+    exercise.pt_log_id,
+    sessionNameById.get(payload.logs.find((log) => log.id === exercise.pt_log_id)?.client_session_id ?? "") ?? "",
+    exercise.client_session_exercise_id ?? "",
+    exercise.exercise_id ?? "",
+    exercise.exercise_name_snapshot,
+    exercise.set_number,
+    exercise.target_reps ?? "",
+    exercise.completed_reps ?? "",
+    exercise.weight_value ?? "",
+    exercise.weight_unit ?? "",
+    exercise.duration_seconds ?? "",
+    exercise.distance_value ?? "",
+    exercise.distance_unit ?? "",
+    exercise.rpe ?? "",
+    exercise.notes ?? "",
+    exercise.updated_at,
+  ])
+
+  await overwriteTab(
+    sheetId,
+    "Training_Plan",
+    [
+      ["client_session_id", "assignment_id", "program_id", "program_name", "week_number", "day_number", "sort_order", "session_name", "workout_id", "workout_name", "scheduled_date", "status", "coach_note", "completed_at", "updated_at"],
+      ...payload.sessions.map((session) => [
+        session.id,
+        session.assignment_id,
+        session.program_id ?? "",
+        payload.assignment?.program_name_snapshot ?? "",
+        session.week_number,
+        session.day_number,
+        session.sort_order,
+        session.session_name,
+        session.workout_id ?? "",
+        session.session_name,
+        session.scheduled_date ?? "",
+        session.status,
+        session.coach_note ?? "",
+        session.completed_at ?? "",
+        session.updated_at,
+      ]),
+    ],
+    coachId
+  )
+
+  await overwriteTab(
+    sheetId,
+    "Training_Plan_Exercises",
+    [
+      ["client_session_exercise_id", "client_session_id", "session_name", "sort_order", "block_label", "exercise_id", "exercise_name", "prescription_type", "sets", "reps", "rep_range_min", "rep_range_max", "duration_seconds", "distance_value", "distance_unit", "rest_seconds", "tempo", "load_guidance", "rpe_target", "notes", "updated_at"],
+      ...payload.sessionExercises.map((exercise) => [
+        exercise.id,
+        exercise.client_session_id,
+        sessionNameById.get(exercise.client_session_id) ?? "",
+        exercise.sort_order,
+        exercise.block_label ?? "",
+        exercise.exercise_id ?? "",
+        exercise.exercise_name_snapshot,
+        exercise.prescription_type,
+        exercise.sets ?? "",
+        exercise.reps ?? "",
+        exercise.rep_range_min ?? "",
+        exercise.rep_range_max ?? "",
+        exercise.duration_seconds ?? "",
+        exercise.distance_value ?? "",
+        exercise.distance_unit ?? "",
+        exercise.rest_seconds ?? "",
+        exercise.tempo ?? "",
+        exercise.load_guidance ?? "",
+        exercise.rpe_target ?? "",
+        exercise.notes ?? "",
+        exercise.updated_at,
+      ]),
+    ],
+    coachId
+  )
+
+  await overwriteTab(
+    sheetId,
+    "Workout_Log",
+    [
+      ["pt_log_id", "client_session_id", "assignment_id", "program_name", "session_name", "logged_at", "completion_status", "session_rpe", "energy_rating", "client_feedback", "coach_follow_up_note", "updated_at"],
+      ...payload.logs.map((log) => [
+        log.id,
+        log.client_session_id,
+        payload.assignment?.id ?? "",
+        payload.assignment?.program_name_snapshot ?? "",
+        sessionNameById.get(log.client_session_id) ?? "",
+        log.logged_at,
+        log.completion_status,
+        log.session_rpe ?? "",
+        log.energy_rating ?? "",
+        log.client_feedback ?? "",
+        logBySessionId.get(log.client_session_id)?.coach_follow_up_note ?? "",
+        log.updated_at,
+      ]),
+    ],
+    coachId
+  )
+
+  await overwriteTab(
+    sheetId,
+    "Workout_Log_Exercises",
+    [
+      ["pt_log_exercise_id", "pt_log_id", "session_name", "client_session_exercise_id", "exercise_id", "exercise_name", "set_number", "target_reps", "completed_reps", "weight_value", "weight_unit", "duration_seconds", "distance_value", "distance_unit", "rpe", "notes", "updated_at"],
+      ...logExerciseRows,
+    ],
+    coachId
+  )
 }

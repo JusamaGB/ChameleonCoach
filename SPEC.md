@@ -1,6 +1,6 @@
 # Chameleon Coach — Current Product Spec
 
-**Status:** documentation sync to reflect the current app state as of 2026-04-08.
+**Status:** documentation sync to reflect the current app state as of 2026-04-09.
 **Purpose:** describe the product that now exists, not the original single-coach prototype plan.
 
 ---
@@ -172,6 +172,7 @@ Client can view meal plan, log progress, manage appointments, and pay for confir
 | `/progress` | Client progress logging + history |
 | `/appointments` | Client appointment requests, confirmed sessions, and payment CTA for unpaid confirmed appointments |
 | `/profile` | Client profile details |
+| `/training` | Client PT training plan view and workout logging surface when PT Core is enabled |
 
 ## Current Coach Pages
 
@@ -182,9 +183,12 @@ Client can view meal plan, log progress, manage appointments, and pay for confir
 | `/admin/clients/[id]` | Client workspace shell with backed client sections |
 | `/admin/invite` | Invite management |
 | `/admin/settings` | Google connection + lightweight branding settings |
+| `/admin/modules` | Workspace-level module entitlement management |
 | `/admin/appointments` | Appointment management, slots, confirmation/decline, payment request action |
 | `/admin/billing` | Coach subscription billing status and portal actions |
-| `/admin/exercises` | Coach PT Core exercise library management for future workout programming |
+| `/admin/exercises` | Coach PT Core exercise library management |
+| `/admin/workouts` | Coach PT workout builder and reusable workout management |
+| `/admin/programs` | Coach PT program/template builder and assignment source |
 
 ---
 
@@ -200,6 +204,12 @@ Client can view meal plan, log progress, manage appointments, and pay for confir
 - Stripe webhooks update subscription and appointment payment state
 - Coaches can create, edit, search, and filter their own exercise library records
 - Exercise library is currently a PT Core capability, not the platform layer that defines module architecture
+- Module entitlements now drive coach/client navigation and client portal visibility, with coach type acting as the starting preset rather than the permanent access rule
+- Coaches can create reusable PT workouts and programs from the exercise library
+- Assigning a PT program materialises concrete client sessions and session exercises instead of recomputing the plan on every load
+- Clients can view assigned PT sessions and submit workout logs through `/training` when PT Core is active
+- Coach client workspaces now include PT assignment state, recent training logs, and adherence context
+- Provisioned PT Google workbook tabs are now written during workout/program sync, assignment sync, and workout logging sync where the relevant managed workbook exists
 - `Clients` is the coach-facing entry point into client-specific workspaces
 - Client workspaces now group only real client-backed surfaces such as overview, meal plan, progress, and appointment history, while coach-scoped tools remain in the main admin nav
 - Mobile responsiveness remains a core requirement across client surfaces
@@ -215,7 +225,7 @@ Client can view meal plan, log progress, manage appointments, and pay for confir
 - Invoicing system
 - Reporting dashboards for appointment revenue
 - In-app messaging between coach and client
-- Phase 2 PT builder features such as drag-and-drop workouts and program scheduling
+- Advanced PT builder features such as drag-and-drop workouts, auto-progression rules, and more complex periodisation logic
 
 ---
 

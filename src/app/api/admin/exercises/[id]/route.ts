@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server"
 import { verifyCoach, isCoachResult } from "@/lib/auth-helpers"
+import { syncCoachPTWorkbookForCoach } from "@/lib/pt"
 
 function normalizeExerciseInput(body: Record<string, unknown>) {
   const updates: Record<string, string | null> = {}
@@ -70,6 +71,8 @@ export async function PATCH(
   if (error || !exercise) {
     return NextResponse.json({ error: "Failed to update exercise" }, { status: 400 })
   }
+
+  await syncCoachPTWorkbookForCoach(supabase, user.id)
 
   return NextResponse.json({ exercise })
 }

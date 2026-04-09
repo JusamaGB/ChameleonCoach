@@ -50,3 +50,7 @@ Status:
    - Confirm the workbook is shared to the invited client email successfully.
    - Confirm `Sheet pending` flips to a linked/usable state and both coach/client views become operational after onboarding.
    - Add clearer failure handling if workbook creation, sharing, or sheet reads fail late in the flow.
+2. Verify the new PT Core managed-workbook behavior on real provisioned workspaces.
+   - Confirm coach PT library workbooks receive `PT_Exercises`, `PT_Workouts`, `PT_Workout_Exercises`, `PT_Programs`, and `PT_Program_Sessions` updates after PT CRUD actions.
+   - Confirm client workbooks receive `Training_Plan`, `Training_Plan_Exercises`, `Workout_Log`, and `Workout_Log_Exercises` updates after assignment and workout logging.
+   - Confirm older client workbooks created before the PT tabs existed are either reprovisioned safely or handled with a clear recovery path.

@@ -476,21 +476,21 @@ Coach type should be treated as a starting preset that suggests a default module
 ### Phase 2A — Module Backbone
 > The platform structure that makes coach type a preset and active modules the real entitlement layer.
 
-- [ ] Module toggle in admin settings (coach selects what their clients see)
-- [ ] Coach type selection at sign-up (pre-selects relevant modules)
-- [ ] Client portal adapts to active modules only
+- [x] Module toggle in admin modules workspace settings (coach selects what their clients see)
+- [x] Coach type selection at sign-up (pre-selects relevant modules)
+- [x] Client portal adapts to active modules only
 
 ### Phase 2B — PT Core
 > Unlocks the PT leads on top of the module backbone. The exercise library slice is already started and stays in place.
 
-- [ ] Lock the PT Core managed-sheet contract
-- [ ] Workout builder (sets, reps, rest, tempo, order, notes)
+- [x] Lock the PT Core managed-sheet contract
+- [x] Workout builder (sets, reps, rest, tempo, order, notes)
 - [x] Exercise library (basic, expandable) — already started PT Core capability, not the platform-defining layer
-- [ ] Programs and templates
-- [ ] Client training plan delivery
-- [ ] Workout logging / session feedback
-- [ ] Coach training overview inside client workspaces
-- [ ] Program scheduling
+- [x] Programs and templates
+- [x] Client training plan delivery
+- [x] Workout logging / session feedback
+- [x] Coach training overview inside client workspaces
+- [x] Program scheduling
 - [ ] Auto-progression (basic)
 
 ### PT Core Build Order
@@ -1203,3 +1203,6 @@ Default implementation assumptions unless overridden:
 | 2026-04-09 | Build-direction clarification: `PLATFORM_RESEARCH.md` is the planning document for what comes next, `SPEC.md` describes current implemented product state, and `CHAMELEON_BRAND_TODO.md` tracks built slices that still need validation/hardening. |
 | 2026-04-09 | Next module priority is to deepen the two active foundations rather than add another core. PT Core is the next primary build slice and should expand from exercise library into workout builder, programs/templates, client training plan delivery, workout logging, and coach review tooling. |
 | 2026-04-09 | PT Core should be the first complete proof of the module architecture: coach-scoped build tools and libraries at workspace level, client-scoped assigned plans and logging inside client workspaces, with the managed Google Sheets structure kept clear enough to operate directly in Sheets as well as through the app. |
+| 2026-04-09 | Phase 2A module backbone is now live in app: coach type remains the preset, active modules drive admin/client navigation and portal visibility, and PT surfaces are hidden when PT Core is disabled except for intentional legacy workspace handling. |
+| 2026-04-09 | PT Core V1 now includes workout authoring, reusable programs, client assignment materialisation, client training delivery, workout logging, coach-side training review in the client workspace, and managed PT tab sync into provisioned Google workbooks where workbook links exist. |
+| 2026-04-09 | PT data remains database-led for identity, relationships, and permissions; Google Sheets now mirrors the PT operational tabs, but the next hardening pass should focus on proving sync reliability on real provisioned workspaces and older pre-PT client workbooks. |
