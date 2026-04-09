@@ -52,6 +52,14 @@ const MODULE_DESCRIPTIONS: Record<EnableableModule, string> = {
   nutrition_core: "Meal-plan and nutrition-oriented client work. Enable it once for this workspace, then manage each client's nutrition work from their workspace.",
 }
 
+const MODULE_TOOL_LINKS: Partial<Record<EnableableModule, Array<{ href: string; label: string }>>> = {
+  pt_core: [
+    { href: "/admin/exercises", label: "Exercise library" },
+    { href: "/admin/workouts", label: "Workout builder" },
+    { href: "/admin/programs", label: "Programs" },
+  ],
+}
+
 export function ModulesCatalog() {
   const [profile, setProfile] = useState<ProfilePayload>(EMPTY_PROFILE)
   const [loading, setLoading] = useState(true)
@@ -201,18 +209,23 @@ export function ModulesCatalog() {
               </div>
 
               {module === "pt_core" ? (
-                <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
+                <div className="mt-4 space-y-3">
                   <p className="text-xs text-gf-muted">
-                    Exercises now lives under the PT Core module instead of the main sidebar.
+                    PT tools live inside the module layer instead of the main sidebar. Client-specific PT delivery still happens from each client workspace.
                   </p>
                   {enabled || profile.is_legacy_workspace ? (
-                    <Link
-                      href="/admin/exercises"
-                      className="inline-flex items-center gap-1.5 text-sm text-gf-pink hover:text-gf-pink-light transition-colors"
-                    >
-                      Open exercise library
-                      <ArrowRight size={14} />
-                    </Link>
+                    <div className="flex flex-wrap gap-3">
+                      {(MODULE_TOOL_LINKS[module] ?? []).map((tool) => (
+                        <Link
+                          key={tool.href}
+                          href={tool.href}
+                          className="inline-flex items-center gap-1.5 text-sm text-gf-pink hover:text-gf-pink-light transition-colors"
+                        >
+                          {tool.label}
+                          <ArrowRight size={14} />
+                        </Link>
+                      ))}
+                    </div>
                   ) : null}
                 </div>
               ) : null}

@@ -17,15 +17,11 @@ import {
   Gem,
 } from "lucide-react"
 import { PLATFORM_NAME } from "@/lib/platform"
-import { canAccessFeature } from "@/lib/modules"
 
 const navItems = [
   { href: "/admin", label: "Dashboard", icon: LayoutDashboard },
   { href: "/admin/clients", label: "Clients", icon: Users },
   { href: "/admin/appointments", label: "Appointments", icon: Calendar },
-  { href: "/admin/exercises", label: "Exercises", icon: Layers3, feature: "exercises" as const },
-  { href: "/admin/workouts", label: "Workouts", icon: Layers3, feature: "workouts" as const },
-  { href: "/admin/programs", label: "Programs", icon: Layers3, feature: "programs" as const },
   { href: "/admin/modules", label: "Modules", icon: Layers3 },
   { href: "/admin/premium", label: "Premium", icon: Gem },
   { href: "/admin/settings", label: "Settings", icon: Settings },
@@ -70,9 +66,7 @@ export function AdminNav({
       <p className="text-xs text-gf-muted mb-10">Admin Panel</p>
 
       <div className="flex flex-col gap-1 flex-1">
-        {navItems
-          .filter((item) => !item.feature || canAccessFeature(item.feature, activeModules))
-          .map(({ href, label, icon: Icon }) => (
+        {navItems.map(({ href, label, icon: Icon }) => (
           <Link
             key={href}
             href={href}
