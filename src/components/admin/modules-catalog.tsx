@@ -213,27 +213,27 @@ export function ModulesCatalog() {
                 </p>
               </div>
 
-              {enabled || profile.is_legacy_workspace ? (
-                <div className="mt-4 space-y-3">
-                  <p className="text-xs text-gf-muted">
-                    {module === "pt_core"
+              <div className="mt-4 space-y-3">
+                <p className="text-xs text-gf-muted">
+                  {enabled || profile.is_legacy_workspace
+                    ? module === "pt_core"
                       ? "PT tools live inside the module layer instead of the main sidebar. Client-specific PT delivery still happens from each client workspace."
-                      : "Nutrition tools live inside the module layer instead of the main sidebar. Client-specific nutrition delivery still happens from each client workspace."}
-                  </p>
-                  <div className="flex flex-wrap gap-3">
-                    {(MODULE_TOOL_LINKS[module] ?? []).map((tool) => (
-                      <Link
-                        key={tool.href}
-                        href={tool.href}
-                        className="inline-flex items-center gap-1.5 text-sm text-gf-pink hover:text-gf-pink-light transition-colors"
-                      >
-                        {tool.label}
-                        <ArrowRight size={14} />
-                      </Link>
-                    ))}
-                  </div>
+                      : "Nutrition tools live inside the module layer instead of the main sidebar. Client-specific nutrition delivery still happens from each client workspace."
+                    : "These module sections are ready here. Enable the bundle first, then use them at the workspace level before delivering the work inside each client workspace."}
+                </p>
+                <div className="flex flex-wrap gap-3">
+                  {(MODULE_TOOL_LINKS[module] ?? []).map((tool) => (
+                    <Link
+                      key={tool.href}
+                      href={tool.href}
+                      className="inline-flex items-center gap-1.5 text-sm text-gf-pink hover:text-gf-pink-light transition-colors"
+                    >
+                      {tool.label}
+                      <ArrowRight size={14} />
+                    </Link>
+                  ))}
                 </div>
-              ) : null}
+              </div>
 
               <div className="mt-5">
                 <button
