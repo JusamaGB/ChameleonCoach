@@ -72,6 +72,7 @@ export function ModulesCatalog() {
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
   const [error, setError] = useState("")
+  const [savingModule, setSavingModule] = useState<EnableableModule | null>(null)
 
   useEffect(() => {
     fetch("/api/admin/profile")
@@ -99,17 +100,7 @@ export function ModulesCatalog() {
       .finally(() => setLoading(false))
   }, [])
 
-  function toggleModule(module: EnableableModule) {
-    setProfile((current) => ({
-      ...current,
-      active_modules: current.active_modules.includes(module)
-        ? current.active_modules.filter((entry) => entry !== module)
-        : [...current.active_modules, module],
-    }))
-  }
-
-  async function saveModules() {
-    setSaving(true)
+  async function persistModules(nextModules: EnableableModule[]) {
     setSaved(false)
     setError("")
 
@@ -127,7 +118,7 @@ export function ModulesCatalog() {
           brand_welcome_text: profile.brand_welcome_text,
           show_powered_by: profile.show_powered_by,
           coach_type_preset: profile.coach_type_preset,
-          active_modules: profile.active_modules,
+          active_modules: nextModules,
           appointment_booking_mode: profile.appointment_booking_mode,
         }),
       })
@@ -136,13 +127,33 @@ export function ModulesCatalog() {
         throw new Error()
       }
 
+      setProfile((current) => ({
+        ...current,
+        active_modules: nextModules,
+      }))
       setSaved(true)
       setTimeout(() => setSaved(false), 3000)
     } catch {
       setError("Failed to save module settings.")
-    } finally {
-      setSaving(false)
     }
+  }
+
+  async function toggleModule(module: EnableableModule) {
+    if (savingModule || saving) return
+
+    const nextModules = profile.active_modules.includes(module)
+      ? profile.active_modules.filter((entry) => entry !== module)
+      : [...profile.active_modules, module]
+
+    setSavingModule(module)
+    await persistModules(nextModules)
+    setSavingModule(null)
+  }
+
+  async function saveModules() {
+    setSaving(true)
+    await persistModules(profile.active_modules)
+    setSaving(false)
   }
 
   return (
@@ -237,6 +248,7 @@ export function ModulesCatalog() {
       <div className="grid gap-4 lg:grid-cols-2">
         {(["pt_core", "nutrition_core"] as EnableableModule[]).map((module) => {
           const enabled = profile.active_modules.includes(module)
+          const isSavingThisModule = savingModule === module
 
           return (
             <Card key={module} className="flex h-full flex-col">
@@ -288,13 +300,14 @@ export function ModulesCatalog() {
                 <button
                   type="button"
                   onClick={() => toggleModule(module)}
+                  disabled={isSavingThisModule || saving}
                   className={`inline-flex rounded-lg border px-4 py-2 text-sm font-medium transition-colors ${
                     enabled
                       ? "border-gf-pink/40 bg-gf-pink/10 text-gf-pink hover:bg-gf-pink/15"
                       : "border-gf-border bg-gf-surface text-white hover:border-gf-pink/40"
                   }`}
                 >
-                  {enabled ? "Disable bundle" : "Enable bundle"}
+                  {isSavingThisModule ? "Saving..." : enabled ? "Disable bundle" : "Enable bundle"}
                 </button>
               </div>
             </Card>
