@@ -18,6 +18,33 @@ export const COACH_TYPE_LABELS: Record<CoachTypePreset, string> = {
   gym_studio_owner: "Gym / studio owner",
 }
 
+export const COACH_TYPE_DESCRIPTIONS: Record<CoachTypePreset, string> = {
+  personal_trainer: "Training plans, workout delivery, progress review, and client accountability.",
+  nutritionist: "Meal planning, nutrition accountability, habit coaching, and check-in review.",
+  wellness_coach: "Goals, habits, check-ins, and session-led coaching with structured follow-up.",
+  sports_performance_coach: "Performance planning, athlete monitoring, assessments, and team workflows.",
+  yoga_pilates_instructor: "Class-led client delivery, recurring booking flows, memberships, and attendance.",
+  gym_studio_owner: "Multi-service scheduling, staff operations, memberships, and studio reporting.",
+}
+
+export const COACH_TYPE_STATUS: Record<CoachTypePreset, "live" | "coming_soon"> = {
+  personal_trainer: "live",
+  nutritionist: "live",
+  wellness_coach: "coming_soon",
+  sports_performance_coach: "coming_soon",
+  yoga_pilates_instructor: "coming_soon",
+  gym_studio_owner: "coming_soon",
+}
+
+export const COACH_TYPE_HIGHLIGHTS: Record<CoachTypePreset, string[]> = {
+  personal_trainer: ["PT Core", "Workout builder", "Programs and client training"],
+  nutritionist: ["Nutrition Core", "Templates and habits", "Client nutrition accountability"],
+  wellness_coach: ["Goals and milestones", "Check-ins and habits", "Session notes and follow-up"],
+  sports_performance_coach: ["Assessments", "Recovery tracking", "Team and athlete workflows"],
+  yoga_pilates_instructor: ["Class scheduling", "Self-booking", "Memberships and attendance"],
+  gym_studio_owner: ["Membership operations", "Staff scheduling", "Studio reporting and retention"],
+}
+
 export const ENABLEABLE_MODULES = ["pt_core", "nutrition_core"] as const
 
 export type EnableableModule = (typeof ENABLEABLE_MODULES)[number]

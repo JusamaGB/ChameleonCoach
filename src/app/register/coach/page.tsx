@@ -6,16 +6,13 @@ import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { PLATFORM_NAME } from "@/lib/platform"
-import { COACH_TYPE_PRESETS } from "@/lib/modules"
-
-const COACH_TYPE_OPTIONS = [
-  { value: "personal_trainer", label: "Personal trainer" },
-  { value: "nutritionist", label: "Nutritionist" },
-  { value: "wellness_coach", label: "Wellness coach" },
-  { value: "sports_performance_coach", label: "Sports performance coach" },
-  { value: "yoga_pilates_instructor", label: "Yoga / Pilates instructor" },
-  { value: "gym_studio_owner", label: "Gym / studio owner" },
-] as const
+import {
+  COACH_TYPE_DESCRIPTIONS,
+  COACH_TYPE_HIGHLIGHTS,
+  COACH_TYPE_LABELS,
+  COACH_TYPE_PRESETS,
+  COACH_TYPE_STATUS,
+} from "@/lib/modules"
 
 export default function RegisterCoachPage() {
   const router = useRouter()
@@ -67,7 +64,7 @@ export default function RegisterCoachPage() {
 
   return (
     <div className="min-h-screen flex items-center justify-center px-6">
-      <div className="w-full max-w-sm">
+      <div className="w-full max-w-3xl">
         <h1 className="text-3xl font-bold text-center mb-2">
           {PLATFORM_NAME}
         </h1>
@@ -92,25 +89,58 @@ export default function RegisterCoachPage() {
               placeholder="you@example.com"
               required
             />
-            <div className="space-y-1.5">
-              <label htmlFor="coach-type-preset" className="block text-sm font-medium text-gf-muted">
-                Coach Type
-              </label>
-              <select
-                id="coach-type-preset"
-                value={coachTypePreset}
-                onChange={(e) => setCoachTypePreset(e.target.value as (typeof COACH_TYPE_PRESETS)[number])}
-                className="w-full bg-gf-surface border border-gf-border rounded-lg px-4 py-2.5 text-white transition-colors focus:outline-none focus:border-gf-pink focus:ring-1 focus:ring-gf-pink/30"
-              >
-                {COACH_TYPE_OPTIONS.map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
-              <p className="text-xs text-gf-muted">
-                This sets your starting workspace preset. You can enable more modules later.
-              </p>
+            <div className="space-y-3">
+              <div>
+                <label className="block text-sm font-medium text-gf-muted">
+                  Coach Type
+                </label>
+                <p className="mt-1 text-xs text-gf-muted">
+                  Pick the niche that best matches your starting workspace. You can expand into more modules later.
+                </p>
+              </div>
+              <div className="grid gap-3 md:grid-cols-2">
+                {COACH_TYPE_PRESETS.map((preset) => {
+                  const selected = coachTypePreset === preset
+                  const status = COACH_TYPE_STATUS[preset]
+
+                  return (
+                    <button
+                      key={preset}
+                      type="button"
+                      onClick={() => setCoachTypePreset(preset)}
+                      className={`rounded-xl border p-4 text-left transition-colors ${
+                        selected
+                          ? "border-gf-pink bg-gf-pink/10"
+                          : "border-gf-border bg-gf-surface hover:border-gf-pink/40"
+                      }`}
+                    >
+                      <div className="flex items-center justify-between gap-3">
+                        <p className="font-medium text-white">{COACH_TYPE_LABELS[preset]}</p>
+                        <span
+                          className={`inline-flex rounded-full px-2.5 py-0.5 text-xs font-medium ${
+                            status === "live"
+                              ? "bg-green-900/40 text-green-400"
+                              : "bg-gf-border text-gf-muted"
+                          }`}
+                        >
+                          {status === "live" ? "Live now" : "Coming soon"}
+                        </span>
+                      </div>
+                      <p className="mt-2 text-sm text-gf-muted">{COACH_TYPE_DESCRIPTIONS[preset]}</p>
+                      <div className="mt-3 flex flex-wrap gap-2">
+                        {COACH_TYPE_HIGHLIGHTS[preset].map((item) => (
+                          <span
+                            key={item}
+                            className="inline-flex rounded-full border border-gf-border px-2.5 py-1 text-xs text-gf-muted"
+                          >
+                            {item}
+                          </span>
+                        ))}
+                      </div>
+                    </button>
+                  )
+                })}
+              </div>
             </div>
             <Input
               label="Password"

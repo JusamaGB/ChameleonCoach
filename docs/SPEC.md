@@ -188,6 +188,7 @@ Client can view meal plan, log progress, manage appointments, and pay for confir
 | `/admin/requests` | Coach request board with submission, voting, comments, follows, and moderation hooks |
 | `/admin/appointments` | Appointment management, slots, confirmation/decline, payment request action |
 | `/admin/billing` | Coach subscription billing status and portal actions |
+| `/admin/payments` | Coach Stripe Connect onboarding, invoice creation, and invoice status tracking |
 | `/admin/exercises` | Coach PT Core exercise library management |
 | `/admin/workouts` | Coach PT workout builder and reusable workout management |
 | `/admin/programs` | Coach PT program/template builder and assignment source |
@@ -218,10 +219,13 @@ Client can view meal plan, log progress, manage appointments, and pay for confir
 - Nutrition check-ins now sync into the client workbook's `Nutrition_Check_Ins` tab as readable structured rows
 - Coaches can now add nutrition log entries for real-world meals/reflections, including meal slot, adherence flag, hunger signal, notes, and coach note
 - Nutrition log entries now sync into the client workbook's `Nutrition_Log` tab as readable structured rows
+- Clients can now log nutrition habits, weekly check-ins, and real-world nutrition notes from the client portal when Nutrition Core is active
 - Assigning a PT program materialises concrete client sessions and session exercises instead of recomputing the plan on every load
 - Clients can view assigned PT sessions and submit workout logs through `/training` when PT Core is active
 - Coach client workspaces now include PT assignment state, recent training logs, and adherence context
 - Provisioned PT Google workbook tabs are now written during workout/program sync, assignment sync, and workout logging sync where the relevant managed workbook exists
+- Coaches can onboard a connected Stripe account and create hosted client invoices from `/admin/payments`
+- Connected-account invoice webhooks now sync invoice status updates including sent, paid, failed, voided, and updated states
 - Coaches and clients can now use a shared in-app requests board to submit product needs, vote, comment, follow requests, and view public status updates
 - Internal moderation hooks now support request status management, duplicate linking, and contributor rewards for implemented or high-value requests
 - `Clients` is the coach-facing entry point into client-specific workspaces
@@ -232,11 +236,9 @@ Client can view meal plan, log progress, manage appointments, and pay for confir
 
 ## Current Out of Scope
 
-- Stripe Connect or coach payout architecture
 - Packages or bundles
 - Refund workflows
 - Saved client cards / off-session charging
-- Invoicing system
 - Reporting dashboards for appointment revenue
 - In-app messaging between coach and client
 - Advanced PT builder features such as drag-and-drop workouts, auto-progression rules, and more complex periodisation logic

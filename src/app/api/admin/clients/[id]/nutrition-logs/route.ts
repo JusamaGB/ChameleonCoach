@@ -40,6 +40,6 @@ export async function POST(
     const log = await createClientNutritionLogEntry(supabase, user.id, id, body)
     return NextResponse.json({ log })
   } catch {
-    return NextResponse.json({ error: "Failed to create nutrition log" }, { status: 500 })
+    return NextResponse.json({ error: "Failed to create nutrition log" }, { status: 400 })
   }
 }

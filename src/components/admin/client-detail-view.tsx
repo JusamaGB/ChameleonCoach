@@ -31,6 +31,18 @@ import type {
   ProgressEntry,
 } from "@/types"
 
+function todayKey() {
+  return new Date().toISOString().slice(0, 10)
+}
+
+function defaultWeekLabel() {
+  return `Week of ${new Date().toLocaleDateString("en-GB", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+  })}`
+}
+
 interface ClientDetailViewProps {
   client: Client
   profile: ProfileData | null
@@ -96,8 +108,8 @@ export function ClientDetailView({
   const [assigningNutritionHabit, setAssigningNutritionHabit] = useState(false)
   const [updatingNutritionHabitId, setUpdatingNutritionHabitId] = useState<string | null>(null)
   const [nutritionCheckInForm, setNutritionCheckInForm] = useState({
-    submitted_at: "",
-    week_label: "",
+    submitted_at: todayKey(),
+    week_label: defaultWeekLabel(),
     adherence_score: "7",
     energy_score: "7",
     hunger_score: "7",
@@ -111,7 +123,7 @@ export function ClientDetailView({
   const [editingNutritionCheckInId, setEditingNutritionCheckInId] = useState<string | null>(null)
   const [updatingNutritionCheckIn, setUpdatingNutritionCheckIn] = useState(false)
   const [nutritionLogForm, setNutritionLogForm] = useState({
-    logged_at: "",
+    logged_at: todayKey(),
     meal_slot: "any",
     entry_title: "",
     notes: "",
@@ -122,6 +134,12 @@ export function ClientDetailView({
   const [submittingNutritionLog, setSubmittingNutritionLog] = useState(false)
   const [editingNutritionLogId, setEditingNutritionLogId] = useState<string | null>(null)
   const [updatingNutritionLog, setUpdatingNutritionLog] = useState(false)
+  const [editingNutritionHabitLogId, setEditingNutritionHabitLogId] = useState<string | null>(null)
+  const [nutritionHabitLogForm, setNutritionHabitLogForm] = useState({
+    adherence_score: "",
+    coach_note: "",
+  })
+  const [updatingNutritionHabitLog, setUpdatingNutritionHabitLog] = useState(false)
   const [nutritionError, setNutritionError] = useState("")
   const [assignmentProgramId, setAssignmentProgramId] = useState("")
   const [assignmentStartDate, setAssignmentStartDate] = useState("")
@@ -195,8 +213,8 @@ export function ClientDetailView({
   function resetNutritionCheckInForm() {
     setEditingNutritionCheckInId(null)
     setNutritionCheckInForm({
-      submitted_at: "",
-      week_label: "",
+      submitted_at: todayKey(),
+      week_label: defaultWeekLabel(),
       adherence_score: "7",
       energy_score: "7",
       hunger_score: "7",
@@ -228,7 +246,7 @@ export function ClientDetailView({
   function resetNutritionLogForm() {
     setEditingNutritionLogId(null)
     setNutritionLogForm({
-      logged_at: "",
+      logged_at: todayKey(),
       meal_slot: "any",
       entry_title: "",
       notes: "",
@@ -236,6 +254,23 @@ export function ClientDetailView({
       hunger_score: "7",
       coach_note: "",
     })
+  }
+
+  function resetNutritionHabitLogForm() {
+    setEditingNutritionHabitLogId(null)
+    setNutritionHabitLogForm({
+      adherence_score: "",
+      coach_note: "",
+    })
+  }
+
+  function beginEditNutritionHabitLog(log: ClientNutritionHabitLog) {
+    setEditingNutritionHabitLogId(log.id)
+    setNutritionHabitLogForm({
+      adherence_score: log.adherence_score?.toString() ?? "",
+      coach_note: log.coach_note ?? "",
+    })
+    setNutritionError("")
   }
 
   function beginEditNutritionLog(log: ClientNutritionLogEntry) {
@@ -414,6 +449,32 @@ export function ClientDetailView({
       setNutritionError("Failed to update nutrition habit")
     } finally {
       setUpdatingNutritionHabitId(null)
+    }
+  }
+
+  async function handleUpdateNutritionHabitLog(logId: string) {
+    setUpdatingNutritionHabitLog(true)
+    setNutritionError("")
+    try {
+      const response = await fetch(`/api/admin/clients/${client.id}/nutrition-habit-logs/${logId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          adherence_score: nutritionHabitLogForm.adherence_score || null,
+          coach_note: nutritionHabitLogForm.coach_note,
+        }),
+      })
+      const data = await response.json()
+      if (!response.ok) {
+        setNutritionError(data.error || "Failed to update nutrition habit log")
+        return
+      }
+      resetNutritionHabitLogForm()
+      router.refresh()
+    } catch {
+      setNutritionError("Failed to update nutrition habit log")
+    } finally {
+      setUpdatingNutritionHabitLog(false)
     }
   }
 
@@ -660,7 +721,7 @@ export function ClientDetailView({
   }
 
   const activeNutritionHabitsCount = nutritionHabitAssignments.filter((habit) => habit.status === "active").length
-  const todayKey = new Date().toISOString().slice(0, 10)
+  const currentDayKey = todayKey()
   const habitLogsThisWeek = nutritionHabitLogs.filter((log) => {
     const date = new Date(log.completion_date)
     const now = new Date()
@@ -668,6 +729,7 @@ export function ClientDetailView({
     return diffDays >= 0 && diffDays < 7
   })
   const completedHabitLogsThisWeek = habitLogsThisWeek.filter((log) => log.completion_status === "completed").length
+  const missedHabitLogsThisWeek = habitLogsThisWeek.filter((log) => log.completion_status === "missed").length
   const latestHabitLog = nutritionHabitLogs[0] ?? null
   const latestNutritionCheckIn = nutritionCheckIns[0] ?? null
   const averageAdherence = nutritionCheckIns.length
@@ -676,6 +738,26 @@ export function ClientDetailView({
       )
     : null
   const latestNutritionLog = nutritionLogs[0] ?? null
+  const offPlanLogsThisWeek = nutritionLogs.filter((log) => {
+    const date = new Date(log.logged_at)
+    const now = new Date()
+    const diffDays = Math.floor((now.getTime() - date.getTime()) / 86400000)
+    return diffDays >= 0 && diffDays < 7 && log.adherence_flag === "off_plan"
+  }).length
+  const lowSignalCheckIns = nutritionCheckIns.filter((checkIn) =>
+    [checkIn.adherence_score, checkIn.energy_score, checkIn.digestion_score, checkIn.sleep_score].some(
+      (score) => typeof score === "number" && score <= 4
+    )
+  ).length
+  const checkInAgeDays = latestNutritionCheckIn
+    ? Math.floor((Date.now() - new Date(latestNutritionCheckIn.submitted_at).getTime()) / 86400000)
+    : null
+  const needsNutritionFollowUp =
+    missedHabitLogsThisWeek > 0
+    || offPlanLogsThisWeek > 0
+    || lowSignalCheckIns > 0
+    || checkInAgeDays === null
+    || checkInAgeDays > 10
 
   function paymentStatusLabel(status: ClientDetailViewProps["appointments"][number]["payment_status"]) {
     switch (status) {
@@ -1051,6 +1133,37 @@ export function ClientDetailView({
                       </div>
                     </div>
 
+                    <div className="mb-6 grid gap-4 md:grid-cols-4">
+                      <div className="rounded-xl border border-gf-border bg-gf-black/10 p-4">
+                        <p className="text-xs uppercase tracking-wide text-gf-muted">Follow-up radar</p>
+                        <p className="mt-2 text-sm font-medium text-white">
+                          {needsNutritionFollowUp ? "Needs coach review" : "Stable this week"}
+                        </p>
+                        <p className="mt-1 text-sm text-gf-muted">
+                          Flags missed habits, off-plan logs, low check-in scores, or stale weekly updates.
+                        </p>
+                      </div>
+                      <div className="rounded-xl border border-gf-border bg-gf-black/10 p-4">
+                        <p className="text-xs uppercase tracking-wide text-gf-muted">Missed habits (7d)</p>
+                        <p className="mt-2 text-2xl font-semibold text-white">{missedHabitLogsThisWeek}</p>
+                        <p className="mt-1 text-sm text-gf-muted">Client logs marked as missed this week.</p>
+                      </div>
+                      <div className="rounded-xl border border-gf-border bg-gf-black/10 p-4">
+                        <p className="text-xs uppercase tracking-wide text-gf-muted">Off-plan logs (7d)</p>
+                        <p className="mt-2 text-2xl font-semibold text-white">{offPlanLogsThisWeek}</p>
+                        <p className="mt-1 text-sm text-gf-muted">Real-world entries tagged off plan in the last week.</p>
+                      </div>
+                      <div className="rounded-xl border border-gf-border bg-gf-black/10 p-4">
+                        <p className="text-xs uppercase tracking-wide text-gf-muted">Check-in freshness</p>
+                        <p className="mt-2 text-sm font-medium text-white">
+                          {checkInAgeDays === null ? "No check-in yet" : `${checkInAgeDays} days ago`}
+                        </p>
+                        <p className="mt-1 text-sm text-gf-muted">
+                          {lowSignalCheckIns > 0 ? `${lowSignalCheckIns} low-signal check-in${lowSignalCheckIns === 1 ? "" : "s"} logged.` : "No low-signal check-ins flagged yet."}
+                        </p>
+                      </div>
+                    </div>
+
                     <div className="mb-4 flex items-center justify-between gap-4">
                       <div>
                         <p className="text-sm font-medium text-white">Nutrition habits</p>
@@ -1224,18 +1337,64 @@ export function ClientDetailView({
                                         {log.completion_status}
                                       </Badge>
                                       {log.adherence_score ? <Badge variant="default">{log.adherence_score}/10</Badge> : null}
-                                      {log.completion_date === todayKey ? <Badge variant="default">Today</Badge> : null}
+                                      {log.completion_date === currentDayKey ? <Badge variant="default">Today</Badge> : null}
                                     </div>
                                     <p className="mt-2 text-xs text-gf-muted">
                                       {new Date(log.completion_date).toLocaleDateString("en-GB")} • Logged {new Date(log.logged_at).toLocaleString("en-GB")}
                                     </p>
                                     {log.notes ? <p className="mt-2 text-sm text-gf-muted">{log.notes}</p> : null}
-                                    {log.coach_note ? (
+                                    {editingNutritionHabitLogId === log.id ? (
+                                      <div className="mt-3 grid gap-3 rounded-lg border border-gf-border/80 bg-gf-black/20 p-3">
+                                        <Input
+                                          label="Adherence score (1-10)"
+                                          type="number"
+                                          min="1"
+                                          max="10"
+                                          value={nutritionHabitLogForm.adherence_score}
+                                          onChange={(event) =>
+                                            setNutritionHabitLogForm((current) => ({
+                                              ...current,
+                                              adherence_score: event.target.value,
+                                            }))
+                                          }
+                                        />
+                                        <TextArea
+                                          label="Coach note"
+                                          value={nutritionHabitLogForm.coach_note}
+                                          onChange={(event) =>
+                                            setNutritionHabitLogForm((current) => ({
+                                              ...current,
+                                              coach_note: event.target.value,
+                                            }))
+                                          }
+                                          placeholder="Add context or the next action for this habit."
+                                        />
+                                        {nutritionError ? <p className="text-sm text-red-400">{nutritionError}</p> : null}
+                                        <div className="flex items-center gap-2">
+                                          <Button
+                                            type="button"
+                                            size="sm"
+                                            onClick={() => handleUpdateNutritionHabitLog(log.id)}
+                                            disabled={updatingNutritionHabitLog}
+                                          >
+                                            {updatingNutritionHabitLog ? "Saving..." : "Save note"}
+                                          </Button>
+                                          <Button type="button" variant="ghost" size="sm" onClick={resetNutritionHabitLogForm}>
+                                            Cancel
+                                          </Button>
+                                        </div>
+                                      </div>
+                                    ) : log.coach_note ? (
                                       <p className="mt-2 text-sm text-gf-muted">
                                         <span className="text-white">Coach note:</span> {log.coach_note}
                                       </p>
-                                    ) : null}
+                                    ) : (
+                                      <p className="mt-2 text-sm text-gf-muted">No coach note added yet.</p>
+                                    )}
                                   </div>
+                                  <Button type="button" variant="ghost" size="sm" onClick={() => beginEditNutritionHabitLog(log)}>
+                                    {log.coach_note ? "Edit note" : "Add note"}
+                                  </Button>
                                 </div>
                               </div>
                             )

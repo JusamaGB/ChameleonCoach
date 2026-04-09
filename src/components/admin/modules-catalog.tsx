@@ -5,17 +5,17 @@ import Link from "next/link"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardTitle } from "@/components/ui/card"
-import { MODULE_LABELS, type CoachTypePreset, type EnableableModule } from "@/lib/modules"
+import {
+  COACH_TYPE_DESCRIPTIONS,
+  COACH_TYPE_HIGHLIGHTS,
+  COACH_TYPE_LABELS,
+  COACH_TYPE_PRESETS,
+  COACH_TYPE_STATUS,
+  MODULE_LABELS,
+  type CoachTypePreset,
+  type EnableableModule,
+} from "@/lib/modules"
 import { ArrowRight, CheckCircle, Dumbbell, Layers3 } from "lucide-react"
-
-const COACH_TYPE_LABELS: Record<CoachTypePreset, string> = {
-  personal_trainer: "Personal trainer",
-  nutritionist: "Nutritionist",
-  wellness_coach: "Wellness coach",
-  sports_performance_coach: "Sports performance coach",
-  yoga_pilates_instructor: "Yoga / Pilates instructor",
-  gym_studio_owner: "Gym / studio owner",
-}
 
 type ProfilePayload = {
   display_name: string
@@ -185,6 +185,55 @@ export function ModulesCatalog() {
         ) : null}
       </Card>
 
+      <Card>
+        <div className="flex flex-col gap-4">
+          <div>
+            <CardTitle>Coach niches</CardTitle>
+            <p className="mt-2 text-sm text-gf-muted">
+              Every coach type is visible here as a positioning lane. Only built module bundles are enableable today.
+            </p>
+          </div>
+          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+            {COACH_TYPE_PRESETS.map((preset) => {
+              const isCurrentPreset = profile.coach_type_preset === preset
+              const status = COACH_TYPE_STATUS[preset]
+
+              return (
+                <div
+                  key={preset}
+                  className={`rounded-xl border p-4 ${
+                    isCurrentPreset
+                      ? "border-gf-pink bg-gf-pink/10"
+                      : "border-gf-border bg-gf-surface"
+                  }`}
+                >
+                  <div className="flex items-center justify-between gap-3">
+                    <p className="font-medium text-white">{COACH_TYPE_LABELS[preset]}</p>
+                    <Badge variant={status === "live" ? "success" : "default"}>
+                      {status === "live" ? "Live now" : "Coming soon"}
+                    </Badge>
+                  </div>
+                  <p className="mt-2 text-sm text-gf-muted">{COACH_TYPE_DESCRIPTIONS[preset]}</p>
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    {COACH_TYPE_HIGHLIGHTS[preset].map((item) => (
+                      <span
+                        key={item}
+                        className="inline-flex rounded-full border border-gf-border px-2.5 py-1 text-xs text-gf-muted"
+                      >
+                        {item}
+                      </span>
+                    ))}
+                  </div>
+                  {isCurrentPreset ? (
+                    <p className="mt-3 text-xs text-gf-pink-light">Current workspace preset</p>
+                  ) : null}
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      </Card>
+
       <div className="grid gap-4 lg:grid-cols-2">
         {(["pt_core", "nutrition_core"] as EnableableModule[]).map((module) => {
           const enabled = profile.active_modules.includes(module)
@@ -256,8 +305,29 @@ export function ModulesCatalog() {
       <Card>
         <CardTitle>Coming soon bundles</CardTitle>
         <p className="mt-2 text-sm text-gf-muted">
-          Wellness, sports performance, yoga / Pilates, and studio-specific bundles will expand here without changing the client-first workspace model.
+          Future niche bundles will land on top of the same module backbone without changing the client-first workspace model.
         </p>
+        <div className="mt-4 grid gap-3 md:grid-cols-2">
+          {COACH_TYPE_PRESETS.filter((preset) => COACH_TYPE_STATUS[preset] === "coming_soon").map((preset) => (
+            <div key={preset} className="rounded-xl border border-gf-border bg-gf-black p-4">
+              <div className="flex items-center justify-between gap-3">
+                <p className="font-medium text-white">{COACH_TYPE_LABELS[preset]}</p>
+                <Badge>Coming soon</Badge>
+              </div>
+              <p className="mt-2 text-sm text-gf-muted">{COACH_TYPE_DESCRIPTIONS[preset]}</p>
+              <div className="mt-3 flex flex-wrap gap-2">
+                {COACH_TYPE_HIGHLIGHTS[preset].map((item) => (
+                  <span
+                    key={item}
+                    className="inline-flex rounded-full border border-gf-border px-2.5 py-1 text-xs text-gf-muted"
+                  >
+                    {item}
+                  </span>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
       </Card>
 
       <Card>

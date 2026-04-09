@@ -15,6 +15,9 @@ export async function POST(request: NextRequest) {
   try {
     const admin = createAdmin()
     const body = await request.json()
+    if (typeof body.entry_title !== "string" || body.entry_title.trim().length === 0) {
+      return NextResponse.json({ error: "Entry title is required" }, { status: 400 })
+    }
     const log = await createClientNutritionLogEntryForUser(admin, user.id, {
       logged_at: body.logged_at || null,
       meal_slot: body.meal_slot,
@@ -27,7 +30,7 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     return NextResponse.json(
       { error: error instanceof Error ? error.message : "Failed to save nutrition log" },
-      { status: 500 }
+      { status: 400 }
     )
   }
 }

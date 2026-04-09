@@ -270,6 +270,7 @@ No existing platform offers native two-way Google Sheets integration as a first-
 ## Module Map by Coach Type
 
 Coach type should be treated as a starting preset that suggests a default module mix. It is not intended to hard-lock a coach to one lane forever; active modules are the real entitlement layer.
+All approved coach-type niches can be shown in onboarding and the Modules workspace even before their full bundles ship, as long as unbuilt niches are clearly marked `Coming soon` and not exposed as real entitlements yet.
 
 ### Personal Trainer
 
@@ -384,6 +385,19 @@ Coach type should be treated as a starting preset that suggests a default module
 | Premium | Lead capture page |
 | Premium | CRM and pipeline management |
 | Premium | AI assistant (session summaries, homework generation) |
+
+#### Wellness Coach starter slice
+
+The first implementation slice for Wellness Coach should stay close to the existing shared core plus the strongest recurring coaching loop:
+
+1. client profiles and session notes
+2. appointment scheduling + calendar sync
+3. goal setting and milestone tracking
+4. check-in forms
+5. habit tracking
+6. Google Sheets sync
+
+This should deliberately defer secure messaging, group coaching, course delivery, CRM, and AI until the starter loop is proven.
 
 ### Gym / Studio Owner
 
@@ -1208,3 +1222,7 @@ Default implementation assumptions unless overridden:
 | 2026-04-09 | PT data remains database-led for identity, relationships, and permissions; Google Sheets now mirrors the PT operational tabs, but the next hardening pass should focus on proving sync reliability on real provisioned workspaces and older pre-PT client workbooks. |
 | 2026-04-09 | Requests is now a real shared product surface rather than a feedback inbox: coaches and clients can submit requests, vote, comment, follow progress, and see visible statuses; internal moderation can update status, link duplicates, and grant contributor rewards such as credit, trial time, or module access. |
 | 2026-04-09 | Focused nutrition competitor R&D confirmed that the sticky nutrition loop is delivery + logging + habits/check-ins + coach review, not just static meal-plan editing. Nutrition Core should therefore deepen from the current meal-plan surface into coach-side libraries/templates first, then client accountability and review. |
+| 2026-04-09 | Coach payments now include a dedicated `/admin/payments` area for Stripe Connect onboarding, hosted invoice creation, and invoice status tracking. This is implemented product scope, but live end-to-end validation remains a release-hardening task rather than a completed validation milestone. |
+| 2026-04-09 | Nutrition Core now includes client-side habit logging, weekly check-ins, nutrition logs, and an initial coach review layer in client workspaces. Remaining Nutrition Core work is now primarily hardening and review polish rather than missing the accountability loop entirely. |
+| 2026-04-09 | All approved coach-type niches are now intentionally visible in onboarding and the Modules workspace as positioning lanes. Only built bundles are real entitlements; future lanes remain clearly marked `Coming soon` until their module contract and starter slice are implemented. |
+| 2026-04-09 | Wellness Coach is now the next niche-definition candidate after PT Core and Nutrition Core hardening. Its starter slice should center on goals, check-ins, habits, session notes, appointments, and Google Sheets sync before adding messaging, community, CRM, or AI layers. |

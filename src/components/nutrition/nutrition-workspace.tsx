@@ -9,6 +9,43 @@ import { Button } from "@/components/ui/button"
 import { Input, Select, TextArea } from "@/components/ui/input"
 import { DEFAULT_COACH_BRANDING, type CoachBranding } from "@/lib/branding"
 
+function todayKey() {
+  return new Date().toISOString().slice(0, 10)
+}
+
+function defaultWeekLabel() {
+  return `Week of ${new Date().toLocaleDateString("en-GB", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+  })}`
+}
+
+function createDefaultCheckInForm() {
+  return {
+    submitted_at: todayKey(),
+    week_label: defaultWeekLabel(),
+    adherence_score: "7",
+    energy_score: "7",
+    hunger_score: "7",
+    digestion_score: "7",
+    sleep_score: "7",
+    wins: "",
+    struggles: "",
+  }
+}
+
+function createDefaultLogForm() {
+  return {
+    logged_at: todayKey(),
+    meal_slot: "any",
+    entry_title: "",
+    adherence_flag: "flexible",
+    hunger_score: "7",
+    notes: "",
+  }
+}
+
 type HabitAssignment = {
   id: string
   habit_name_snapshot: string
@@ -89,25 +126,8 @@ export function NutritionWorkspace({
   const [error, setError] = useState("")
   const [savingHabitId, setSavingHabitId] = useState<string | null>(null)
   const [habitNotes, setHabitNotes] = useState<Record<string, string>>({})
-  const [checkInForm, setCheckInForm] = useState({
-    submitted_at: "",
-    week_label: "",
-    adherence_score: "7",
-    energy_score: "7",
-    hunger_score: "7",
-    digestion_score: "7",
-    sleep_score: "7",
-    wins: "",
-    struggles: "",
-  })
-  const [logForm, setLogForm] = useState({
-    logged_at: "",
-    meal_slot: "any",
-    entry_title: "",
-    adherence_flag: "flexible",
-    hunger_score: "7",
-    notes: "",
-  })
+  const [checkInForm, setCheckInForm] = useState(createDefaultCheckInForm)
+  const [logForm, setLogForm] = useState(createDefaultLogForm)
   const [savingCheckIn, setSavingCheckIn] = useState(false)
   const [savingLog, setSavingLog] = useState(false)
 
@@ -152,6 +172,16 @@ export function NutritionWorkspace({
   }, [data.habit_logs])
   const latestCheckIn = data.check_ins[0] ?? null
   const latestLog = data.logs[0] ?? null
+  const todayHabitLogs = useMemo(() => {
+    const map = new Map<string, HabitLog>()
+    const today = todayKey()
+    for (const log of data.habit_logs) {
+      if (log.completion_date === today && !map.has(log.assignment_id)) {
+        map.set(log.assignment_id, log)
+      }
+    }
+    return map
+  }, [data.habit_logs])
 
   async function submitHabitLog(assignmentId: string, completionStatus: "completed" | "partial" | "missed") {
     setSavingHabitId(assignmentId)
@@ -194,17 +224,7 @@ export function NutritionWorkspace({
       if (!response.ok) {
         throw new Error(payload.error || "Failed to save check-in")
       }
-      setCheckInForm({
-        submitted_at: "",
-        week_label: "",
-        adherence_score: "7",
-        energy_score: "7",
-        hunger_score: "7",
-        digestion_score: "7",
-        sleep_score: "7",
-        wins: "",
-        struggles: "",
-      })
+      setCheckInForm(createDefaultCheckInForm())
       await load()
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to save check-in")
@@ -227,14 +247,7 @@ export function NutritionWorkspace({
       if (!response.ok) {
         throw new Error(payload.error || "Failed to save nutrition log")
       }
-      setLogForm({
-        logged_at: "",
-        meal_slot: "any",
-        entry_title: "",
-        adherence_flag: "flexible",
-        hunger_score: "7",
-        notes: "",
-      })
+      setLogForm(createDefaultLogForm())
       await load()
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to save nutrition log")
@@ -297,6 +310,18 @@ export function NutritionWorkspace({
                   <div className="mt-4 space-y-4">
                     {activeHabits.map((habit) => (
                       <div key={habit.id} className="rounded-xl border border-gf-border bg-gf-surface p-4">
+                        {todayHabitLogs.get(habit.id) ? (
+                          <div className="mb-3 flex flex-wrap items-center gap-2">
+                            <Badge variant="success">Updated today</Badge>
+                            <span className="text-xs text-gf-muted">
+                              {todayHabitLogs.get(habit.id)?.completion_status} at{" "}
+                              {new Date(todayHabitLogs.get(habit.id)!.logged_at).toLocaleTimeString("en-GB", {
+                                hour: "2-digit",
+                                minute: "2-digit",
+                              })}
+                            </span>
+                          </div>
+                        ) : null}
                         <div className="flex flex-wrap items-center gap-2">
                           <p className="font-medium text-white">{habit.habit_name_snapshot}</p>
                           <Badge variant="default">{habit.target_count} per {habit.target_period}</Badge>
@@ -314,13 +339,13 @@ export function NutritionWorkspace({
                           />
                           <div className="flex flex-wrap items-end gap-2">
                             <Button type="button" disabled={savingHabitId === habit.id} onClick={() => submitHabitLog(habit.id, "completed")}>
-                              {savingHabitId === habit.id ? "Saving..." : "Completed"}
+                              {savingHabitId === habit.id ? "Saving..." : todayHabitLogs.get(habit.id) ? "Update as completed" : "Completed"}
                             </Button>
                             <Button type="button" variant="secondary" disabled={savingHabitId === habit.id} onClick={() => submitHabitLog(habit.id, "partial")}>
-                              Partial
+                              {todayHabitLogs.get(habit.id) ? "Update as partial" : "Partial"}
                             </Button>
                             <Button type="button" variant="ghost" disabled={savingHabitId === habit.id} onClick={() => submitHabitLog(habit.id, "missed")}>
-                              Missed
+                              {todayHabitLogs.get(habit.id) ? "Update as missed" : "Missed"}
                             </Button>
                           </div>
                         </div>
@@ -398,6 +423,9 @@ export function NutritionWorkspace({
                       <Input label="Hunger (1-10)" type="number" min="1" max="10" value={logForm.hunger_score} onChange={(e) => setLogForm((c) => ({ ...c, hunger_score: e.target.value }))} />
                     </div>
                     <TextArea label="Notes" value={logForm.notes} onChange={(e) => setLogForm((c) => ({ ...c, notes: e.target.value }))} />
+                    <p className="text-xs text-gf-muted">
+                      Use this for meals out, appetite notes, or anything your coach should see between weekly check-ins.
+                    </p>
                     <Button type="submit" disabled={savingLog}>{savingLog ? "Saving..." : "Save nutrition log"}</Button>
                   </form>
                 </Card>

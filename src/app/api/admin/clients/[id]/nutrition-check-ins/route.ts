@@ -36,6 +36,6 @@ export async function POST(
     const checkIn = await createClientNutritionCheckIn(supabase, user.id, id, body)
     return NextResponse.json({ checkIn })
   } catch {
-    return NextResponse.json({ error: "Failed to create nutrition check-in" }, { status: 500 })
+    return NextResponse.json({ error: "Failed to create nutrition check-in" }, { status: 400 })
   }
 }

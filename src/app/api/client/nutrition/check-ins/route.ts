@@ -30,7 +30,7 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     return NextResponse.json(
       { error: error instanceof Error ? error.message : "Failed to save nutrition check-in" },
-      { status: 500 }
+      { status: 400 }
     )
   }
 }

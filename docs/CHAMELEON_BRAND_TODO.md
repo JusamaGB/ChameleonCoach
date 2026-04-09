@@ -45,7 +45,12 @@ Status:
 
 ## Functional Follow-Ups
 
-1. Verify and harden the full post-onboarding client workspace handoff.
+1. Run the payments end-to-end validation pass.
+   - Execute the full Stripe test-mode pass for both appointment billing and coach invoices.
+   - Cover the full flow from payment/invoice creation through hosted Stripe completion and webhook-driven status updates.
+   - Record any gaps in recovery UX, state reconciliation, or webhook handling before treating payments as release-ready.
+   - Treat this as the immediate next hardening step because the code is live but validation is still outstanding.
+2. Verify and harden the full post-onboarding client workspace handoff.
    - Confirm onboarding completion creates the client folder and workbook in the coach-owned `Clients` hierarchy.
    - Confirm the workbook is shared to the invited client email successfully.
    - Confirm `Sheet pending` flips to a linked/usable state and both coach/client views become operational after onboarding.
@@ -53,18 +58,18 @@ Status:
    - Run a full real-account end-to-end validation from invite send -> invite accept -> client auth creation -> workbook provisioning -> workbook sharing -> first successful coach/client workspace load.
    - Run a deliberate failure-and-repair pass to confirm the new `Repair workspace` action recovers an incomplete or broken client workspace cleanly.
    - Do not treat onboarding/workspace handoff as complete until one successful live pass and one failure-recovery pass have both been verified.
-2. Verify the new PT Core managed-workbook behavior on real provisioned workspaces.
+3. Verify the new PT Core managed-workbook behavior on real provisioned workspaces.
    - Confirm coach PT library workbooks receive `PT_Exercises`, `PT_Workouts`, `PT_Workout_Exercises`, `PT_Programs`, and `PT_Program_Sessions` updates after PT CRUD actions.
    - Confirm client workbooks receive `Training_Plan`, `Training_Plan_Exercises`, `Workout_Log`, and `Workout_Log_Exercises` updates after assignment and workout logging.
    - Confirm older client workbooks created before the PT tabs existed are either reprovisioned safely or handled with a clear recovery path.
-3. Validate and harden Stripe appointment billing end to end.
+4. Validate and harden Stripe appointment billing end to end.
    - Run the full Stripe test-mode flow for a confirmed appointment payment request.
    - Confirm successful Checkout updates appointment `payment_status` to `paid`.
    - Confirm expired or failed payments update appointment `payment_status` to `payment_failed`.
    - Confirm webhook retries are idempotent and do not corrupt payment state.
    - Add any missing reconciliation or recovery UX discovered during live validation.
    - Treat this as the next implementation slice because billing is implemented in code but still not release-complete until end-to-end validation passes.
-4. Validate and harden coach payments and invoicing end to end.
+5. Validate and harden coach payments and invoicing end to end.
    - Run a full Stripe Connect onboarding pass for a coach from `/admin/payments`.
    - Confirm connected account status sync updates `onboarding_completed`, `charges_enabled`, and `payouts_enabled` correctly in app.
    - Create and send a real test invoice from a coach to a client through the new Payments area.
@@ -72,9 +77,8 @@ Status:
    - Confirm connected-account webhook events update invoice status correctly for at least `invoice.sent`, `invoice.paid`, and `invoice.voided`.
    - Confirm the new payments flow stays clearly separate from platform billing in `/admin/billing`.
    - Add any missing resend, recovery, or status UX discovered during end-to-end testing before treating coach payments as release-ready.
-5. Move to the next build-documents slice: Nutrition Core completion and hardening.
-   - Add client-side nutrition entry surfaces so nutrition work is not only coach-entered.
-   - Add nutrition habit logging to complete the accountability loop.
-   - Improve the coach-side nutrition review layer inside client workspaces.
+6. Move to the next build-documents slice: Nutrition Core completion and hardening.
+   - Validate the nutrition flow end to end on real provisioned workspaces, including workbook sync after client habit logs, check-ins, and nutrition logs.
+   - Confirm the new coach review signals and habit-log follow-up notes hold up under real usage and make any UX adjustments they expose.
    - Verify managed-sheet reliability, read/write consistency, and end-to-end onboarding validation for Nutrition Core.
-   - Keep this aligned with `NUTRITION_CORE_PLAN.md`, where Nutrition Core is still explicitly thinner than PT Core and still missing client-side entry surfaces and habit logging.
+   - Keep this aligned with `NUTRITION_CORE_PLAN.md`, where Nutrition Core is now functionally complete for the accountability loop but still thinner than PT Core and still needs live hardening.

@@ -12,7 +12,6 @@ import type {
 import { syncClientNutritionHabitSheets, syncCoachNutritionLibrarySheets } from "@/lib/google/sheets"
 
 const DAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
-
 type TemplateDayInput = {
   day: string
   breakfast?: string | null
@@ -30,6 +29,42 @@ function cleanNumber(value: unknown) {
   if (value === null || value === undefined || value === "") return null
   const number = Number(value)
   return Number.isFinite(number) ? number : null
+}
+
+function cleanScore(value: unknown, label: string) {
+  const number = cleanNumber(value)
+  if (number === null) return null
+  if (number < 1 || number > 10) {
+    throw new Error(`${label} must be between 1 and 10.`)
+  }
+  return number
+}
+
+function cleanRequiredText(value: unknown, label: string) {
+  const text = typeof value === "string" ? value.trim() : ""
+  if (!text) {
+    throw new Error(`${label} is required.`)
+  }
+  return text
+}
+
+function normalizeDateTime(value: unknown, fallback = new Date().toISOString()) {
+  if (typeof value !== "string" || value.trim().length === 0) return fallback
+  const trimmed = value.trim()
+  const normalized = trimmed.length === 10 ? `${trimmed}T12:00:00.000Z` : trimmed
+  const date = new Date(normalized)
+  if (Number.isNaN(date.getTime())) {
+    throw new Error("Invalid date provided.")
+  }
+  return date.toISOString()
+}
+
+function defaultWeekLabel(submittedAt: string) {
+  return `Week of ${new Date(submittedAt).toLocaleDateString("en-GB", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+  })}`
 }
 
 function normalizeTemplateDays(input: TemplateDayInput[]) {
@@ -509,24 +544,103 @@ export async function createClientNutritionHabitLog(
       ? payload.completion_date
       : new Date().toISOString().slice(0, 10)
 
+  const loggedAt = normalizeDateTime(payload.logged_at)
+  const adherenceScore = cleanScore(payload.adherence_score, "Adherence score")
+  const completionStatus =
+    payload.completion_status === "missed"
+      ? "missed"
+      : payload.completion_status === "partial"
+        ? "partial"
+        : "completed"
+
+  const { data: existingLog, error: existingLogError } = await supabase
+    .from("client_nutrition_habit_logs")
+    .select("*")
+    .eq("coach_id", coachId)
+    .eq("client_id", clientId)
+    .eq("assignment_id", assignment.id)
+    .eq("completion_date", completionDate)
+    .order("created_at", { ascending: false })
+    .maybeSingle()
+
+  if (existingLogError) throw existingLogError
+
+  if (existingLog) {
+    const { data: updatedLog, error: updateError } = await supabase
+      .from("client_nutrition_habit_logs")
+      .update({
+        logged_at: loggedAt,
+        completion_status: completionStatus,
+        adherence_score: adherenceScore,
+        notes: cleanText(payload.notes),
+        coach_note: cleanText(payload.coach_note),
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", existingLog.id)
+      .eq("coach_id", coachId)
+      .eq("client_id", clientId)
+      .select("*")
+      .single()
+
+    if (updateError) throw updateError
+    await syncClientNutritionWorkbook(supabase, coachId, clientId)
+    return updatedLog as ClientNutritionHabitLog
+  }
+
   const { data, error } = await supabase
     .from("client_nutrition_habit_logs")
     .insert({
       coach_id: coachId,
       client_id: clientId,
       assignment_id: assignment.id,
-      logged_at: payload.logged_at ?? new Date().toISOString(),
+      logged_at: loggedAt,
       completion_date: completionDate,
-      completion_status:
-        payload.completion_status === "missed"
-          ? "missed"
-          : payload.completion_status === "partial"
-            ? "partial"
-            : "completed",
-      adherence_score: cleanNumber(payload.adherence_score),
+      completion_status: completionStatus,
+      adherence_score: adherenceScore,
       notes: cleanText(payload.notes),
       coach_note: cleanText(payload.coach_note),
     })
+    .select("*")
+    .single()
+
+  if (error) throw error
+  await syncClientNutritionWorkbook(supabase, coachId, clientId)
+  return data as ClientNutritionHabitLog
+}
+
+export async function updateClientNutritionHabitLog(
+  supabase: { from: (table: string) => any },
+  coachId: string,
+  clientId: string,
+  habitLogId: string,
+  payload: Partial<ClientNutritionHabitLog>
+) {
+  const updates: Record<string, unknown> = {
+    updated_at: new Date().toISOString(),
+  }
+
+  if ("logged_at" in payload) updates.logged_at = normalizeDateTime(payload.logged_at)
+  if ("completion_date" in payload && typeof payload.completion_date === "string" && payload.completion_date.trim()) {
+    updates.completion_date = payload.completion_date
+  }
+  if ("completion_status" in payload) {
+    updates.completion_status =
+      payload.completion_status === "missed"
+        ? "missed"
+        : payload.completion_status === "partial"
+          ? "partial"
+          : "completed"
+  }
+  if ("adherence_score" in payload) updates.adherence_score = cleanScore(payload.adherence_score, "Adherence score")
+  if ("notes" in payload) updates.notes = cleanText(payload.notes)
+  if ("coach_note" in payload) updates.coach_note = cleanText(payload.coach_note)
+
+  const { data, error } = await supabase
+    .from("client_nutrition_habit_logs")
+    .update(updates)
+    .eq("id", habitLogId)
+    .eq("coach_id", coachId)
+    .eq("client_id", clientId)
     .select("*")
     .single()
 
@@ -557,18 +671,19 @@ export async function createClientNutritionCheckIn(
   clientId: string,
   payload: Partial<ClientNutritionCheckIn>
 ) {
+  const submittedAt = normalizeDateTime(payload.submitted_at)
   const { data, error } = await supabase
     .from("client_nutrition_check_ins")
     .insert({
       coach_id: coachId,
       client_id: clientId,
-      submitted_at: payload.submitted_at ?? new Date().toISOString(),
-      week_label: cleanText(payload.week_label),
-      adherence_score: cleanNumber(payload.adherence_score),
-      energy_score: cleanNumber(payload.energy_score),
-      hunger_score: cleanNumber(payload.hunger_score),
-      digestion_score: cleanNumber(payload.digestion_score),
-      sleep_score: cleanNumber(payload.sleep_score),
+      submitted_at: submittedAt,
+      week_label: cleanText(payload.week_label) ?? defaultWeekLabel(submittedAt),
+      adherence_score: cleanScore(payload.adherence_score, "Adherence score"),
+      energy_score: cleanScore(payload.energy_score, "Energy score"),
+      hunger_score: cleanScore(payload.hunger_score, "Hunger score"),
+      digestion_score: cleanScore(payload.digestion_score, "Digestion score"),
+      sleep_score: cleanScore(payload.sleep_score, "Sleep score"),
       wins: cleanText(payload.wins),
       struggles: cleanText(payload.struggles),
       coach_follow_up_note: cleanText(payload.coach_follow_up_note),
@@ -592,13 +707,18 @@ export async function updateClientNutritionCheckIn(
     updated_at: new Date().toISOString(),
   }
 
-  if ("submitted_at" in payload) updates.submitted_at = payload.submitted_at ?? new Date().toISOString()
-  if ("week_label" in payload) updates.week_label = cleanText(payload.week_label)
-  if ("adherence_score" in payload) updates.adherence_score = cleanNumber(payload.adherence_score)
-  if ("energy_score" in payload) updates.energy_score = cleanNumber(payload.energy_score)
-  if ("hunger_score" in payload) updates.hunger_score = cleanNumber(payload.hunger_score)
-  if ("digestion_score" in payload) updates.digestion_score = cleanNumber(payload.digestion_score)
-  if ("sleep_score" in payload) updates.sleep_score = cleanNumber(payload.sleep_score)
+  if ("submitted_at" in payload) updates.submitted_at = normalizeDateTime(payload.submitted_at)
+  if ("week_label" in payload) {
+    const weekLabel = cleanText(payload.week_label)
+    updates.week_label =
+      weekLabel
+      ?? defaultWeekLabel(typeof updates.submitted_at === "string" ? updates.submitted_at : new Date().toISOString())
+  }
+  if ("adherence_score" in payload) updates.adherence_score = cleanScore(payload.adherence_score, "Adherence score")
+  if ("energy_score" in payload) updates.energy_score = cleanScore(payload.energy_score, "Energy score")
+  if ("hunger_score" in payload) updates.hunger_score = cleanScore(payload.hunger_score, "Hunger score")
+  if ("digestion_score" in payload) updates.digestion_score = cleanScore(payload.digestion_score, "Digestion score")
+  if ("sleep_score" in payload) updates.sleep_score = cleanScore(payload.sleep_score, "Sleep score")
   if ("wins" in payload) updates.wins = cleanText(payload.wins)
   if ("struggles" in payload) updates.struggles = cleanText(payload.struggles)
   if ("coach_follow_up_note" in payload) updates.coach_follow_up_note = cleanText(payload.coach_follow_up_note)
@@ -639,17 +759,18 @@ export async function createClientNutritionLogEntry(
   clientId: string,
   payload: Partial<ClientNutritionLogEntry>
 ) {
+  const entryTitle = cleanRequiredText(payload.entry_title, "Entry title")
   const { data, error } = await supabase
     .from("client_nutrition_log_entries")
     .insert({
       coach_id: coachId,
       client_id: clientId,
-      logged_at: payload.logged_at ?? new Date().toISOString(),
+      logged_at: normalizeDateTime(payload.logged_at),
       meal_slot: cleanText(payload.meal_slot) ?? "any",
-      entry_title: String(payload.entry_title || "").trim(),
+      entry_title: entryTitle,
       notes: cleanText(payload.notes),
       adherence_flag: cleanText(payload.adherence_flag) ?? "flexible",
-      hunger_score: cleanNumber(payload.hunger_score),
+      hunger_score: cleanScore(payload.hunger_score, "Hunger score"),
       coach_note: cleanText(payload.coach_note),
     })
     .select("*")
@@ -671,12 +792,12 @@ export async function updateClientNutritionLogEntry(
     updated_at: new Date().toISOString(),
   }
 
-  if ("logged_at" in payload) updates.logged_at = payload.logged_at ?? new Date().toISOString()
+  if ("logged_at" in payload) updates.logged_at = normalizeDateTime(payload.logged_at)
   if ("meal_slot" in payload) updates.meal_slot = cleanText(payload.meal_slot) ?? "any"
-  if ("entry_title" in payload) updates.entry_title = String(payload.entry_title || "").trim()
+  if ("entry_title" in payload) updates.entry_title = cleanRequiredText(payload.entry_title, "Entry title")
   if ("notes" in payload) updates.notes = cleanText(payload.notes)
   if ("adherence_flag" in payload) updates.adherence_flag = cleanText(payload.adherence_flag) ?? "flexible"
-  if ("hunger_score" in payload) updates.hunger_score = cleanNumber(payload.hunger_score)
+  if ("hunger_score" in payload) updates.hunger_score = cleanScore(payload.hunger_score, "Hunger score")
   if ("coach_note" in payload) updates.coach_note = cleanText(payload.coach_note)
 
   const { data, error } = await supabase

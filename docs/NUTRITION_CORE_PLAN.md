@@ -14,13 +14,19 @@
 - module-layer nutrition tool links
 - client-workspace template application using coach-owned nutrition templates
 - client nutrition habit assignment flow
-- client workbook tabs for `Nutrition_Habits`, `Nutrition_Check_Ins`, and `Nutrition_Log`
+- client habit logging surface
+- client nutrition check-in surface
+- client nutrition notes / log surface
+- coach-side nutrition adherence and review context inside client workspaces
+- coach-side follow-up radar for missed habits, off-plan logs, and stale/low-signal check-ins
+- coach notes on habit logs inside the client workspace review flow
+- nutrition input validation and duplicate same-day habit-log protection in the write layer
+- client workbook tabs for `Nutrition_Habits`, `Nutrition_Habit_Log`, `Nutrition_Check_Ins`, and `Nutrition_Log`
 
 ### What is still missing
 
-- nutrition habit logging
-- more complete coach-side nutrition review polish
-- client-side nutrition entry surfaces
+- more end-to-end validation and hardening across onboarding, workbook sync, and client usage
+- final coach-side review polish after live usage feedback
 
 Nutrition Core is still materially thinner than PT Core.
 
@@ -63,6 +69,7 @@ Goal:
 Deliver:
 
 - nutrition habits
+- nutrition habit logging
 - weekly nutrition check-ins
 - client nutrition notes/reflections
 - nutrition log entries
@@ -79,6 +86,12 @@ Deliver:
 - recent check-ins
 - recent nutrition logs
 - coach follow-up context
+
+Status:
+
+- initial coach review layer is now implemented in client workspaces
+- the current hardening pass added coach follow-up radar, editable habit-log coach notes, and safer nutrition write validation
+- additional polish and validation still remain before this should be treated as fully hardened
 
 ---
 
@@ -109,6 +122,7 @@ Deliver:
 
 - `Meal Plan`
 - `Nutrition_Habits`
+- `Nutrition_Habit_Log`
 - `Nutrition_Check_Ins`
 - `Nutrition_Log`
 
