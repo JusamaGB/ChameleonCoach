@@ -1,7 +1,9 @@
 import { google } from "googleapis"
 import { getAuthedClient } from "./auth"
 import type {
+  ClientNutritionCheckIn,
   ClientNutritionHabitAssignment,
+  ClientNutritionLogEntry,
   ClientPTLog,
   ClientPTLogExercise,
   ClientPTProgramAssignment,
@@ -598,7 +600,9 @@ export async function syncCoachNutritionLibrarySheets(
 export async function syncClientNutritionHabitSheets(
   sheetId: string,
   coachId: string,
-  habits: ClientNutritionHabitAssignment[]
+  habits: ClientNutritionHabitAssignment[],
+  checkIns: ClientNutritionCheckIn[] = [],
+  logs: ClientNutritionLogEntry[] = []
 ) {
   await ensureSpreadsheetTabs(
     sheetId,
@@ -622,6 +626,46 @@ export async function syncClientNutritionHabitSheets(
         habit.assigned_start_date ?? "",
         habit.status,
         habit.coaching_notes ?? "",
+      ]),
+    ],
+    coachId
+  )
+
+  await overwriteTab(
+    sheetId,
+    "Nutrition_Check_Ins",
+    [
+      ["check_in_id", "submitted_at", "week_label", "adherence_score", "energy_score", "hunger_score", "digestion_score", "sleep_score", "wins", "struggles"],
+      ...checkIns.map((checkIn) => [
+        checkIn.id,
+        checkIn.submitted_at,
+        checkIn.week_label ?? "",
+        checkIn.adherence_score ?? "",
+        checkIn.energy_score ?? "",
+        checkIn.hunger_score ?? "",
+        checkIn.digestion_score ?? "",
+        checkIn.sleep_score ?? "",
+        checkIn.wins ?? "",
+        checkIn.struggles ?? "",
+      ]),
+    ],
+    coachId
+  )
+
+  await overwriteTab(
+    sheetId,
+    "Nutrition_Log",
+    [
+      ["log_id", "logged_at", "meal_slot", "entry_title", "notes", "adherence_flag", "hunger_score", "coach_note"],
+      ...logs.map((log) => [
+        log.id,
+        log.logged_at,
+        log.meal_slot,
+        log.entry_title,
+        log.notes ?? "",
+        log.adherence_flag,
+        log.hunger_score ?? "",
+        log.coach_note ?? "",
       ]),
     ],
     coachId

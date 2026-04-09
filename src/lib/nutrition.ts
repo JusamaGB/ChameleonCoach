@@ -1,5 +1,7 @@
 import type {
+  ClientNutritionCheckIn,
   ClientNutritionHabitAssignment,
+  ClientNutritionLogEntry,
   MealPlanDay,
   NutritionHabitTemplate,
   NutritionMealPlanTemplate,
@@ -94,8 +96,12 @@ async function syncClientNutritionWorkbook(
 
     if (!client?.sheet_id) return
 
-    const habits = await listClientNutritionHabitAssignmentsForCoach(supabase, coachId, clientId)
-    await syncClientNutritionHabitSheets(client.sheet_id, coachId, habits)
+    const [habits, checkIns, logs] = await Promise.all([
+      listClientNutritionHabitAssignmentsForCoach(supabase, coachId, clientId),
+      listClientNutritionCheckInsForCoach(supabase, coachId, clientId),
+      listClientNutritionLogEntriesForCoach(supabase, coachId, clientId),
+    ])
+    await syncClientNutritionHabitSheets(client.sheet_id, coachId, habits, checkIns, logs)
   } catch (error) {
     console.error("Client nutrition workbook sync failed", error)
   }
@@ -459,4 +465,162 @@ export async function updateClientNutritionHabitAssignment(
   if (error) throw error
   await syncClientNutritionWorkbook(supabase, coachId, clientId)
   return data as ClientNutritionHabitAssignment
+}
+
+export async function listClientNutritionCheckInsForCoach(
+  supabase: { from: (table: string) => any },
+  coachId: string,
+  clientId: string
+) {
+  const { data, error } = await supabase
+    .from("client_nutrition_check_ins")
+    .select("*")
+    .eq("coach_id", coachId)
+    .eq("client_id", clientId)
+    .order("submitted_at", { ascending: false })
+
+  if (error) throw error
+  return (data ?? []) as ClientNutritionCheckIn[]
+}
+
+export async function createClientNutritionCheckIn(
+  supabase: { from: (table: string) => any },
+  coachId: string,
+  clientId: string,
+  payload: Partial<ClientNutritionCheckIn>
+) {
+  const { data, error } = await supabase
+    .from("client_nutrition_check_ins")
+    .insert({
+      coach_id: coachId,
+      client_id: clientId,
+      submitted_at: payload.submitted_at ?? new Date().toISOString(),
+      week_label: cleanText(payload.week_label),
+      adherence_score: cleanNumber(payload.adherence_score),
+      energy_score: cleanNumber(payload.energy_score),
+      hunger_score: cleanNumber(payload.hunger_score),
+      digestion_score: cleanNumber(payload.digestion_score),
+      sleep_score: cleanNumber(payload.sleep_score),
+      wins: cleanText(payload.wins),
+      struggles: cleanText(payload.struggles),
+      coach_follow_up_note: cleanText(payload.coach_follow_up_note),
+    })
+    .select("*")
+    .single()
+
+  if (error) throw error
+  await syncClientNutritionWorkbook(supabase, coachId, clientId)
+  return data as ClientNutritionCheckIn
+}
+
+export async function updateClientNutritionCheckIn(
+  supabase: { from: (table: string) => any },
+  coachId: string,
+  clientId: string,
+  checkInId: string,
+  payload: Partial<ClientNutritionCheckIn>
+) {
+  const updates: Record<string, unknown> = {
+    updated_at: new Date().toISOString(),
+  }
+
+  if ("submitted_at" in payload) updates.submitted_at = payload.submitted_at ?? new Date().toISOString()
+  if ("week_label" in payload) updates.week_label = cleanText(payload.week_label)
+  if ("adherence_score" in payload) updates.adherence_score = cleanNumber(payload.adherence_score)
+  if ("energy_score" in payload) updates.energy_score = cleanNumber(payload.energy_score)
+  if ("hunger_score" in payload) updates.hunger_score = cleanNumber(payload.hunger_score)
+  if ("digestion_score" in payload) updates.digestion_score = cleanNumber(payload.digestion_score)
+  if ("sleep_score" in payload) updates.sleep_score = cleanNumber(payload.sleep_score)
+  if ("wins" in payload) updates.wins = cleanText(payload.wins)
+  if ("struggles" in payload) updates.struggles = cleanText(payload.struggles)
+  if ("coach_follow_up_note" in payload) updates.coach_follow_up_note = cleanText(payload.coach_follow_up_note)
+
+  const { data, error } = await supabase
+    .from("client_nutrition_check_ins")
+    .update(updates)
+    .eq("id", checkInId)
+    .eq("coach_id", coachId)
+    .eq("client_id", clientId)
+    .select("*")
+    .single()
+
+  if (error) throw error
+  await syncClientNutritionWorkbook(supabase, coachId, clientId)
+  return data as ClientNutritionCheckIn
+}
+
+export async function listClientNutritionLogEntriesForCoach(
+  supabase: { from: (table: string) => any },
+  coachId: string,
+  clientId: string
+) {
+  const { data, error } = await supabase
+    .from("client_nutrition_log_entries")
+    .select("*")
+    .eq("coach_id", coachId)
+    .eq("client_id", clientId)
+    .order("logged_at", { ascending: false })
+
+  if (error) throw error
+  return (data ?? []) as ClientNutritionLogEntry[]
+}
+
+export async function createClientNutritionLogEntry(
+  supabase: { from: (table: string) => any },
+  coachId: string,
+  clientId: string,
+  payload: Partial<ClientNutritionLogEntry>
+) {
+  const { data, error } = await supabase
+    .from("client_nutrition_log_entries")
+    .insert({
+      coach_id: coachId,
+      client_id: clientId,
+      logged_at: payload.logged_at ?? new Date().toISOString(),
+      meal_slot: cleanText(payload.meal_slot) ?? "any",
+      entry_title: String(payload.entry_title || "").trim(),
+      notes: cleanText(payload.notes),
+      adherence_flag: cleanText(payload.adherence_flag) ?? "flexible",
+      hunger_score: cleanNumber(payload.hunger_score),
+      coach_note: cleanText(payload.coach_note),
+    })
+    .select("*")
+    .single()
+
+  if (error) throw error
+  await syncClientNutritionWorkbook(supabase, coachId, clientId)
+  return data as ClientNutritionLogEntry
+}
+
+export async function updateClientNutritionLogEntry(
+  supabase: { from: (table: string) => any },
+  coachId: string,
+  clientId: string,
+  logEntryId: string,
+  payload: Partial<ClientNutritionLogEntry>
+) {
+  const updates: Record<string, unknown> = {
+    updated_at: new Date().toISOString(),
+  }
+
+  if ("logged_at" in payload) updates.logged_at = payload.logged_at ?? new Date().toISOString()
+  if ("meal_slot" in payload) updates.meal_slot = cleanText(payload.meal_slot) ?? "any"
+  if ("entry_title" in payload) updates.entry_title = String(payload.entry_title || "").trim()
+  if ("notes" in payload) updates.notes = cleanText(payload.notes)
+  if ("adherence_flag" in payload) updates.adherence_flag = cleanText(payload.adherence_flag) ?? "flexible"
+  if ("hunger_score" in payload) updates.hunger_score = cleanNumber(payload.hunger_score)
+  if ("coach_note" in payload) updates.coach_note = cleanText(payload.coach_note)
+
+  const { data, error } = await supabase
+    .from("client_nutrition_log_entries")
+    .update(updates)
+    .eq("id", logEntryId)
+    .eq("coach_id", coachId)
+    .eq("client_id", clientId)
+    .select("*")
+    .single()
+
+  if (error) throw error
+  await syncClientNutritionWorkbook(supabase, coachId, clientId)
+  return data as ClientNutritionLogEntry
 }

@@ -15,7 +15,9 @@ import Link from "next/link"
 import { ArrowLeft, ExternalLink, Pencil, Trash2 } from "lucide-react"
 import type {
   Client,
+  ClientNutritionCheckIn,
   ClientNutritionHabitAssignment,
+  ClientNutritionLogEntry,
   ClientPTLog,
   ClientPTProgramAssignment,
   ClientPTSessionExercise,
@@ -63,6 +65,8 @@ interface ClientDetailViewProps {
   nutritionTemplates: Array<NutritionMealPlanTemplate & { days?: NutritionMealPlanTemplateDay[] }>
   nutritionHabitTemplates: NutritionHabitTemplate[]
   nutritionHabitAssignments: ClientNutritionHabitAssignment[]
+  nutritionCheckIns: ClientNutritionCheckIn[]
+  nutritionLogs: ClientNutritionLogEntry[]
 }
 
 export function ClientDetailView({
@@ -77,6 +81,8 @@ export function ClientDetailView({
   nutritionTemplates,
   nutritionHabitTemplates,
   nutritionHabitAssignments,
+  nutritionCheckIns,
+  nutritionLogs,
 }: ClientDetailViewProps) {
   const router = useRouter()
   const [editingProfile, setEditingProfile] = useState(false)
@@ -86,6 +92,33 @@ export function ClientDetailView({
   const [nutritionHabitStartDate, setNutritionHabitStartDate] = useState("")
   const [assigningNutritionHabit, setAssigningNutritionHabit] = useState(false)
   const [updatingNutritionHabitId, setUpdatingNutritionHabitId] = useState<string | null>(null)
+  const [nutritionCheckInForm, setNutritionCheckInForm] = useState({
+    submitted_at: "",
+    week_label: "",
+    adherence_score: "7",
+    energy_score: "7",
+    hunger_score: "7",
+    digestion_score: "7",
+    sleep_score: "7",
+    wins: "",
+    struggles: "",
+    coach_follow_up_note: "",
+  })
+  const [submittingNutritionCheckIn, setSubmittingNutritionCheckIn] = useState(false)
+  const [editingNutritionCheckInId, setEditingNutritionCheckInId] = useState<string | null>(null)
+  const [updatingNutritionCheckIn, setUpdatingNutritionCheckIn] = useState(false)
+  const [nutritionLogForm, setNutritionLogForm] = useState({
+    logged_at: "",
+    meal_slot: "any",
+    entry_title: "",
+    notes: "",
+    adherence_flag: "flexible",
+    hunger_score: "7",
+    coach_note: "",
+  })
+  const [submittingNutritionLog, setSubmittingNutritionLog] = useState(false)
+  const [editingNutritionLogId, setEditingNutritionLogId] = useState<string | null>(null)
+  const [updatingNutritionLog, setUpdatingNutritionLog] = useState(false)
   const [nutritionError, setNutritionError] = useState("")
   const [assignmentProgramId, setAssignmentProgramId] = useState("")
   const [assignmentStartDate, setAssignmentStartDate] = useState("")
@@ -153,6 +186,66 @@ export function ClientDetailView({
     router.refresh()
   }
 
+  function resetNutritionCheckInForm() {
+    setEditingNutritionCheckInId(null)
+    setNutritionCheckInForm({
+      submitted_at: "",
+      week_label: "",
+      adherence_score: "7",
+      energy_score: "7",
+      hunger_score: "7",
+      digestion_score: "7",
+      sleep_score: "7",
+      wins: "",
+      struggles: "",
+      coach_follow_up_note: "",
+    })
+  }
+
+  function beginEditNutritionCheckIn(checkIn: ClientNutritionCheckIn) {
+    setEditingNutritionCheckInId(checkIn.id)
+    setNutritionCheckInForm({
+      submitted_at: checkIn.submitted_at.slice(0, 10),
+      week_label: checkIn.week_label ?? "",
+      adherence_score: checkIn.adherence_score?.toString() ?? "",
+      energy_score: checkIn.energy_score?.toString() ?? "",
+      hunger_score: checkIn.hunger_score?.toString() ?? "",
+      digestion_score: checkIn.digestion_score?.toString() ?? "",
+      sleep_score: checkIn.sleep_score?.toString() ?? "",
+      wins: checkIn.wins ?? "",
+      struggles: checkIn.struggles ?? "",
+      coach_follow_up_note: checkIn.coach_follow_up_note ?? "",
+    })
+    setNutritionError("")
+  }
+
+  function resetNutritionLogForm() {
+    setEditingNutritionLogId(null)
+    setNutritionLogForm({
+      logged_at: "",
+      meal_slot: "any",
+      entry_title: "",
+      notes: "",
+      adherence_flag: "flexible",
+      hunger_score: "7",
+      coach_note: "",
+    })
+  }
+
+  function beginEditNutritionLog(log: ClientNutritionLogEntry) {
+    setEditingNutritionLogId(log.id)
+    setNutritionLogForm({
+      logged_at: log.logged_at.slice(0, 10),
+      meal_slot: log.meal_slot,
+      entry_title: log.entry_title,
+      notes: log.notes ?? "",
+      adherence_flag: log.adherence_flag,
+      hunger_score: log.hunger_score?.toString() ?? "",
+      coach_note: log.coach_note ?? "",
+    })
+    setNutritionError("")
+  }
+
   async function handleAssignNutritionHabit(event: React.FormEvent) {
     event.preventDefault()
     if (!nutritionHabitTemplateId) return
@@ -180,6 +273,116 @@ export function ClientDetailView({
       setNutritionError("Failed to assign nutrition habit")
     } finally {
       setAssigningNutritionHabit(false)
+    }
+  }
+
+  async function handleSubmitNutritionCheckIn(event: React.FormEvent) {
+    event.preventDefault()
+    setSubmittingNutritionCheckIn(true)
+    setNutritionError("")
+    try {
+      const response = await fetch(`/api/admin/clients/${client.id}/nutrition-check-ins`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          ...nutritionCheckInForm,
+          submitted_at: nutritionCheckInForm.submitted_at || null,
+        }),
+      })
+      const data = await response.json()
+      if (!response.ok) {
+        setNutritionError(data.error || "Failed to add nutrition check-in")
+        return
+      }
+      resetNutritionCheckInForm()
+      router.refresh()
+    } catch {
+      setNutritionError("Failed to add nutrition check-in")
+    } finally {
+      setSubmittingNutritionCheckIn(false)
+    }
+  }
+
+  async function handleUpdateNutritionCheckIn() {
+    if (!editingNutritionCheckInId) return
+
+    setUpdatingNutritionCheckIn(true)
+    setNutritionError("")
+    try {
+      const response = await fetch(`/api/admin/clients/${client.id}/nutrition-check-ins/${editingNutritionCheckInId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          ...nutritionCheckInForm,
+          submitted_at: nutritionCheckInForm.submitted_at || null,
+        }),
+      })
+      const data = await response.json()
+      if (!response.ok) {
+        setNutritionError(data.error || "Failed to update nutrition check-in")
+        return
+      }
+      resetNutritionCheckInForm()
+      router.refresh()
+    } catch {
+      setNutritionError("Failed to update nutrition check-in")
+    } finally {
+      setUpdatingNutritionCheckIn(false)
+    }
+  }
+
+  async function handleSubmitNutritionLog(event: React.FormEvent) {
+    event.preventDefault()
+    setSubmittingNutritionLog(true)
+    setNutritionError("")
+    try {
+      const response = await fetch(`/api/admin/clients/${client.id}/nutrition-logs`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          ...nutritionLogForm,
+          logged_at: nutritionLogForm.logged_at || null,
+        }),
+      })
+      const data = await response.json()
+      if (!response.ok) {
+        setNutritionError(data.error || "Failed to add nutrition log")
+        return
+      }
+      resetNutritionLogForm()
+      router.refresh()
+    } catch {
+      setNutritionError("Failed to add nutrition log")
+    } finally {
+      setSubmittingNutritionLog(false)
+    }
+  }
+
+  async function handleUpdateNutritionLog() {
+    if (!editingNutritionLogId) return
+
+    setUpdatingNutritionLog(true)
+    setNutritionError("")
+    try {
+      const response = await fetch(`/api/admin/clients/${client.id}/nutrition-logs/${editingNutritionLogId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          ...nutritionLogForm,
+          logged_at: nutritionLogForm.logged_at || null,
+        }),
+      })
+      const data = await response.json()
+      if (!response.ok) {
+        setNutritionError(data.error || "Failed to update nutrition log")
+        return
+      }
+      resetNutritionLogForm()
+      router.refresh()
+    } catch {
+      setNutritionError("Failed to update nutrition log")
+    } finally {
+      setUpdatingNutritionLog(false)
     }
   }
 
@@ -450,6 +653,15 @@ export function ClientDetailView({
     }
   }
 
+  const activeNutritionHabitsCount = nutritionHabitAssignments.filter((habit) => habit.status === "active").length
+  const latestNutritionCheckIn = nutritionCheckIns[0] ?? null
+  const averageAdherence = nutritionCheckIns.length
+    ? Math.round(
+        nutritionCheckIns.reduce((sum, checkIn) => sum + (checkIn.adherence_score ?? 0), 0) / nutritionCheckIns.length
+      )
+    : null
+  const latestNutritionLog = nutritionLogs[0] ?? null
+
   function paymentStatusLabel(status: ClientDetailViewProps["appointments"][number]["payment_status"]) {
     switch (status) {
       case "paid":
@@ -710,6 +922,43 @@ export function ClientDetailView({
                   </div>
 
                   <div className="border-t border-gf-border pt-6">
+                    <div className="mb-6 grid gap-4 md:grid-cols-4">
+                      <div className="rounded-xl border border-gf-border bg-gf-black/10 p-4">
+                        <p className="text-xs uppercase tracking-wide text-gf-muted">Active habits</p>
+                        <p className="mt-2 text-2xl font-semibold text-white">{activeNutritionHabitsCount}</p>
+                        <p className="mt-1 text-sm text-gf-muted">Current nutrition accountability targets</p>
+                      </div>
+                      <div className="rounded-xl border border-gf-border bg-gf-black/10 p-4">
+                        <p className="text-xs uppercase tracking-wide text-gf-muted">Average adherence</p>
+                        <p className="mt-2 text-2xl font-semibold text-white">
+                          {averageAdherence ? `${averageAdherence}/10` : "No data"}
+                        </p>
+                        <p className="mt-1 text-sm text-gf-muted">Based on recent nutrition check-ins</p>
+                      </div>
+                      <div className="rounded-xl border border-gf-border bg-gf-black/10 p-4">
+                        <p className="text-xs uppercase tracking-wide text-gf-muted">Latest check-in</p>
+                        <p className="mt-2 text-sm font-medium text-white">
+                          {latestNutritionCheckIn
+                            ? new Date(latestNutritionCheckIn.submitted_at).toLocaleDateString("en-GB")
+                            : "None yet"}
+                        </p>
+                        <p className="mt-1 text-sm text-gf-muted">
+                          {latestNutritionCheckIn?.week_label || "Add the first weekly nutrition check-in below"}
+                        </p>
+                      </div>
+                      <div className="rounded-xl border border-gf-border bg-gf-black/10 p-4">
+                        <p className="text-xs uppercase tracking-wide text-gf-muted">Latest nutrition log</p>
+                        <p className="mt-2 text-sm font-medium text-white">
+                          {latestNutritionLog?.entry_title || "None yet"}
+                        </p>
+                        <p className="mt-1 text-sm text-gf-muted">
+                          {latestNutritionLog
+                            ? `${latestNutritionLog.meal_slot} • ${new Date(latestNutritionLog.logged_at).toLocaleDateString("en-GB")}`
+                            : "Add the first real-world nutrition note below"}
+                        </p>
+                      </div>
+                    </div>
+
                     <div className="mb-4 flex items-center justify-between gap-4">
                       <div>
                         <p className="text-sm font-medium text-white">Nutrition habits</p>
@@ -846,6 +1095,359 @@ export function ClientDetailView({
                             </p>
                           </div>
                         )}
+                      </div>
+                    </div>
+
+                    <div className="mt-6 border-t border-gf-border pt-6">
+                      <div className="mb-4 flex items-center justify-between gap-4">
+                        <div>
+                          <p className="text-sm font-medium text-white">Nutrition check-ins</p>
+                          <p className="mt-1 text-sm text-gf-muted">
+                            Capture weekly nutrition adherence and follow-up context in the client workspace and workbook.
+                          </p>
+                        </div>
+                        <Badge variant={nutritionCheckIns.length ? "success" : "default"}>
+                          {nutritionCheckIns.length} logged
+                        </Badge>
+                      </div>
+
+                      <div className="grid gap-6 lg:grid-cols-[0.9fr,1.1fr]">
+                        <div className="rounded-xl border border-gf-border bg-gf-surface p-4">
+                          <div className="flex items-center justify-between gap-3">
+                            <p className="text-xs uppercase tracking-wide text-gf-muted">
+                              {editingNutritionCheckInId ? "Edit check-in" : "Add check-in"}
+                            </p>
+                            {editingNutritionCheckInId ? (
+                              <Button type="button" variant="ghost" size="sm" onClick={resetNutritionCheckInForm}>
+                                Cancel
+                              </Button>
+                            ) : null}
+                          </div>
+                          <form
+                            onSubmit={(event) => {
+                              if (editingNutritionCheckInId) {
+                                event.preventDefault()
+                                void handleUpdateNutritionCheckIn()
+                              } else {
+                                void handleSubmitNutritionCheckIn(event)
+                              }
+                            }}
+                            className="mt-4 space-y-4"
+                          >
+                            <div className="grid gap-4 sm:grid-cols-2">
+                              <div>
+                                <label className="block text-sm font-medium text-gf-muted">Date</label>
+                                <input
+                                  type="date"
+                                  value={nutritionCheckInForm.submitted_at}
+                                  onChange={(event) => setNutritionCheckInForm((current) => ({ ...current, submitted_at: event.target.value }))}
+                                  className="mt-1 w-full rounded-lg border border-gf-border bg-gf-black px-4 py-2.5 text-white focus:outline-none focus:border-gf-pink"
+                                />
+                              </div>
+                              <div>
+                                <label className="block text-sm font-medium text-gf-muted">Week label</label>
+                                <input
+                                  type="text"
+                                  value={nutritionCheckInForm.week_label}
+                                  onChange={(event) => setNutritionCheckInForm((current) => ({ ...current, week_label: event.target.value }))}
+                                  placeholder="e.g. Week of 8 April"
+                                  className="mt-1 w-full rounded-lg border border-gf-border bg-gf-black px-4 py-2.5 text-white focus:outline-none focus:border-gf-pink"
+                                />
+                              </div>
+                            </div>
+
+                            <div className="grid gap-4 sm:grid-cols-2">
+                              {[
+                                ["adherence_score", "Adherence"],
+                                ["energy_score", "Energy"],
+                                ["hunger_score", "Hunger"],
+                                ["digestion_score", "Digestion"],
+                                ["sleep_score", "Sleep"],
+                              ].map(([field, label]) => (
+                                <div key={field}>
+                                  <label className="block text-sm font-medium text-gf-muted">{label} (1-10)</label>
+                                  <input
+                                    type="number"
+                                    min="1"
+                                    max="10"
+                                    value={nutritionCheckInForm[field as keyof typeof nutritionCheckInForm] as string}
+                                    onChange={(event) =>
+                                      setNutritionCheckInForm((current) => ({
+                                        ...current,
+                                        [field]: event.target.value,
+                                      }))
+                                    }
+                                    className="mt-1 w-full rounded-lg border border-gf-border bg-gf-black px-4 py-2.5 text-white focus:outline-none focus:border-gf-pink"
+                                  />
+                                </div>
+                              ))}
+                            </div>
+
+                            <div>
+                              <label className="block text-sm font-medium text-gf-muted">Wins</label>
+                              <textarea
+                                value={nutritionCheckInForm.wins}
+                                onChange={(event) => setNutritionCheckInForm((current) => ({ ...current, wins: event.target.value }))}
+                                className="mt-1 min-h-[88px] w-full rounded-lg border border-gf-border bg-gf-black px-4 py-2.5 text-white focus:outline-none focus:border-gf-pink"
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-sm font-medium text-gf-muted">Struggles</label>
+                              <textarea
+                                value={nutritionCheckInForm.struggles}
+                                onChange={(event) => setNutritionCheckInForm((current) => ({ ...current, struggles: event.target.value }))}
+                                className="mt-1 min-h-[88px] w-full rounded-lg border border-gf-border bg-gf-black px-4 py-2.5 text-white focus:outline-none focus:border-gf-pink"
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-sm font-medium text-gf-muted">Coach follow-up note</label>
+                              <textarea
+                                value={nutritionCheckInForm.coach_follow_up_note}
+                                onChange={(event) =>
+                                  setNutritionCheckInForm((current) => ({ ...current, coach_follow_up_note: event.target.value }))
+                                }
+                                className="mt-1 min-h-[88px] w-full rounded-lg border border-gf-border bg-gf-black px-4 py-2.5 text-white focus:outline-none focus:border-gf-pink"
+                              />
+                            </div>
+
+                            {nutritionError ? <p className="text-sm text-red-400">{nutritionError}</p> : null}
+                            <Button type="submit" disabled={submittingNutritionCheckIn || updatingNutritionCheckIn}>
+                              {editingNutritionCheckInId
+                                ? updatingNutritionCheckIn ? "Saving..." : "Save check-in"
+                                : submittingNutritionCheckIn ? "Adding..." : "Add check-in"}
+                            </Button>
+                          </form>
+                        </div>
+
+                        <div className="rounded-xl border border-gf-border bg-gf-surface p-4">
+                          <p className="text-xs uppercase tracking-wide text-gf-muted">Recent check-ins</p>
+                          {nutritionCheckIns.length > 0 ? (
+                            <div className="mt-4 space-y-3">
+                              {nutritionCheckIns.map((checkIn) => (
+                                <div key={checkIn.id} className="rounded-xl border border-gf-border bg-gf-black/10 p-4">
+                                  <div className="flex items-start justify-between gap-3">
+                                    <div>
+                                      <div className="flex flex-wrap items-center gap-2">
+                                        <p className="font-medium text-white">
+                                          {checkIn.week_label || new Date(checkIn.submitted_at).toLocaleDateString("en-GB")}
+                                        </p>
+                                        <Badge variant="default">
+                                          {new Date(checkIn.submitted_at).toLocaleDateString("en-GB")}
+                                        </Badge>
+                                      </div>
+                                      <div className="mt-3 flex flex-wrap gap-2 text-xs text-gf-muted">
+                                        {checkIn.adherence_score ? <span>Adherence {checkIn.adherence_score}/10</span> : null}
+                                        {checkIn.energy_score ? <span>Energy {checkIn.energy_score}/10</span> : null}
+                                        {checkIn.hunger_score ? <span>Hunger {checkIn.hunger_score}/10</span> : null}
+                                        {checkIn.digestion_score ? <span>Digestion {checkIn.digestion_score}/10</span> : null}
+                                        {checkIn.sleep_score ? <span>Sleep {checkIn.sleep_score}/10</span> : null}
+                                      </div>
+                                      {checkIn.wins ? (
+                                        <p className="mt-3 text-sm text-gf-muted">
+                                          <span className="text-white">Wins:</span> {checkIn.wins}
+                                        </p>
+                                      ) : null}
+                                      {checkIn.struggles ? (
+                                        <p className="mt-2 text-sm text-gf-muted">
+                                          <span className="text-white">Struggles:</span> {checkIn.struggles}
+                                        </p>
+                                      ) : null}
+                                      {checkIn.coach_follow_up_note ? (
+                                        <p className="mt-2 text-sm text-gf-muted">
+                                          <span className="text-white">Coach follow-up:</span> {checkIn.coach_follow_up_note}
+                                        </p>
+                                      ) : null}
+                                    </div>
+                                    <Button type="button" variant="ghost" size="sm" onClick={() => beginEditNutritionCheckIn(checkIn)}>
+                                      Edit
+                                    </Button>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          ) : (
+                            <div className="mt-4 rounded-xl border border-dashed border-gf-border bg-gf-black/10 px-4 py-5">
+                              <p className="text-sm font-medium text-white">No check-ins yet</p>
+                              <p className="mt-1 text-sm text-gf-muted">
+                                Add the first nutrition check-in to start building accountability and coach review context.
+                              </p>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="mt-6 border-t border-gf-border pt-6">
+                      <div className="mb-4 flex items-center justify-between gap-4">
+                        <div>
+                          <p className="text-sm font-medium text-white">Nutrition log</p>
+                          <p className="mt-1 text-sm text-gf-muted">
+                            Capture real-world meals, reflections, and on-plan/off-plan context between weekly check-ins.
+                          </p>
+                        </div>
+                        <Badge variant={nutritionLogs.length ? "success" : "default"}>
+                          {nutritionLogs.length} entries
+                        </Badge>
+                      </div>
+
+                      <div className="grid gap-6 lg:grid-cols-[0.9fr,1.1fr]">
+                        <div className="rounded-xl border border-gf-border bg-gf-surface p-4">
+                          <div className="flex items-center justify-between gap-3">
+                            <p className="text-xs uppercase tracking-wide text-gf-muted">
+                              {editingNutritionLogId ? "Edit log entry" : "Add log entry"}
+                            </p>
+                            {editingNutritionLogId ? (
+                              <Button type="button" variant="ghost" size="sm" onClick={resetNutritionLogForm}>
+                                Cancel
+                              </Button>
+                            ) : null}
+                          </div>
+                          <form
+                            onSubmit={(event) => {
+                              if (editingNutritionLogId) {
+                                event.preventDefault()
+                                void handleUpdateNutritionLog()
+                              } else {
+                                void handleSubmitNutritionLog(event)
+                              }
+                            }}
+                            className="mt-4 space-y-4"
+                          >
+                            <div className="grid gap-4 sm:grid-cols-2">
+                              <div>
+                                <label className="block text-sm font-medium text-gf-muted">Date</label>
+                                <input
+                                  type="date"
+                                  value={nutritionLogForm.logged_at}
+                                  onChange={(event) => setNutritionLogForm((current) => ({ ...current, logged_at: event.target.value }))}
+                                  className="mt-1 w-full rounded-lg border border-gf-border bg-gf-black px-4 py-2.5 text-white focus:outline-none focus:border-gf-pink"
+                                />
+                              </div>
+                              <div>
+                                <label className="block text-sm font-medium text-gf-muted">Meal slot</label>
+                                <select
+                                  value={nutritionLogForm.meal_slot}
+                                  onChange={(event) => setNutritionLogForm((current) => ({ ...current, meal_slot: event.target.value }))}
+                                  className="mt-1 w-full rounded-lg border border-gf-border bg-gf-black px-4 py-2.5 text-white focus:outline-none focus:border-gf-pink"
+                                >
+                                  <option value="any">Any</option>
+                                  <option value="breakfast">Breakfast</option>
+                                  <option value="lunch">Lunch</option>
+                                  <option value="dinner">Dinner</option>
+                                  <option value="snacks">Snacks</option>
+                                </select>
+                              </div>
+                            </div>
+                            <div>
+                              <label className="block text-sm font-medium text-gf-muted">Entry title</label>
+                              <input
+                                type="text"
+                                value={nutritionLogForm.entry_title}
+                                onChange={(event) => setNutritionLogForm((current) => ({ ...current, entry_title: event.target.value }))}
+                                placeholder="e.g. Weekend dinner out"
+                                className="mt-1 w-full rounded-lg border border-gf-border bg-gf-black px-4 py-2.5 text-white focus:outline-none focus:border-gf-pink"
+                              />
+                            </div>
+                            <div className="grid gap-4 sm:grid-cols-2">
+                              <div>
+                                <label className="block text-sm font-medium text-gf-muted">Adherence</label>
+                                <select
+                                  value={nutritionLogForm.adherence_flag}
+                                  onChange={(event) => setNutritionLogForm((current) => ({ ...current, adherence_flag: event.target.value }))}
+                                  className="mt-1 w-full rounded-lg border border-gf-border bg-gf-black px-4 py-2.5 text-white focus:outline-none focus:border-gf-pink"
+                                >
+                                  <option value="flexible">Flexible</option>
+                                  <option value="on_plan">On plan</option>
+                                  <option value="off_plan">Off plan</option>
+                                </select>
+                              </div>
+                              <div>
+                                <label className="block text-sm font-medium text-gf-muted">Hunger (1-10)</label>
+                                <input
+                                  type="number"
+                                  min="1"
+                                  max="10"
+                                  value={nutritionLogForm.hunger_score}
+                                  onChange={(event) => setNutritionLogForm((current) => ({ ...current, hunger_score: event.target.value }))}
+                                  className="mt-1 w-full rounded-lg border border-gf-border bg-gf-black px-4 py-2.5 text-white focus:outline-none focus:border-gf-pink"
+                                />
+                              </div>
+                            </div>
+                            <div>
+                              <label className="block text-sm font-medium text-gf-muted">Notes</label>
+                              <textarea
+                                value={nutritionLogForm.notes}
+                                onChange={(event) => setNutritionLogForm((current) => ({ ...current, notes: event.target.value }))}
+                                className="mt-1 min-h-[88px] w-full rounded-lg border border-gf-border bg-gf-black px-4 py-2.5 text-white focus:outline-none focus:border-gf-pink"
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-sm font-medium text-gf-muted">Coach note</label>
+                              <textarea
+                                value={nutritionLogForm.coach_note}
+                                onChange={(event) => setNutritionLogForm((current) => ({ ...current, coach_note: event.target.value }))}
+                                className="mt-1 min-h-[88px] w-full rounded-lg border border-gf-border bg-gf-black px-4 py-2.5 text-white focus:outline-none focus:border-gf-pink"
+                              />
+                            </div>
+                            {nutritionError ? <p className="text-sm text-red-400">{nutritionError}</p> : null}
+                            <Button type="submit" disabled={submittingNutritionLog || updatingNutritionLog}>
+                              {editingNutritionLogId
+                                ? updatingNutritionLog ? "Saving..." : "Save log entry"
+                                : submittingNutritionLog ? "Adding..." : "Add log entry"}
+                            </Button>
+                          </form>
+                        </div>
+
+                        <div className="rounded-xl border border-gf-border bg-gf-surface p-4">
+                          <p className="text-xs uppercase tracking-wide text-gf-muted">Recent log entries</p>
+                          {nutritionLogs.length > 0 ? (
+                            <div className="mt-4 space-y-3">
+                              {nutritionLogs.map((log) => (
+                                <div key={log.id} className="rounded-xl border border-gf-border bg-gf-black/10 p-4">
+                                  <div className="flex items-start justify-between gap-3">
+                                    <div>
+                                      <div className="flex flex-wrap items-center gap-2">
+                                        <p className="font-medium text-white">{log.entry_title}</p>
+                                        <Badge variant="default">{log.meal_slot}</Badge>
+                                        <Badge
+                                          variant={
+                                            log.adherence_flag === "on_plan"
+                                              ? "success"
+                                              : log.adherence_flag === "off_plan"
+                                                ? "warning"
+                                                : "default"
+                                          }
+                                        >
+                                          {log.adherence_flag.replace(/_/g, " ")}
+                                        </Badge>
+                                      </div>
+                                      <p className="mt-2 text-xs text-gf-muted">
+                                        {new Date(log.logged_at).toLocaleString("en-GB")}
+                                        {log.hunger_score ? ` • Hunger ${log.hunger_score}/10` : ""}
+                                      </p>
+                                      {log.notes ? <p className="mt-3 text-sm text-gf-muted">{log.notes}</p> : null}
+                                      {log.coach_note ? (
+                                        <p className="mt-2 text-sm text-gf-muted">
+                                          <span className="text-white">Coach note:</span> {log.coach_note}
+                                        </p>
+                                      ) : null}
+                                    </div>
+                                    <Button type="button" variant="ghost" size="sm" onClick={() => beginEditNutritionLog(log)}>
+                                      Edit
+                                    </Button>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          ) : (
+                            <div className="mt-4 rounded-xl border border-dashed border-gf-border bg-gf-black/10 px-4 py-5">
+                              <p className="text-sm font-medium text-white">No nutrition logs yet</p>
+                              <p className="mt-1 text-sm text-gf-muted">
+                                Add day-to-day nutrition reflections here so coaches can review what happened between weekly check-ins.
+                              </p>
+                            </div>
+                          )}
+                        </div>
                       </div>
                     </div>
                   </div>

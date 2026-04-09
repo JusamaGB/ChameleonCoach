@@ -381,6 +381,39 @@ export interface ClientNutritionHabitAssignment {
   updated_at: string
 }
 
+export interface ClientNutritionCheckIn {
+  id: string
+  coach_id: string
+  client_id: string
+  submitted_at: string
+  week_label: string | null
+  adherence_score: number | null
+  energy_score: number | null
+  hunger_score: number | null
+  digestion_score: number | null
+  sleep_score: number | null
+  wins: string | null
+  struggles: string | null
+  coach_follow_up_note: string | null
+  created_at: string
+  updated_at: string
+}
+
+export interface ClientNutritionLogEntry {
+  id: string
+  coach_id: string
+  client_id: string
+  logged_at: string
+  meal_slot: "breakfast" | "lunch" | "dinner" | "snacks" | "any"
+  entry_title: string
+  notes: string | null
+  adherence_flag: "on_plan" | "off_plan" | "flexible"
+  hunger_score: number | null
+  coach_note: string | null
+  created_at: string
+  updated_at: string
+}
+
 export interface ProgressEntry {
   date: string
   weight: string

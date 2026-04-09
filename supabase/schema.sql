@@ -378,6 +378,41 @@ create table client_nutrition_habit_assignments (
   updated_at timestamptz default now()
 );
 
+create table client_nutrition_check_ins (
+  id uuid primary key default gen_random_uuid(),
+  coach_id uuid not null references auth.users(id) on delete cascade,
+  client_id uuid not null references clients(id) on delete cascade,
+  submitted_at timestamptz not null default now(),
+  week_label text,
+  adherence_score integer check (adherence_score between 1 and 10),
+  energy_score integer check (energy_score between 1 and 10),
+  hunger_score integer check (hunger_score between 1 and 10),
+  digestion_score integer check (digestion_score between 1 and 10),
+  sleep_score integer check (sleep_score between 1 and 10),
+  wins text,
+  struggles text,
+  coach_follow_up_note text,
+  created_at timestamptz default now(),
+  updated_at timestamptz default now()
+);
+
+create table client_nutrition_log_entries (
+  id uuid primary key default gen_random_uuid(),
+  coach_id uuid not null references auth.users(id) on delete cascade,
+  client_id uuid not null references clients(id) on delete cascade,
+  logged_at timestamptz not null default now(),
+  meal_slot text not null default 'any'
+    check (meal_slot in ('breakfast', 'lunch', 'dinner', 'snacks', 'any')),
+  entry_title text not null,
+  notes text,
+  adherence_flag text not null default 'flexible'
+    check (adherence_flag in ('on_plan', 'off_plan', 'flexible')),
+  hunger_score integer check (hunger_score between 1 and 10),
+  coach_note text,
+  created_at timestamptz default now(),
+  updated_at timestamptz default now()
+);
+
 create table product_requests (
   id uuid primary key default gen_random_uuid(),
   title text not null,
@@ -531,6 +566,8 @@ alter table nutrition_meal_plan_templates enable row level security;
 alter table nutrition_meal_plan_template_days enable row level security;
 alter table nutrition_habit_templates enable row level security;
 alter table client_nutrition_habit_assignments enable row level security;
+alter table client_nutrition_check_ins enable row level security;
+alter table client_nutrition_log_entries enable row level security;
 alter table product_requests enable row level security;
 alter table product_request_votes enable row level security;
 alter table product_request_comments enable row level security;
@@ -721,6 +758,12 @@ create policy "coach_own_nutrition_habit_templates" on nutrition_habit_templates
 create policy "coach_own_client_nutrition_habit_assignments" on client_nutrition_habit_assignments
   for all using (coach_id = auth.uid());
 
+create policy "coach_own_client_nutrition_check_ins" on client_nutrition_check_ins
+  for all using (coach_id = auth.uid());
+
+create policy "coach_own_client_nutrition_log_entries" on client_nutrition_log_entries
+  for all using (coach_id = auth.uid());
+
 create policy "authenticated_read_product_requests" on product_requests
   for select using (auth.uid() is not null);
 
@@ -837,6 +880,8 @@ create index idx_nutrition_templates_coach_id on nutrition_meal_plan_templates(c
 create index idx_nutrition_template_days_template_id on nutrition_meal_plan_template_days(template_id, day);
 create index idx_nutrition_habit_templates_coach_id on nutrition_habit_templates(coach_id, name);
 create index idx_client_nutrition_habit_assignments_client_id on client_nutrition_habit_assignments(client_id, status, created_at desc);
+create index idx_client_nutrition_check_ins_client_id on client_nutrition_check_ins(client_id, submitted_at desc);
+create index idx_client_nutrition_log_entries_client_id on client_nutrition_log_entries(client_id, logged_at desc);
 create index idx_product_requests_status on product_requests(status, created_at desc);
 create index idx_product_requests_module_area on product_requests(module_area, created_at desc);
 create index idx_product_requests_requester on product_requests(requester_user_id, created_at desc);

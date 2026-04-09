@@ -214,6 +214,10 @@ Client can view meal plan, log progress, manage appointments, and pay for confir
 - Coaches can create reusable nutrition recipes, meal-plan templates, and nutrition habit templates from the Nutrition Core module layer
 - Client nutrition workspaces now apply real coach-owned meal-plan templates instead of only local canned presets
 - Coaches can assign nutrition habits inside each client workspace, and those assignments sync into the client workbook's `Nutrition_Habits` tab
+- Coaches can now add weekly nutrition check-ins, capture adherence/energy/hunger/digestion/sleep signals, and store coach follow-up notes directly inside each client nutrition workspace
+- Nutrition check-ins now sync into the client workbook's `Nutrition_Check_Ins` tab as readable structured rows
+- Coaches can now add nutrition log entries for real-world meals/reflections, including meal slot, adherence flag, hunger signal, notes, and coach note
+- Nutrition log entries now sync into the client workbook's `Nutrition_Log` tab as readable structured rows
 - Assigning a PT program materialises concrete client sessions and session exercises instead of recomputing the plan on every load
 - Clients can view assigned PT sessions and submit workout logs through `/training` when PT Core is active
 - Coach client workspaces now include PT assignment state, recent training logs, and adherence context

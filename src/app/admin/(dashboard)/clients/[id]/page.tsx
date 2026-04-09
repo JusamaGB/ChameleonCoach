@@ -4,13 +4,17 @@ import { ClientDetailView } from "@/components/admin/client-detail-view"
 import { resolveActiveModules } from "@/lib/modules"
 import { getClientPTOverviewForCoach, listPTProgramsForCoach } from "@/lib/pt"
 import {
+  listClientNutritionCheckInsForCoach,
   listClientNutritionHabitAssignmentsForCoach,
+  listClientNutritionLogEntriesForCoach,
   listNutritionHabitTemplatesForCoach,
   listNutritionTemplatesForCoach,
 } from "@/lib/nutrition"
 import { redirect } from "next/navigation"
 import type {
+  ClientNutritionCheckIn,
   ClientNutritionHabitAssignment,
+  ClientNutritionLogEntry,
   MealPlanDay,
   NutritionHabitTemplate,
   NutritionMealPlanTemplate,
@@ -88,6 +92,8 @@ export default async function ClientDetailPage({
   let nutritionTemplates: Array<NutritionMealPlanTemplate & { days?: any[] }> = []
   let nutritionHabitTemplates: NutritionHabitTemplate[] = []
   let nutritionHabitAssignments: ClientNutritionHabitAssignment[] = []
+  let nutritionCheckIns: ClientNutritionCheckIn[] = []
+  let nutritionLogs: ClientNutritionLogEntry[] = []
 
   if (client.sheet_id) {
     try {
@@ -114,10 +120,12 @@ export default async function ClientDetailPage({
 
   if (activeModules.includes("nutrition_core")) {
     try {
-      ;[nutritionTemplates, nutritionHabitTemplates, nutritionHabitAssignments] = await Promise.all([
+      ;[nutritionTemplates, nutritionHabitTemplates, nutritionHabitAssignments, nutritionCheckIns, nutritionLogs] = await Promise.all([
         listNutritionTemplatesForCoach(supabase, user.id) as Promise<any>,
         listNutritionHabitTemplatesForCoach(supabase, user.id),
         listClientNutritionHabitAssignmentsForCoach(supabase, user.id, id),
+        listClientNutritionCheckInsForCoach(supabase, user.id, id),
+        listClientNutritionLogEntriesForCoach(supabase, user.id, id),
       ])
     } catch {
       // Nutrition data may not be available yet
@@ -137,6 +145,8 @@ export default async function ClientDetailPage({
       nutritionTemplates={nutritionTemplates as any}
       nutritionHabitTemplates={nutritionHabitTemplates}
       nutritionHabitAssignments={nutritionHabitAssignments}
+      nutritionCheckIns={nutritionCheckIns}
+      nutritionLogs={nutritionLogs}
     />
   )
 }

@@ -502,13 +502,13 @@ async function ensureClientWorkbookContent(
       ["assignment_id", "habit_template_id", "habit_name", "category", "target_count", "target_period", "meal_slot", "assigned_start_date", "status", "coaching_notes"],
       ["", "", "", "", "", "", "", "", "", ""],
     ])
-    await updateValues(sheets, spreadsheetId, "Nutrition_Check_Ins!A1:G2", [
-      ["check_in_id", "submitted_at", "week_label", "energy", "adherence", "wins", "struggles"],
-      ["", "", "", "", "", "", ""],
+    await updateValues(sheets, spreadsheetId, "Nutrition_Check_Ins!A1:J2", [
+      ["check_in_id", "submitted_at", "week_label", "adherence_score", "energy_score", "hunger_score", "digestion_score", "sleep_score", "wins", "struggles"],
+      ["", "", "", "", "", "", "", "", "", ""],
     ])
-    await updateValues(sheets, spreadsheetId, "Nutrition_Log!A1:G2", [
-      ["log_id", "logged_at", "meal_slot", "entry_title", "notes", "coach_note", "updated_at"],
-      ["", "", "", "", "", "", ""],
+    await updateValues(sheets, spreadsheetId, "Nutrition_Log!A1:H2", [
+      ["log_id", "logged_at", "meal_slot", "entry_title", "notes", "adherence_flag", "hunger_score", "coach_note"],
+      ["", "", "", "", "", "", "", ""],
     ])
   }
 

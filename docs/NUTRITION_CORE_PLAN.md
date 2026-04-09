@@ -18,10 +18,9 @@
 
 ### What is still missing
 
-- nutrition check-ins
 - nutrition habit logging
-- coach nutrition review surface
-- richer client nutrition logging/reflection loops
+- more complete coach-side nutrition review polish
+- client-side nutrition entry surfaces
 
 Nutrition Core is still materially thinner than PT Core.
 
@@ -66,6 +65,7 @@ Deliver:
 - nutrition habits
 - weekly nutrition check-ins
 - client nutrition notes/reflections
+- nutrition log entries
 
 ## Phase 4: Coach Nutrition Review
 
