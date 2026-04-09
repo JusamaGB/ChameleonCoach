@@ -56,6 +56,11 @@ create table clients (
   invite_expires_at timestamptz,
   invite_accepted_at timestamptz,
   onboarding_completed boolean default false,
+  provisioning_status text not null default 'pending'
+    check (provisioning_status in ('pending', 'provisioning', 'ready', 'failed')),
+  provisioning_started_at timestamptz,
+  provisioning_completed_at timestamptz,
+  provisioning_last_error text,
   sheet_shared_email text,
   sheet_shared_permission_id text,
   sheet_shared_at timestamptz,
@@ -96,6 +101,72 @@ create table appointment_slots (
   duration_minutes integer not null default 60,
   is_visible boolean not null default false,
   appointment_id uuid unique references appointments(id) on delete set null,
+  created_at timestamptz default now(),
+  updated_at timestamptz default now()
+);
+
+create table coach_payment_accounts (
+  id uuid primary key default gen_random_uuid(),
+  coach_id uuid not null references auth.users(id) on delete cascade unique,
+  stripe_account_id text not null unique,
+  account_type text not null default 'express'
+    check (account_type in ('express')),
+  onboarding_completed boolean not null default false,
+  details_submitted boolean not null default false,
+  charges_enabled boolean not null default false,
+  payouts_enabled boolean not null default false,
+  default_currency text not null default 'gbp',
+  country text not null default 'GB',
+  last_account_link_url text,
+  last_account_link_expires_at timestamptz,
+  created_at timestamptz default now(),
+  updated_at timestamptz default now()
+);
+
+create table coach_client_payment_customers (
+  id uuid primary key default gen_random_uuid(),
+  coach_id uuid not null references auth.users(id) on delete cascade,
+  client_id uuid not null references clients(id) on delete cascade,
+  stripe_account_id text not null,
+  stripe_customer_id text not null,
+  created_at timestamptz default now(),
+  updated_at timestamptz default now(),
+  unique (coach_id, client_id)
+);
+
+create table client_invoices (
+  id uuid primary key default gen_random_uuid(),
+  coach_id uuid not null references auth.users(id) on delete cascade,
+  client_id uuid not null references clients(id) on delete cascade,
+  stripe_account_id text not null,
+  stripe_customer_id text,
+  stripe_invoice_id text unique,
+  stripe_invoice_number text,
+  stripe_hosted_invoice_url text,
+  stripe_invoice_pdf_url text,
+  source_appointment_id uuid references appointments(id) on delete set null,
+  status text not null default 'draft'
+    check (status in ('draft', 'open', 'paid', 'void', 'uncollectible')),
+  currency text not null default 'gbp',
+  subtotal_amount integer not null default 0,
+  total_amount integer not null default 0,
+  due_date timestamptz,
+  description text,
+  internal_note text,
+  paid_at timestamptz,
+  voided_at timestamptz,
+  created_at timestamptz default now(),
+  updated_at timestamptz default now()
+);
+
+create table client_invoice_items (
+  id uuid primary key default gen_random_uuid(),
+  invoice_id uuid not null references client_invoices(id) on delete cascade,
+  label text not null,
+  description text,
+  quantity integer not null default 1,
+  unit_amount integer not null,
+  sort_order integer not null default 0,
   created_at timestamptz default now(),
   updated_at timestamptz default now()
 );
@@ -374,6 +445,22 @@ create table client_nutrition_habit_assignments (
   assigned_start_date date,
   status text not null default 'active'
     check (status in ('active', 'completed', 'cancelled')),
+  created_at timestamptz default now(),
+  updated_at timestamptz default now()
+);
+
+create table client_nutrition_habit_logs (
+  id uuid primary key default gen_random_uuid(),
+  coach_id uuid not null references auth.users(id) on delete cascade,
+  client_id uuid not null references clients(id) on delete cascade,
+  assignment_id uuid not null references client_nutrition_habit_assignments(id) on delete cascade,
+  logged_at timestamptz not null default now(),
+  completion_date date not null,
+  completion_status text not null default 'completed'
+    check (completion_status in ('completed', 'partial', 'missed')),
+  adherence_score integer check (adherence_score between 1 and 10),
+  notes text,
+  coach_note text,
   created_at timestamptz default now(),
   updated_at timestamptz default now()
 );
@@ -858,6 +945,13 @@ create index idx_appointments_google_calendar_event_id on appointments(google_ca
 create index idx_appointments_payment_checkout_session_id on appointments(payment_checkout_session_id);
 create index idx_appointment_slots_coach_id on appointment_slots(coach_id);
 create index idx_appointment_slots_starts_at on appointment_slots(starts_at);
+create index idx_coach_payment_accounts_coach_id on coach_payment_accounts(coach_id);
+create index idx_coach_client_payment_customers_coach_client on coach_client_payment_customers(coach_id, client_id);
+create index idx_client_invoices_coach_id on client_invoices(coach_id, created_at desc);
+create index idx_client_invoices_client_id on client_invoices(client_id, created_at desc);
+create index idx_client_invoices_status on client_invoices(status, created_at desc);
+create index idx_client_invoices_stripe_invoice_id on client_invoices(stripe_invoice_id);
+create index idx_client_invoice_items_invoice_id on client_invoice_items(invoice_id, sort_order);
 create index idx_exercises_coach_id on exercises(coach_id);
 create index idx_exercises_coach_id_category on exercises(coach_id, category);
 create index idx_exercises_coach_id_name on exercises(coach_id, name);
@@ -880,6 +974,8 @@ create index idx_nutrition_templates_coach_id on nutrition_meal_plan_templates(c
 create index idx_nutrition_template_days_template_id on nutrition_meal_plan_template_days(template_id, day);
 create index idx_nutrition_habit_templates_coach_id on nutrition_habit_templates(coach_id, name);
 create index idx_client_nutrition_habit_assignments_client_id on client_nutrition_habit_assignments(client_id, status, created_at desc);
+create index idx_client_nutrition_habit_logs_assignment_id on client_nutrition_habit_logs(assignment_id, completion_date desc);
+create index idx_client_nutrition_habit_logs_client_id on client_nutrition_habit_logs(client_id, completion_date desc);
 create index idx_client_nutrition_check_ins_client_id on client_nutrition_check_ins(client_id, submitted_at desc);
 create index idx_client_nutrition_log_entries_client_id on client_nutrition_log_entries(client_id, logged_at desc);
 create index idx_product_requests_status on product_requests(status, created_at desc);

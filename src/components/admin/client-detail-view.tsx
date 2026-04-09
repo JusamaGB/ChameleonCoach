@@ -17,6 +17,7 @@ import type {
   Client,
   ClientNutritionCheckIn,
   ClientNutritionHabitAssignment,
+  ClientNutritionHabitLog,
   ClientNutritionLogEntry,
   ClientPTLog,
   ClientPTProgramAssignment,
@@ -65,6 +66,7 @@ interface ClientDetailViewProps {
   nutritionTemplates: Array<NutritionMealPlanTemplate & { days?: NutritionMealPlanTemplateDay[] }>
   nutritionHabitTemplates: NutritionHabitTemplate[]
   nutritionHabitAssignments: ClientNutritionHabitAssignment[]
+  nutritionHabitLogs: ClientNutritionHabitLog[]
   nutritionCheckIns: ClientNutritionCheckIn[]
   nutritionLogs: ClientNutritionLogEntry[]
 }
@@ -81,6 +83,7 @@ export function ClientDetailView({
   nutritionTemplates,
   nutritionHabitTemplates,
   nutritionHabitAssignments,
+  nutritionHabitLogs,
   nutritionCheckIns,
   nutritionLogs,
 }: ClientDetailViewProps) {
@@ -147,6 +150,9 @@ export function ClientDetailView({
   })
   const [savingSessionExercise, setSavingSessionExercise] = useState(false)
   const [assignmentError, setAssignmentError] = useState("")
+  const [repairingWorkspace, setRepairingWorkspace] = useState(false)
+  const [workspaceMessage, setWorkspaceMessage] = useState("")
+  const [workspaceError, setWorkspaceError] = useState("")
 
   const sheetUrl = client.sheet_id
     ? `https://docs.google.com/spreadsheets/d/${client.sheet_id}`
@@ -654,6 +660,15 @@ export function ClientDetailView({
   }
 
   const activeNutritionHabitsCount = nutritionHabitAssignments.filter((habit) => habit.status === "active").length
+  const todayKey = new Date().toISOString().slice(0, 10)
+  const habitLogsThisWeek = nutritionHabitLogs.filter((log) => {
+    const date = new Date(log.completion_date)
+    const now = new Date()
+    const diffDays = Math.floor((now.getTime() - date.getTime()) / 86400000)
+    return diffDays >= 0 && diffDays < 7
+  })
+  const completedHabitLogsThisWeek = habitLogsThisWeek.filter((log) => log.completion_status === "completed").length
+  const latestHabitLog = nutritionHabitLogs[0] ?? null
   const latestNutritionCheckIn = nutritionCheckIns[0] ?? null
   const averageAdherence = nutritionCheckIns.length
     ? Math.round(
@@ -688,6 +703,42 @@ export function ClientDetailView({
     }
   }
 
+  function provisioningBadge() {
+    switch (client.provisioning_status) {
+      case "ready":
+        return <Badge variant="success">Workspace ready</Badge>
+      case "provisioning":
+        return <Badge variant="warning">Provisioning</Badge>
+      case "failed":
+        return <Badge variant="warning">Needs repair</Badge>
+      default:
+        return <Badge>Awaiting setup</Badge>
+    }
+  }
+
+  async function handleRepairWorkspace() {
+    setRepairingWorkspace(true)
+    setWorkspaceMessage("")
+    setWorkspaceError("")
+
+    try {
+      const response = await fetch(`/api/admin/clients/${client.id}/repair-workspace`, {
+        method: "POST",
+      })
+      const data = await response.json().catch(() => ({}))
+      if (!response.ok) {
+        throw new Error(data.error || "Failed to repair workspace")
+      }
+
+      setWorkspaceMessage("Client workspace repaired. Refreshing the latest state...")
+      router.refresh()
+    } catch (error) {
+      setWorkspaceError(error instanceof Error ? error.message : "Failed to repair workspace")
+    } finally {
+      setRepairingWorkspace(false)
+    }
+  }
+
   return (
     <div className="max-w-4xl mx-auto">
       <Link
@@ -704,11 +755,8 @@ export function ClientDetailView({
           <p className="text-gf-muted">{client.email}</p>
         </div>
         <div className="flex items-center gap-3">
-          {client.onboarding_completed ? (
-            <Badge variant="success">Active</Badge>
-          ) : (
-            <Badge variant="warning">Pending</Badge>
-          )}
+          {client.onboarding_completed ? <Badge variant="success">Active</Badge> : <Badge variant="warning">Pending</Badge>}
+          {provisioningBadge()}
           {sheetUrl && (
             <a
               href={sheetUrl}
@@ -737,6 +785,39 @@ export function ClientDetailView({
         <p className="mt-2 text-sm text-gf-muted">
           Client-specific work stays here. Workspace-level tools like modules, exercises, billing, and settings stay outside this client context.
         </p>
+        <div className="mt-4 rounded-xl border border-gf-border bg-gf-surface p-4">
+          <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+            <div>
+              <p className="text-sm font-medium text-white">Provisioning status</p>
+              <div className="mt-2 flex flex-wrap items-center gap-2">
+                {provisioningBadge()}
+                {client.sheet_id ? <Badge variant="success">Sheet linked</Badge> : <Badge>Sheet pending</Badge>}
+                {client.sheet_shared_at ? <Badge variant="success">Shared to client</Badge> : <Badge>Sharing pending</Badge>}
+              </div>
+              {client.provisioning_last_error ? (
+                <p className="mt-3 text-sm text-yellow-300">{client.provisioning_last_error}</p>
+              ) : null}
+              {workspaceMessage ? (
+                <p className="mt-3 text-sm text-green-400">{workspaceMessage}</p>
+              ) : null}
+              {workspaceError ? (
+                <p className="mt-3 text-sm text-red-400">{workspaceError}</p>
+              ) : null}
+            </div>
+            <Button
+              size="sm"
+              variant={client.provisioning_status === "ready" ? "secondary" : "primary"}
+              onClick={handleRepairWorkspace}
+              disabled={repairingWorkspace}
+            >
+              {repairingWorkspace
+                ? "Repairing..."
+                : client.provisioning_status === "ready"
+                  ? "Re-sync workspace"
+                  : "Repair workspace"}
+            </Button>
+          </div>
+        </div>
         <div className="mt-4 flex flex-wrap gap-2">
           {workspaceSections.map((section) => (
             <a
@@ -936,6 +1017,17 @@ export function ClientDetailView({
                         <p className="mt-1 text-sm text-gf-muted">Based on recent nutrition check-ins</p>
                       </div>
                       <div className="rounded-xl border border-gf-border bg-gf-black/10 p-4">
+                        <p className="text-xs uppercase tracking-wide text-gf-muted">Habit logs (7d)</p>
+                        <p className="mt-2 text-2xl font-semibold text-white">
+                          {habitLogsThisWeek.length ? `${completedHabitLogsThisWeek}/${habitLogsThisWeek.length}` : "No data"}
+                        </p>
+                        <p className="mt-1 text-sm text-gf-muted">
+                          {latestHabitLog
+                            ? `Latest ${latestHabitLog.completion_status} on ${new Date(latestHabitLog.completion_date).toLocaleDateString("en-GB")}`
+                            : "Waiting for the first client habit completion"}
+                        </p>
+                      </div>
+                      <div className="rounded-xl border border-gf-border bg-gf-black/10 p-4">
                         <p className="text-xs uppercase tracking-wide text-gf-muted">Latest check-in</p>
                         <p className="mt-2 text-sm font-medium text-white">
                           {latestNutritionCheckIn
@@ -1096,6 +1188,67 @@ export function ClientDetailView({
                           </div>
                         )}
                       </div>
+                    </div>
+
+                    <div className="mt-6 border-t border-gf-border pt-6">
+                      <div className="mb-4 flex items-center justify-between gap-4">
+                        <div>
+                          <p className="text-sm font-medium text-white">Habit completion log</p>
+                          <p className="mt-1 text-sm text-gf-muted">
+                            Review client-submitted habit completions and quick adherence notes.
+                          </p>
+                        </div>
+                        <Badge variant={nutritionHabitLogs.length ? "success" : "default"}>
+                          {nutritionHabitLogs.length} logged
+                        </Badge>
+                      </div>
+                      {nutritionHabitLogs.length > 0 ? (
+                        <div className="space-y-3">
+                          {nutritionHabitLogs.map((log) => {
+                            const relatedHabit = nutritionHabitAssignments.find((habit) => habit.id === log.assignment_id)
+                            return (
+                              <div key={log.id} className="rounded-xl border border-gf-border bg-gf-surface p-4">
+                                <div className="flex items-start justify-between gap-3">
+                                  <div>
+                                    <div className="flex flex-wrap items-center gap-2">
+                                      <p className="font-medium text-white">{relatedHabit?.habit_name_snapshot ?? "Nutrition habit"}</p>
+                                      <Badge
+                                        variant={
+                                          log.completion_status === "completed"
+                                            ? "success"
+                                            : log.completion_status === "partial"
+                                              ? "warning"
+                                              : "default"
+                                        }
+                                      >
+                                        {log.completion_status}
+                                      </Badge>
+                                      {log.adherence_score ? <Badge variant="default">{log.adherence_score}/10</Badge> : null}
+                                      {log.completion_date === todayKey ? <Badge variant="default">Today</Badge> : null}
+                                    </div>
+                                    <p className="mt-2 text-xs text-gf-muted">
+                                      {new Date(log.completion_date).toLocaleDateString("en-GB")} • Logged {new Date(log.logged_at).toLocaleString("en-GB")}
+                                    </p>
+                                    {log.notes ? <p className="mt-2 text-sm text-gf-muted">{log.notes}</p> : null}
+                                    {log.coach_note ? (
+                                      <p className="mt-2 text-sm text-gf-muted">
+                                        <span className="text-white">Coach note:</span> {log.coach_note}
+                                      </p>
+                                    ) : null}
+                                  </div>
+                                </div>
+                              </div>
+                            )
+                          })}
+                        </div>
+                      ) : (
+                        <div className="rounded-xl border border-dashed border-gf-border bg-gf-black/10 px-4 py-5">
+                          <p className="text-sm font-medium text-white">No habit logs yet</p>
+                          <p className="mt-1 text-sm text-gf-muted">
+                            Once clients start marking nutrition habits complete or missed, review context will appear here.
+                          </p>
+                        </div>
+                      )}
                     </div>
 
                     <div className="mt-6 border-t border-gf-border pt-6">

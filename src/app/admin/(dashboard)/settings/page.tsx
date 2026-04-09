@@ -281,6 +281,21 @@ export default function SettingsPage() {
             </div>
             <ArrowRight size={16} className="text-gf-muted" />
           </Link>
+          <Link
+            href="/admin/payments"
+            className="flex items-center justify-between rounded-xl border border-gf-border bg-gf-surface p-4 text-sm text-white transition-colors hover:border-gf-pink/40"
+          >
+            <div className="flex items-start gap-3">
+              <CreditCard size={18} className="mt-0.5 text-gf-pink" />
+              <div>
+                <p className="font-medium">Payments</p>
+                <p className="mt-1 text-xs text-gf-muted">
+                  Connect Stripe for client-to-coach invoices and payment collection.
+                </p>
+              </div>
+            </div>
+            <ArrowRight size={16} className="text-gf-muted" />
+          </Link>
         </div>
       </Card>
 

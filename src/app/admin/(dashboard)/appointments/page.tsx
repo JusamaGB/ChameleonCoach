@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useMemo, useState } from "react"
+import Link from "next/link"
 import { Card } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -806,7 +807,17 @@ export default function AdminAppointmentsPage() {
                   </div>
                 </div>
                 {a.payment_status !== "paid" ? (
-                  <PaymentRequestForm appointment={a} onDone={load} />
+                  <div className="mt-3 space-y-3">
+                    <PaymentRequestForm appointment={a} onDone={load} />
+                    {a.clients?.id ? (
+                      <Link
+                        href={`/admin/payments?client_id=${encodeURIComponent(a.clients.id)}&source_appointment_id=${encodeURIComponent(a.id)}&amount=${encodeURIComponent(((a.session_price_amount ?? 0) / 100).toFixed(2))}&description=${encodeURIComponent("Invoice for confirmed coaching session")}`}
+                        className="inline-flex text-sm text-gf-pink hover:text-gf-pink-light transition-colors"
+                      >
+                        Create invoice instead
+                      </Link>
+                    ) : null}
+                  </div>
                 ) : null}
               </Card>
             ))}

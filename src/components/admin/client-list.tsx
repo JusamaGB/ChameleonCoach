@@ -48,6 +48,19 @@ export function ClientList({ clients }: ClientListProps) {
     })
   }
 
+  function provisioningBadge(client: Client) {
+    switch (client.provisioning_status) {
+      case "ready":
+        return <Badge variant="success">Workspace ready</Badge>
+      case "provisioning":
+        return <Badge variant="warning">Provisioning</Badge>
+      case "failed":
+        return <Badge variant="warning">Needs repair</Badge>
+      default:
+        return <Badge>Awaiting setup</Badge>
+    }
+  }
+
   async function revokeInvite(client: Client) {
     setBusyId(client.id)
     setActionError("")
@@ -187,7 +200,14 @@ export function ClientList({ clients }: ClientListProps) {
                   <FileText size={12} />
                   {client.sheet_id ? "Sheet linked" : "Sheet pending"}
                 </div>
+                {provisioningBadge(client)}
               </div>
+
+              {client.provisioning_status === "failed" && client.provisioning_last_error ? (
+                <p className="mt-3 text-xs text-yellow-300">
+                  {client.provisioning_last_error}
+                </p>
+              ) : null}
 
               <div className="mt-5 flex flex-wrap gap-3">
                 <Link

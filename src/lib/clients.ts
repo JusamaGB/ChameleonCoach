@@ -134,6 +134,7 @@ export async function insertClientForCoach(
     coach_id: coachId,
     invite_token: inviteToken,
     invite_expires_at: inviteExpiresAt,
+    provisioning_status: "pending",
   })
 
   if (!isMissingCoachIdColumn(scopedInsert.error)) {
@@ -145,6 +146,7 @@ export async function insertClientForCoach(
     email,
     invite_token: inviteToken,
     invite_expires_at: inviteExpiresAt,
+    provisioning_status: "pending",
   })
 }
 
@@ -191,6 +193,30 @@ export async function findClientInviteByToken(
     },
     error: null,
   }
+}
+
+export async function findClientByIdForCoach(
+  supabase: { from: (table: string) => any },
+  coachId: string,
+  clientId: string,
+  selectClause = "*"
+) {
+  const scopedQuery = await supabase
+    .from("clients")
+    .select(selectClause)
+    .eq("id", clientId)
+    .eq("coach_id", coachId)
+    .maybeSingle()
+
+  if (!isMissingCoachIdColumn(scopedQuery.error)) {
+    return scopedQuery
+  }
+
+  return supabase
+    .from("clients")
+    .select(selectClause)
+    .eq("id", clientId)
+    .maybeSingle()
 }
 
 export async function deleteClientsForCoach(

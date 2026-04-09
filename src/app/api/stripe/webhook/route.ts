@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server"
 import { getStripe } from "@/lib/stripe"
 import { createAdmin } from "@/lib/supabase/server"
+import { syncInvoiceFromStripeEvent } from "@/lib/coach-payments"
 import type Stripe from "stripe"
 
 export const runtime = "nodejs"
@@ -25,10 +26,43 @@ export async function POST(request: NextRequest) {
   }
 
   const supabase = createAdmin()
+  const connectedAccountId = event.account ?? null
+
+  if (connectedAccountId && event.type === "account.updated") {
+    const account = event.data.object as Stripe.Account
+    await supabase
+      .from("coach_payment_accounts")
+      .update({
+        onboarding_completed: Boolean(account.details_submitted),
+        details_submitted: Boolean(account.details_submitted),
+        charges_enabled: Boolean(account.charges_enabled),
+        payouts_enabled: Boolean(account.payouts_enabled),
+        default_currency: account.default_currency || "gbp",
+        country: account.country || "GB",
+        updated_at: new Date().toISOString(),
+      })
+      .eq("stripe_account_id", account.id)
+  }
 
   if (
+    connectedAccountId &&
+    (
+      event.type === "invoice.finalized"
+      || event.type === "invoice.sent"
+      || event.type === "invoice.paid"
+      || event.type === "invoice.payment_failed"
+      || event.type === "invoice.voided"
+      || event.type === "invoice.updated"
+    )
+  ) {
+    const invoice = event.data.object as Stripe.Invoice
+    await syncInvoiceFromStripeEvent(supabase, invoice, connectedAccountId)
+  }
+
+  if (
+    !connectedAccountId &&
     event.type === "customer.subscription.updated" ||
-    event.type === "customer.subscription.deleted"
+    !connectedAccountId && event.type === "customer.subscription.deleted"
   ) {
     const subscription = event.data.object as Stripe.Subscription
     await supabase
@@ -43,7 +77,7 @@ export async function POST(request: NextRequest) {
       .eq("stripe_customer_id", subscription.customer as string)
   }
 
-  if (event.type === "invoice.payment_failed") {
+  if (!connectedAccountId && event.type === "invoice.payment_failed") {
     const invoice = event.data.object as Stripe.Invoice
     await supabase
       .from("user_roles")

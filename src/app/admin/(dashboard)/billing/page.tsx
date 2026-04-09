@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge"
 import { BillingActions } from "@/components/admin/billing-actions"
 import { getStripe } from "@/lib/stripe"
 import Stripe from "stripe"
+import Link from "next/link"
 
 export const dynamic = "force-dynamic"
 
@@ -66,6 +67,9 @@ export default async function BillingPage() {
   return (
     <div className="p-8 max-w-xl">
       <h1 className="text-2xl font-bold mb-6">Billing</h1>
+      <p className="mb-6 text-sm text-gf-muted">
+        This page is only for your Chameleon platform subscription. Client-to-coach invoices and payments live in <Link href="/admin/payments" className="text-gf-pink hover:text-gf-pink-light">Payments</Link>.
+      </p>
 
       <Card>
         <div className="space-y-4">

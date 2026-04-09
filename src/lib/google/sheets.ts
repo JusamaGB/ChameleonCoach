@@ -3,6 +3,7 @@ import { getAuthedClient } from "./auth"
 import type {
   ClientNutritionCheckIn,
   ClientNutritionHabitAssignment,
+  ClientNutritionHabitLog,
   ClientNutritionLogEntry,
   ClientPTLog,
   ClientPTLogExercise,
@@ -601,12 +602,13 @@ export async function syncClientNutritionHabitSheets(
   sheetId: string,
   coachId: string,
   habits: ClientNutritionHabitAssignment[],
+  habitLogs: ClientNutritionHabitLog[] = [],
   checkIns: ClientNutritionCheckIn[] = [],
   logs: ClientNutritionLogEntry[] = []
 ) {
   await ensureSpreadsheetTabs(
     sheetId,
-    ["Nutrition_Habits", "Nutrition_Check_Ins", "Nutrition_Log"],
+    ["Nutrition_Habits", "Nutrition_Habit_Log", "Nutrition_Check_Ins", "Nutrition_Log"],
     coachId
   )
 
@@ -626,6 +628,26 @@ export async function syncClientNutritionHabitSheets(
         habit.assigned_start_date ?? "",
         habit.status,
         habit.coaching_notes ?? "",
+      ]),
+    ],
+    coachId
+  )
+
+  await overwriteTab(
+    sheetId,
+    "Nutrition_Habit_Log",
+    [
+      ["habit_log_id", "assignment_id", "habit_name", "completion_date", "completion_status", "adherence_score", "notes", "coach_note", "logged_at"],
+      ...habitLogs.map((log) => [
+        log.id,
+        log.assignment_id,
+        habits.find((habit) => habit.id === log.assignment_id)?.habit_name_snapshot ?? "",
+        log.completion_date,
+        log.completion_status,
+        log.adherence_score ?? "",
+        log.notes ?? "",
+        log.coach_note ?? "",
+        log.logged_at,
       ]),
     ],
     coachId

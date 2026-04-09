@@ -11,6 +11,10 @@ export interface Client {
   invite_expires_at: string | null
   invite_accepted_at: string | null
   onboarding_completed: boolean
+  provisioning_status: "pending" | "provisioning" | "ready" | "failed"
+  provisioning_started_at: string | null
+  provisioning_completed_at: string | null
+  provisioning_last_error: string | null
   sheet_shared_email: string | null
   sheet_shared_permission_id: string | null
   sheet_shared_at: string | null
@@ -38,6 +42,69 @@ export interface Appointment {
   payment_failed_at: string | null
   google_calendar_event_id: string | null
   google_calendar_event_link: string | null
+  created_at: string
+  updated_at: string
+}
+
+export interface CoachPaymentAccount {
+  id: string
+  coach_id: string
+  stripe_account_id: string
+  account_type: "express"
+  onboarding_completed: boolean
+  details_submitted: boolean
+  charges_enabled: boolean
+  payouts_enabled: boolean
+  default_currency: string
+  country: string
+  last_account_link_url: string | null
+  last_account_link_expires_at: string | null
+  created_at: string
+  updated_at: string
+}
+
+export interface CoachClientPaymentCustomer {
+  id: string
+  coach_id: string
+  client_id: string
+  stripe_account_id: string
+  stripe_customer_id: string
+  created_at: string
+  updated_at: string
+}
+
+export interface ClientInvoice {
+  id: string
+  coach_id: string
+  client_id: string
+  stripe_account_id: string
+  stripe_customer_id: string | null
+  stripe_invoice_id: string | null
+  stripe_invoice_number: string | null
+  stripe_hosted_invoice_url: string | null
+  stripe_invoice_pdf_url: string | null
+  source_appointment_id: string | null
+  status: "draft" | "open" | "paid" | "void" | "uncollectible"
+  currency: string
+  subtotal_amount: number
+  total_amount: number
+  due_date: string | null
+  description: string | null
+  internal_note: string | null
+  paid_at: string | null
+  voided_at: string | null
+  created_at: string
+  updated_at: string
+}
+
+export interface ClientInvoiceItem {
+  id: string
+  invoice_id: string
+  label: string
+  description: string | null
+  quantity: number
+  unit_amount: number
+  sort_order: number
   created_at: string
   updated_at: string
 }
@@ -377,6 +444,21 @@ export interface ClientNutritionHabitAssignment {
   coaching_notes: string | null
   assigned_start_date: string | null
   status: "active" | "completed" | "cancelled"
+  created_at: string
+  updated_at: string
+}
+
+export interface ClientNutritionHabitLog {
+  id: string
+  coach_id: string
+  client_id: string
+  assignment_id: string
+  logged_at: string
+  completion_date: string
+  completion_status: "completed" | "partial" | "missed"
+  adherence_score: number | null
+  notes: string | null
+  coach_note: string | null
   created_at: string
   updated_at: string
 }

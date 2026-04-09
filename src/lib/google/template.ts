@@ -460,7 +460,7 @@ async function ensureClientWorkbookContent(
 ) {
   const clientTabs = ["Profile", "Meal Plan", "Progress"]
   if (activeModules.includes("nutrition_core")) {
-    clientTabs.push("Nutrition_Habits", "Nutrition_Check_Ins", "Nutrition_Log")
+    clientTabs.push("Nutrition_Habits", "Nutrition_Habit_Log", "Nutrition_Check_Ins", "Nutrition_Log")
   }
   if (activeModules.includes("pt_core")) {
     clientTabs.push("Training_Plan", "Training_Plan_Exercises", "Workout_Log", "Workout_Log_Exercises")
@@ -501,6 +501,10 @@ async function ensureClientWorkbookContent(
     await updateValues(sheets, spreadsheetId, "Nutrition_Habits!A1:J2", [
       ["assignment_id", "habit_template_id", "habit_name", "category", "target_count", "target_period", "meal_slot", "assigned_start_date", "status", "coaching_notes"],
       ["", "", "", "", "", "", "", "", "", ""],
+    ])
+    await updateValues(sheets, spreadsheetId, "Nutrition_Habit_Log!A1:I2", [
+      ["habit_log_id", "assignment_id", "habit_name", "completion_date", "completion_status", "adherence_score", "notes", "coach_note", "logged_at"],
+      ["", "", "", "", "", "", "", "", ""],
     ])
     await updateValues(sheets, spreadsheetId, "Nutrition_Check_Ins!A1:J2", [
       ["check_in_id", "submitted_at", "week_label", "adherence_score", "energy_score", "hunger_score", "digestion_score", "sleep_score", "wins", "struggles"],

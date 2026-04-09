@@ -48,6 +48,13 @@ export default async function MealPlanPage() {
             Meal Plan
           </h1>
           <p className="text-gf-muted mb-8">Your weekly nutrition plan</p>
+          <a
+            href="/nutrition"
+            className="mb-6 inline-flex text-sm font-semibold"
+            style={{ color: branding.brand_primary_color }}
+          >
+            Open nutrition workspace
+          </a>
           <MealPlanView
             mealPlan={mealPlan}
             highlightToday

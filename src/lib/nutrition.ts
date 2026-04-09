@@ -1,6 +1,7 @@
 import type {
   ClientNutritionCheckIn,
   ClientNutritionHabitAssignment,
+  ClientNutritionHabitLog,
   ClientNutritionLogEntry,
   MealPlanDay,
   NutritionHabitTemplate,
@@ -96,12 +97,13 @@ async function syncClientNutritionWorkbook(
 
     if (!client?.sheet_id) return
 
-    const [habits, checkIns, logs] = await Promise.all([
+    const [habits, habitLogs, checkIns, logs] = await Promise.all([
       listClientNutritionHabitAssignmentsForCoach(supabase, coachId, clientId),
+      listClientNutritionHabitLogsForCoach(supabase, coachId, clientId),
       listClientNutritionCheckInsForCoach(supabase, coachId, clientId),
       listClientNutritionLogEntriesForCoach(supabase, coachId, clientId),
     ])
-    await syncClientNutritionHabitSheets(client.sheet_id, coachId, habits, checkIns, logs)
+    await syncClientNutritionHabitSheets(client.sheet_id, coachId, habits, habitLogs, checkIns, logs)
   } catch (error) {
     console.error("Client nutrition workbook sync failed", error)
   }
@@ -467,6 +469,72 @@ export async function updateClientNutritionHabitAssignment(
   return data as ClientNutritionHabitAssignment
 }
 
+export async function listClientNutritionHabitLogsForCoach(
+  supabase: { from: (table: string) => any },
+  coachId: string,
+  clientId: string
+) {
+  const { data, error } = await supabase
+    .from("client_nutrition_habit_logs")
+    .select("*")
+    .eq("coach_id", coachId)
+    .eq("client_id", clientId)
+    .order("completion_date", { ascending: false })
+    .order("created_at", { ascending: false })
+
+  if (error) throw error
+  return (data ?? []) as ClientNutritionHabitLog[]
+}
+
+export async function createClientNutritionHabitLog(
+  supabase: { from: (table: string) => any },
+  coachId: string,
+  clientId: string,
+  payload: Partial<ClientNutritionHabitLog> & { assignment_id: string }
+) {
+  const { data: assignment, error: assignmentError } = await supabase
+    .from("client_nutrition_habit_assignments")
+    .select("id, coach_id, client_id")
+    .eq("id", payload.assignment_id)
+    .eq("coach_id", coachId)
+    .eq("client_id", clientId)
+    .single()
+
+  if (assignmentError || !assignment) {
+    throw assignmentError ?? new Error("Nutrition habit assignment not found")
+  }
+
+  const completionDate =
+    typeof payload.completion_date === "string" && payload.completion_date.length > 0
+      ? payload.completion_date
+      : new Date().toISOString().slice(0, 10)
+
+  const { data, error } = await supabase
+    .from("client_nutrition_habit_logs")
+    .insert({
+      coach_id: coachId,
+      client_id: clientId,
+      assignment_id: assignment.id,
+      logged_at: payload.logged_at ?? new Date().toISOString(),
+      completion_date: completionDate,
+      completion_status:
+        payload.completion_status === "missed"
+          ? "missed"
+          : payload.completion_status === "partial"
+            ? "partial"
+            : "completed",
+      adherence_score: cleanNumber(payload.adherence_score),
+      notes: cleanText(payload.notes),
+      coach_note: cleanText(payload.coach_note),
+    })
+    .select("*")
+    .single()
+
+  if (error) throw error
+  await syncClientNutritionWorkbook(supabase, coachId, clientId)
+  return data as ClientNutritionHabitLog
+}
+
 export async function listClientNutritionCheckInsForCoach(
   supabase: { from: (table: string) => any },
   coachId: string,
@@ -623,4 +691,88 @@ export async function updateClientNutritionLogEntry(
   if (error) throw error
   await syncClientNutritionWorkbook(supabase, coachId, clientId)
   return data as ClientNutritionLogEntry
+}
+
+export async function getClientNutritionContextForUser(
+  supabase: { from: (table: string) => any },
+  userId: string
+) {
+  const { data: client, error: clientError } = await supabase
+    .from("clients")
+    .select("id, coach_id, name, sheet_id")
+    .eq("user_id", userId)
+    .maybeSingle()
+
+  if (clientError || !client || !client.coach_id) {
+    throw clientError ?? new Error("Client workspace not found")
+  }
+
+  const [habits, habitLogs, checkIns, logs] = await Promise.all([
+    listClientNutritionHabitAssignmentsForCoach(supabase, client.coach_id, client.id),
+    listClientNutritionHabitLogsForCoach(supabase, client.coach_id, client.id),
+    listClientNutritionCheckInsForCoach(supabase, client.coach_id, client.id),
+    listClientNutritionLogEntriesForCoach(supabase, client.coach_id, client.id),
+  ])
+
+  return {
+    client,
+    habits,
+    habit_logs: habitLogs,
+    check_ins: checkIns,
+    logs,
+  }
+}
+
+export async function createClientNutritionCheckInForUser(
+  supabase: { from: (table: string) => any },
+  userId: string,
+  payload: Partial<ClientNutritionCheckIn>
+) {
+  const { data: client, error } = await supabase
+    .from("clients")
+    .select("id, coach_id")
+    .eq("user_id", userId)
+    .maybeSingle()
+
+  if (error || !client?.coach_id) {
+    throw error ?? new Error("Client workspace not found")
+  }
+
+  return createClientNutritionCheckIn(supabase, client.coach_id, client.id, payload)
+}
+
+export async function createClientNutritionLogEntryForUser(
+  supabase: { from: (table: string) => any },
+  userId: string,
+  payload: Partial<ClientNutritionLogEntry>
+) {
+  const { data: client, error } = await supabase
+    .from("clients")
+    .select("id, coach_id")
+    .eq("user_id", userId)
+    .maybeSingle()
+
+  if (error || !client?.coach_id) {
+    throw error ?? new Error("Client workspace not found")
+  }
+
+  return createClientNutritionLogEntry(supabase, client.coach_id, client.id, payload)
+}
+
+export async function createClientNutritionHabitLogForUser(
+  supabase: { from: (table: string) => any },
+  userId: string,
+  payload: Partial<ClientNutritionHabitLog> & { assignment_id: string }
+) {
+  const { data: client, error } = await supabase
+    .from("clients")
+    .select("id, coach_id")
+    .eq("user_id", userId)
+    .maybeSingle()
+
+  if (error || !client?.coach_id) {
+    throw error ?? new Error("Client workspace not found")
+  }
+
+  return createClientNutritionHabitLog(supabase, client.coach_id, client.id, payload)
 }

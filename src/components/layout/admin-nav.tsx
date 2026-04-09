@@ -16,6 +16,7 @@ import {
   X,
   Gem,
   Lightbulb,
+  CreditCard,
 } from "lucide-react"
 import { PLATFORM_NAME } from "@/lib/platform"
 
@@ -25,6 +26,7 @@ const navItems = [
   { href: "/admin/appointments", label: "Appointments", icon: Calendar },
   { href: "/admin/requests", label: "Requests", icon: Lightbulb },
   { href: "/admin/modules", label: "Modules", icon: Layers3 },
+  { href: "/admin/payments", label: "Payments", icon: CreditCard },
   { href: "/admin/premium", label: "Premium", icon: Gem },
   { href: "/admin/settings", label: "Settings", icon: Settings },
 ]

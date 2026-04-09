@@ -103,11 +103,27 @@ export default async function DashboardPage() {
             )}
 
             {showMealPlan ? (
-              <TodaysMeals
-                mealPlan={mealPlan}
-                primaryColor={branding.brand_primary_color}
-                accentColor={branding.brand_accent_color}
-              />
+              <>
+                <TodaysMeals
+                  mealPlan={mealPlan}
+                  primaryColor={branding.brand_primary_color}
+                  accentColor={branding.brand_accent_color}
+                />
+                <Card>
+                  <p className="text-xs text-gf-muted">Nutrition Core</p>
+                  <h2 className="mt-1 text-lg font-semibold text-white">Nutrition workspace available</h2>
+                  <p className="mt-2 text-sm text-gf-muted">
+                    Log nutrition habits, weekly check-ins, and real-world meal notes for your coach.
+                  </p>
+                  <a
+                    href="/nutrition"
+                    className="mt-4 inline-flex text-sm font-semibold"
+                    style={{ color: branding.brand_primary_color }}
+                  >
+                    Open nutrition workspace
+                  </a>
+                </Card>
+              </>
             ) : null}
             {showTraining ? (
               <Card>

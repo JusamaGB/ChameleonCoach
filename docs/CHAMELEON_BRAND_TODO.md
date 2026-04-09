@@ -50,7 +50,31 @@ Status:
    - Confirm the workbook is shared to the invited client email successfully.
    - Confirm `Sheet pending` flips to a linked/usable state and both coach/client views become operational after onboarding.
    - Add clearer failure handling if workbook creation, sharing, or sheet reads fail late in the flow.
+   - Run a full real-account end-to-end validation from invite send -> invite accept -> client auth creation -> workbook provisioning -> workbook sharing -> first successful coach/client workspace load.
+   - Run a deliberate failure-and-repair pass to confirm the new `Repair workspace` action recovers an incomplete or broken client workspace cleanly.
+   - Do not treat onboarding/workspace handoff as complete until one successful live pass and one failure-recovery pass have both been verified.
 2. Verify the new PT Core managed-workbook behavior on real provisioned workspaces.
    - Confirm coach PT library workbooks receive `PT_Exercises`, `PT_Workouts`, `PT_Workout_Exercises`, `PT_Programs`, and `PT_Program_Sessions` updates after PT CRUD actions.
    - Confirm client workbooks receive `Training_Plan`, `Training_Plan_Exercises`, `Workout_Log`, and `Workout_Log_Exercises` updates after assignment and workout logging.
    - Confirm older client workbooks created before the PT tabs existed are either reprovisioned safely or handled with a clear recovery path.
+3. Validate and harden Stripe appointment billing end to end.
+   - Run the full Stripe test-mode flow for a confirmed appointment payment request.
+   - Confirm successful Checkout updates appointment `payment_status` to `paid`.
+   - Confirm expired or failed payments update appointment `payment_status` to `payment_failed`.
+   - Confirm webhook retries are idempotent and do not corrupt payment state.
+   - Add any missing reconciliation or recovery UX discovered during live validation.
+   - Treat this as the next implementation slice because billing is implemented in code but still not release-complete until end-to-end validation passes.
+4. Validate and harden coach payments and invoicing end to end.
+   - Run a full Stripe Connect onboarding pass for a coach from `/admin/payments`.
+   - Confirm connected account status sync updates `onboarding_completed`, `charges_enabled`, and `payouts_enabled` correctly in app.
+   - Create and send a real test invoice from a coach to a client through the new Payments area.
+   - Confirm the Stripe hosted invoice page opens correctly and the client can complete payment in test mode.
+   - Confirm connected-account webhook events update invoice status correctly for at least `invoice.sent`, `invoice.paid`, and `invoice.voided`.
+   - Confirm the new payments flow stays clearly separate from platform billing in `/admin/billing`.
+   - Add any missing resend, recovery, or status UX discovered during end-to-end testing before treating coach payments as release-ready.
+5. Move to the next build-documents slice: Nutrition Core completion and hardening.
+   - Add client-side nutrition entry surfaces so nutrition work is not only coach-entered.
+   - Add nutrition habit logging to complete the accountability loop.
+   - Improve the coach-side nutrition review layer inside client workspaces.
+   - Verify managed-sheet reliability, read/write consistency, and end-to-end onboarding validation for Nutrition Core.
+   - Keep this aligned with `NUTRITION_CORE_PLAN.md`, where Nutrition Core is still explicitly thinner than PT Core and still missing client-side entry surfaces and habit logging.

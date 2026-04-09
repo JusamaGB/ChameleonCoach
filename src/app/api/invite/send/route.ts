@@ -75,6 +75,11 @@ export async function POST(request: NextRequest) {
           name,
           invite_token: token,
           invite_expires_at: expiresAt,
+          provisioning_status: "pending",
+          provisioning_started_at: null,
+          provisioning_completed_at: null,
+          provisioning_last_error: null,
+          onboarding_completed: false,
           updated_at: new Date().toISOString(),
         })
         .eq("id", existing.id)

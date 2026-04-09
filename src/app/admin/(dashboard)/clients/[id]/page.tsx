@@ -6,6 +6,7 @@ import { getClientPTOverviewForCoach, listPTProgramsForCoach } from "@/lib/pt"
 import {
   listClientNutritionCheckInsForCoach,
   listClientNutritionHabitAssignmentsForCoach,
+  listClientNutritionHabitLogsForCoach,
   listClientNutritionLogEntriesForCoach,
   listNutritionHabitTemplatesForCoach,
   listNutritionTemplatesForCoach,
@@ -92,6 +93,7 @@ export default async function ClientDetailPage({
   let nutritionTemplates: Array<NutritionMealPlanTemplate & { days?: any[] }> = []
   let nutritionHabitTemplates: NutritionHabitTemplate[] = []
   let nutritionHabitAssignments: ClientNutritionHabitAssignment[] = []
+  let nutritionHabitLogs: any[] = []
   let nutritionCheckIns: ClientNutritionCheckIn[] = []
   let nutritionLogs: ClientNutritionLogEntry[] = []
 
@@ -120,10 +122,11 @@ export default async function ClientDetailPage({
 
   if (activeModules.includes("nutrition_core")) {
     try {
-      ;[nutritionTemplates, nutritionHabitTemplates, nutritionHabitAssignments, nutritionCheckIns, nutritionLogs] = await Promise.all([
+      ;[nutritionTemplates, nutritionHabitTemplates, nutritionHabitAssignments, nutritionHabitLogs, nutritionCheckIns, nutritionLogs] = await Promise.all([
         listNutritionTemplatesForCoach(supabase, user.id) as Promise<any>,
         listNutritionHabitTemplatesForCoach(supabase, user.id),
         listClientNutritionHabitAssignmentsForCoach(supabase, user.id, id),
+        listClientNutritionHabitLogsForCoach(supabase, user.id, id),
         listClientNutritionCheckInsForCoach(supabase, user.id, id),
         listClientNutritionLogEntriesForCoach(supabase, user.id, id),
       ])
@@ -145,6 +148,7 @@ export default async function ClientDetailPage({
       nutritionTemplates={nutritionTemplates as any}
       nutritionHabitTemplates={nutritionHabitTemplates}
       nutritionHabitAssignments={nutritionHabitAssignments}
+      nutritionHabitLogs={nutritionHabitLogs}
       nutritionCheckIns={nutritionCheckIns}
       nutritionLogs={nutritionLogs}
     />

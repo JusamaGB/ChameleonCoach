@@ -6,6 +6,27 @@ import { getCoachBrandingByCoachId } from "@/lib/branding-server"
 import { normalizeCoachTypePreset, resolveActiveModules } from "@/lib/modules"
 import { findClientInviteByToken } from "@/lib/clients"
 
+async function markProvisioningState(
+  supabase: ReturnType<typeof createAdmin>,
+  clientId: string,
+  state: {
+    provisioning_status: "pending" | "provisioning" | "ready" | "failed"
+    provisioning_started_at?: string | null
+    provisioning_completed_at?: string | null
+    provisioning_last_error?: string | null
+    invite_accepted_at?: string | null
+    onboarding_completed?: boolean
+  }
+) {
+  await supabase
+    .from("clients")
+    .update({
+      ...state,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", clientId)
+}
+
 // GET: validate token
 export async function GET(request: NextRequest) {
   const token = request.nextUrl.searchParams.get("token")
@@ -119,6 +140,16 @@ export async function POST(request: NextRequest) {
     }
   }
 
+  const acceptedAt = new Date().toISOString()
+  await markProvisioningState(supabase, client.id, {
+    provisioning_status: "provisioning",
+    provisioning_started_at: acceptedAt,
+    provisioning_completed_at: null,
+    provisioning_last_error: null,
+    invite_accepted_at: acceptedAt,
+    onboarding_completed: false,
+  })
+
   // Create Supabase auth user
   const { data: authData, error: authError } =
     await supabase.auth.admin.createUser({
@@ -128,6 +159,10 @@ export async function POST(request: NextRequest) {
     })
 
   if (authError || !authData.user) {
+    await markProvisioningState(supabase, client.id, {
+      provisioning_status: "failed",
+      provisioning_last_error: authError?.message || "Failed to create account",
+    })
     return NextResponse.json(
       { error: authError?.message || "Failed to create account" },
       { status: 500 }
@@ -208,8 +243,12 @@ export async function POST(request: NextRequest) {
         sheet_shared_email: sheetSharedEmail,
         sheet_shared_permission_id: sheetSharedPermissionId,
         sheet_shared_at: sheetSharedAt,
-        invite_accepted_at: new Date().toISOString(),
+        invite_accepted_at: acceptedAt,
         onboarding_completed: true,
+        provisioning_status: "ready",
+        provisioning_started_at: acceptedAt,
+        provisioning_completed_at: new Date().toISOString(),
+        provisioning_last_error: null,
         invite_token: null,
         updated_at: new Date().toISOString(),
       })
@@ -220,6 +259,16 @@ export async function POST(request: NextRequest) {
     }
   } catch (error) {
     await supabase.auth.admin.deleteUser(authData.user.id).catch(() => {})
+
+    await markProvisioningState(supabase, client.id, {
+      provisioning_status: "failed",
+      provisioning_last_error:
+        error instanceof Error && error.message
+          ? error.message
+          : "Client workspace provisioning failed",
+      provisioning_completed_at: null,
+      onboarding_completed: false,
+    })
 
     return NextResponse.json(
       {
