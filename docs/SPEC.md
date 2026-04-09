@@ -191,6 +191,9 @@ Client can view meal plan, log progress, manage appointments, and pay for confir
 | `/admin/exercises` | Coach PT Core exercise library management |
 | `/admin/workouts` | Coach PT workout builder and reusable workout management |
 | `/admin/programs` | Coach PT program/template builder and assignment source |
+| `/admin/recipes` | Coach Nutrition Core recipe library management |
+| `/admin/nutrition-templates` | Coach nutrition meal-plan template library |
+| `/admin/nutrition-habits` | Coach nutrition habit template library |
 
 ---
 
@@ -208,6 +211,9 @@ Client can view meal plan, log progress, manage appointments, and pay for confir
 - Exercise library is currently a PT Core capability, not the platform layer that defines module architecture
 - Module entitlements now drive coach/client navigation and client portal visibility, with coach type acting as the starting preset rather than the permanent access rule
 - Coaches can create reusable PT workouts and programs from the exercise library
+- Coaches can create reusable nutrition recipes, meal-plan templates, and nutrition habit templates from the Nutrition Core module layer
+- Client nutrition workspaces now apply real coach-owned meal-plan templates instead of only local canned presets
+- Coaches can assign nutrition habits inside each client workspace, and those assignments sync into the client workbook's `Nutrition_Habits` tab
 - Assigning a PT program materialises concrete client sessions and session exercises instead of recomputing the plan on every load
 - Clients can view assigned PT sessions and submit workout logs through `/training` when PT Core is active
 - Coach client workspaces now include PT assignment state, recent training logs, and adherence context

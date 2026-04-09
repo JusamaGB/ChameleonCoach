@@ -61,6 +61,7 @@ const MODULE_TOOL_LINKS: Partial<Record<EnableableModule, Array<{ href: string; 
   nutrition_core: [
     { href: "/admin/recipes", label: "Recipe library" },
     { href: "/admin/nutrition-templates", label: "Meal plan templates" },
+    { href: "/admin/nutrition-habits", label: "Nutrition habits" },
   ],
 }
 

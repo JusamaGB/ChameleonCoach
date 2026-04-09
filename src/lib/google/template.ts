@@ -425,6 +425,7 @@ async function ensureNutritionLibraryWorkbookContent(
     "Recipe Library",
     "Nutrition_Templates",
     "Nutrition_Template_Days",
+    "Nutrition_Habit_Templates",
   ])
   await updateValues(sheets, spreadsheetId, "Recipe Library!A1:J2", [
     ["recipe_id", "name", "category", "ingredients", "notes", "calories_kcal", "protein_grams", "carbs_grams", "fats_grams", "meal_slot"],
@@ -437,6 +438,10 @@ async function ensureNutritionLibraryWorkbookContent(
   await updateValues(sheets, spreadsheetId, "Nutrition_Template_Days!A1:H2", [
     ["template_day_id", "template_id", "day", "breakfast", "lunch", "dinner", "snacks", "notes"],
     ["", "", "", "", "", "", "", ""],
+  ])
+  await updateValues(sheets, spreadsheetId, "Nutrition_Habit_Templates!A1:I2", [
+    ["habit_template_id", "name", "category", "target_count", "target_period", "meal_slot", "description", "coaching_notes", "updated_at"],
+    ["", "", "", "", "", "", "", "", ""],
   ])
 }
 
@@ -454,6 +459,9 @@ async function ensureClientWorkbookContent(
   }
 ) {
   const clientTabs = ["Profile", "Meal Plan", "Progress"]
+  if (activeModules.includes("nutrition_core")) {
+    clientTabs.push("Nutrition_Habits", "Nutrition_Check_Ins", "Nutrition_Log")
+  }
   if (activeModules.includes("pt_core")) {
     clientTabs.push("Training_Plan", "Training_Plan_Exercises", "Workout_Log", "Workout_Log_Exercises")
   }
@@ -488,6 +496,21 @@ async function ensureClientWorkbookContent(
   await updateValues(sheets, spreadsheetId, "Progress!A1:D1", [
     ["Date", "Weight", "Measurements", "Notes"],
   ])
+
+  if (activeModules.includes("nutrition_core")) {
+    await updateValues(sheets, spreadsheetId, "Nutrition_Habits!A1:J2", [
+      ["assignment_id", "habit_template_id", "habit_name", "category", "target_count", "target_period", "meal_slot", "assigned_start_date", "status", "coaching_notes"],
+      ["", "", "", "", "", "", "", "", "", ""],
+    ])
+    await updateValues(sheets, spreadsheetId, "Nutrition_Check_Ins!A1:G2", [
+      ["check_in_id", "submitted_at", "week_label", "energy", "adherence", "wins", "struggles"],
+      ["", "", "", "", "", "", ""],
+    ])
+    await updateValues(sheets, spreadsheetId, "Nutrition_Log!A1:G2", [
+      ["log_id", "logged_at", "meal_slot", "entry_title", "notes", "coach_note", "updated_at"],
+      ["", "", "", "", "", "", ""],
+    ])
+  }
 
   if (activeModules.includes("pt_core")) {
     await updateValues(sheets, spreadsheetId, "Training_Plan!A1:O2", [

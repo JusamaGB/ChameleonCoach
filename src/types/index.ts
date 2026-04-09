@@ -348,6 +348,39 @@ export interface NutritionMealPlanTemplateDay {
   updated_at: string
 }
 
+export interface NutritionHabitTemplate {
+  id: string
+  coach_id: string
+  name: string
+  description: string | null
+  category: string
+  target_count: number
+  target_period: "day" | "week"
+  meal_slot: "breakfast" | "lunch" | "dinner" | "snacks" | "any"
+  coaching_notes: string | null
+  is_archived: boolean
+  created_at: string
+  updated_at: string
+}
+
+export interface ClientNutritionHabitAssignment {
+  id: string
+  coach_id: string
+  client_id: string
+  habit_template_id: string | null
+  habit_name_snapshot: string
+  description_snapshot: string | null
+  category_snapshot: string
+  target_count: number
+  target_period: "day" | "week"
+  meal_slot: "breakfast" | "lunch" | "dinner" | "snacks" | "any"
+  coaching_notes: string | null
+  assigned_start_date: string | null
+  status: "active" | "completed" | "cancelled"
+  created_at: string
+  updated_at: string
+}
+
 export interface ProgressEntry {
   date: string
   weight: string

@@ -1,6 +1,7 @@
 import { google } from "googleapis"
 import { getAuthedClient } from "./auth"
 import type {
+  ClientNutritionHabitAssignment,
   ClientPTLog,
   ClientPTLogExercise,
   ClientPTProgramAssignment,
@@ -8,6 +9,7 @@ import type {
   ClientPTSessionExercise,
   Exercise,
   MealPlanDay,
+  NutritionHabitTemplate,
   NutritionMealPlanTemplate,
   NutritionMealPlanTemplateDay,
   NutritionRecipe,
@@ -501,11 +503,12 @@ export async function syncCoachNutritionLibrarySheets(
   payload: {
     recipes: NutritionRecipe[]
     templates: Array<NutritionMealPlanTemplate & { days?: NutritionMealPlanTemplateDay[] }>
+    habits: NutritionHabitTemplate[]
   }
 ) {
   await ensureSpreadsheetTabs(
     sheetId,
-    ["Recipe Library", "Nutrition_Templates", "Nutrition_Template_Days"],
+    ["Recipe Library", "Nutrition_Templates", "Nutrition_Template_Days", "Nutrition_Habit_Templates"],
     coachId
   )
 
@@ -567,6 +570,59 @@ export async function syncCoachNutritionLibrarySheets(
           day.notes ?? "",
         ])
       ),
+    ],
+    coachId
+  )
+
+  await overwriteTab(
+    sheetId,
+    "Nutrition_Habit_Templates",
+    [
+      ["habit_template_id", "name", "category", "target_count", "target_period", "meal_slot", "description", "coaching_notes", "updated_at"],
+      ...payload.habits.map((habit) => [
+        habit.id,
+        habit.name,
+        habit.category,
+        habit.target_count,
+        habit.target_period,
+        habit.meal_slot,
+        habit.description ?? "",
+        habit.coaching_notes ?? "",
+        habit.updated_at,
+      ]),
+    ],
+    coachId
+  )
+}
+
+export async function syncClientNutritionHabitSheets(
+  sheetId: string,
+  coachId: string,
+  habits: ClientNutritionHabitAssignment[]
+) {
+  await ensureSpreadsheetTabs(
+    sheetId,
+    ["Nutrition_Habits", "Nutrition_Check_Ins", "Nutrition_Log"],
+    coachId
+  )
+
+  await overwriteTab(
+    sheetId,
+    "Nutrition_Habits",
+    [
+      ["assignment_id", "habit_template_id", "habit_name", "category", "target_count", "target_period", "meal_slot", "assigned_start_date", "status", "coaching_notes"],
+      ...habits.map((habit) => [
+        habit.id,
+        habit.habit_template_id ?? "",
+        habit.habit_name_snapshot,
+        habit.category_snapshot,
+        habit.target_count,
+        habit.target_period,
+        habit.meal_slot,
+        habit.assigned_start_date ?? "",
+        habit.status,
+        habit.coaching_notes ?? "",
+      ]),
     ],
     coachId
   )

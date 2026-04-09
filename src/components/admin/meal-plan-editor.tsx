@@ -2,39 +2,19 @@
 
 import { useState } from "react"
 import { Button } from "@/components/ui/button"
-import type { MealPlanDay } from "@/types"
+import type { MealPlanDay, NutritionMealPlanTemplate, NutritionMealPlanTemplateDay } from "@/types"
 
 interface MealPlanEditorProps {
   clientId: string
   sheetId: string
   mealPlan: MealPlanDay[]
+  templates: Array<NutritionMealPlanTemplate & { days?: NutritionMealPlanTemplateDay[] }>
   onSaved: () => void
   onCancel: () => void
 }
 
 const DAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
 const MEALS = ["breakfast", "lunch", "dinner", "snacks"] as const
-
-const TEMPLATES: Record<string, Partial<MealPlanDay>> = {
-  "High Protein": {
-    breakfast: "Eggs, Greek yogurt, berries",
-    lunch: "Grilled chicken, rice, veg",
-    dinner: "Salmon, sweet potato, greens",
-    snacks: "Protein shake, mixed nuts",
-  },
-  "Vegetarian": {
-    breakfast: "Oats with seeds and fruit",
-    lunch: "Lentil soup, wholegrain bread",
-    dinner: "Tofu stir fry with noodles",
-    snacks: "Hummus, carrot sticks, fruit",
-  },
-  "Calorie Deficit": {
-    breakfast: "Egg whites, spinach, coffee",
-    lunch: "Large salad, tuna, lemon dressing",
-    dinner: "Lean mince, courgette noodles",
-    snacks: "Rice cakes, celery, cucumber",
-  },
-}
 
 function makeBlankPlan(): MealPlanDay[] {
   return DAYS.map((day) => ({ day, breakfast: "", lunch: "", dinner: "", snacks: "" }))
@@ -44,6 +24,7 @@ export function MealPlanEditor({
   clientId,
   sheetId,
   mealPlan,
+  templates,
   onSaved,
   onCancel,
 }: MealPlanEditorProps) {
@@ -61,6 +42,7 @@ export function MealPlanEditor({
   const [plan, setPlan] = useState<MealPlanDay[]>(savedPlan)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState("")
+  const [selectedTemplateId, setSelectedTemplateId] = useState("")
   const [columnFill, setColumnFill] = useState<Record<string, string>>({
     breakfast: "", lunch: "", dinner: "", snacks: "",
   })
@@ -73,17 +55,23 @@ export function MealPlanEditor({
     })
   }
 
-  function applyTemplate(templateName: string) {
-    if (templateName === "") return
-    const tpl = TEMPLATES[templateName]
-    if (!tpl) return
-    setPlan(DAYS.map((day) => ({
-      day,
-      breakfast: tpl.breakfast ?? "",
-      lunch: tpl.lunch ?? "",
-      dinner: tpl.dinner ?? "",
-      snacks: tpl.snacks ?? "",
-    })))
+  function applyTemplate(templateId: string) {
+    if (templateId === "") return
+    const template = templates.find((entry) => entry.id === templateId)
+    if (!template) return
+
+    const dayMap = new Map((template.days ?? []).map((day) => [day.day, day]))
+    setPlan(DAYS.map((day) => {
+      const match = dayMap.get(day)
+      return {
+        day,
+        breakfast: match?.breakfast ?? "",
+        lunch: match?.lunch ?? "",
+        dinner: match?.dinner ?? "",
+        snacks: match?.snacks ?? "",
+      }
+    }))
+    setSelectedTemplateId(templateId)
   }
 
   function fillColumn(meal: typeof MEALS[number]) {
@@ -121,23 +109,48 @@ export function MealPlanEditor({
     <div className="space-y-4">
       <div className="flex items-center gap-3">
         <select
-          onChange={(e) => { applyTemplate(e.target.value); e.target.value = "" }}
-          defaultValue=""
+          value={selectedTemplateId}
+          onChange={(e) => applyTemplate(e.target.value)}
           className="bg-gf-surface border border-gf-border rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-gf-pink"
         >
-          <option value="" disabled>Load template...</option>
-          {Object.keys(TEMPLATES).map((name) => (
-            <option key={name} value={name}>{name}</option>
+          <option value="">Load coach template...</option>
+          {templates.map((template) => (
+            <option key={template.id} value={template.id}>{template.name}</option>
           ))}
         </select>
 
         <button
-          onClick={() => setPlan(savedPlan)}
+          onClick={() => {
+            setPlan(savedPlan)
+            setSelectedTemplateId("")
+          }}
           className="text-sm text-gf-muted hover:text-white transition-colors"
         >
           Reset to saved
         </button>
       </div>
+
+      {selectedTemplateId ? (
+        <div className="rounded-xl border border-gf-border bg-gf-black/10 px-4 py-3 text-sm text-gf-muted">
+          {(() => {
+            const selectedTemplate = templates.find((template) => template.id === selectedTemplateId)
+            if (!selectedTemplate) return null
+
+            return (
+              <>
+                <p className="font-medium text-white">{selectedTemplate.name}</p>
+                {selectedTemplate.goal ? <p className="mt-1">{selectedTemplate.goal}</p> : null}
+                <div className="mt-2 flex flex-wrap gap-3 text-xs">
+                  {selectedTemplate.target_calories_kcal ? <span>{selectedTemplate.target_calories_kcal} kcal</span> : null}
+                  {selectedTemplate.target_protein_grams ? <span>P {selectedTemplate.target_protein_grams}g</span> : null}
+                  {selectedTemplate.target_carbs_grams ? <span>C {selectedTemplate.target_carbs_grams}g</span> : null}
+                  {selectedTemplate.target_fats_grams ? <span>F {selectedTemplate.target_fats_grams}g</span> : null}
+                </div>
+              </>
+            )
+          })()}
+        </div>
+      ) : null}
 
       <div className="overflow-x-auto">
         <table className="w-full text-sm">

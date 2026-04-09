@@ -15,11 +15,15 @@ import Link from "next/link"
 import { ArrowLeft, ExternalLink, Pencil, Trash2 } from "lucide-react"
 import type {
   Client,
+  ClientNutritionHabitAssignment,
   ClientPTLog,
   ClientPTProgramAssignment,
   ClientPTSessionExercise,
   ClientPTSession,
   MealPlanDay,
+  NutritionHabitTemplate,
+  NutritionMealPlanTemplate,
+  NutritionMealPlanTemplateDay,
   ProfileData,
   ProgressEntry,
 } from "@/types"
@@ -56,6 +60,9 @@ interface ClientDetailViewProps {
     progression_mode?: string | null
     progression_notes?: string | null
   }>
+  nutritionTemplates: Array<NutritionMealPlanTemplate & { days?: NutritionMealPlanTemplateDay[] }>
+  nutritionHabitTemplates: NutritionHabitTemplate[]
+  nutritionHabitAssignments: ClientNutritionHabitAssignment[]
 }
 
 export function ClientDetailView({
@@ -67,11 +74,19 @@ export function ClientDetailView({
   activeModules,
   ptOverview,
   ptPrograms,
+  nutritionTemplates,
+  nutritionHabitTemplates,
+  nutritionHabitAssignments,
 }: ClientDetailViewProps) {
   const router = useRouter()
   const [editingProfile, setEditingProfile] = useState(false)
   const [editingMealPlan, setEditingMealPlan] = useState(false)
   const [deleting, setDeleting] = useState(false)
+  const [nutritionHabitTemplateId, setNutritionHabitTemplateId] = useState("")
+  const [nutritionHabitStartDate, setNutritionHabitStartDate] = useState("")
+  const [assigningNutritionHabit, setAssigningNutritionHabit] = useState(false)
+  const [updatingNutritionHabitId, setUpdatingNutritionHabitId] = useState<string | null>(null)
+  const [nutritionError, setNutritionError] = useState("")
   const [assignmentProgramId, setAssignmentProgramId] = useState("")
   const [assignmentStartDate, setAssignmentStartDate] = useState("")
   const [assignmentNote, setAssignmentNote] = useState("")
@@ -109,7 +124,7 @@ export function ClientDetailView({
     : null
   const workspaceSections = [
     { id: "overview", label: "Overview", enabled: canAccessFeature("client_overview", activeModules) },
-    { id: "meal-plan", label: "Meal Plan", enabled: canAccessFeature("client_meal_plan", activeModules) },
+    { id: "meal-plan", label: "Nutrition", enabled: canAccessFeature("client_meal_plan", activeModules) },
     { id: "progress", label: "Progress", enabled: canAccessFeature("client_progress", activeModules) },
     { id: "appointments", label: "Appointments", enabled: canAccessFeature("client_appointments", activeModules) },
     { id: "training", label: "Training", enabled: canAccessFeature("client_training", activeModules) },
@@ -136,6 +151,61 @@ export function ClientDetailView({
     setEditingProfile(false)
     setEditingMealPlan(false)
     router.refresh()
+  }
+
+  async function handleAssignNutritionHabit(event: React.FormEvent) {
+    event.preventDefault()
+    if (!nutritionHabitTemplateId) return
+
+    setAssigningNutritionHabit(true)
+    setNutritionError("")
+    try {
+      const response = await fetch(`/api/admin/clients/${client.id}/nutrition-habits`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          habit_template_id: nutritionHabitTemplateId,
+          assigned_start_date: nutritionHabitStartDate || null,
+        }),
+      })
+      const data = await response.json()
+      if (!response.ok) {
+        setNutritionError(data.error || "Failed to assign nutrition habit")
+        return
+      }
+      setNutritionHabitTemplateId("")
+      setNutritionHabitStartDate("")
+      router.refresh()
+    } catch {
+      setNutritionError("Failed to assign nutrition habit")
+    } finally {
+      setAssigningNutritionHabit(false)
+    }
+  }
+
+  async function handleUpdateNutritionHabit(
+    assignmentId: string,
+    status: ClientNutritionHabitAssignment["status"]
+  ) {
+    setUpdatingNutritionHabitId(assignmentId)
+    setNutritionError("")
+    try {
+      const response = await fetch(`/api/admin/clients/${client.id}/nutrition-habits/${assignmentId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status }),
+      })
+      const data = await response.json()
+      if (!response.ok) {
+        setNutritionError(data.error || "Failed to update nutrition habit")
+        return
+      }
+      router.refresh()
+    } catch {
+      setNutritionError("Failed to update nutrition habit")
+    } finally {
+      setUpdatingNutritionHabitId(null)
+    }
   }
 
   async function handleAssignProgram(event: React.FormEvent) {
@@ -600,7 +670,7 @@ export function ClientDetailView({
           <section id="meal-plan" className="scroll-mt-24">
             <Card>
               <div className="flex items-center justify-between mb-4">
-                <CardTitle>Meal Plan</CardTitle>
+                <CardTitle>Nutrition</CardTitle>
                 {!editingMealPlan && client.sheet_id && (
                   <Button
                     variant="ghost"
@@ -618,11 +688,168 @@ export function ClientDetailView({
                   clientId={client.id}
                   sheetId={client.sheet_id}
                   mealPlan={mealPlan}
+                  templates={nutritionTemplates}
                   onSaved={handleSaved}
                   onCancel={() => setEditingMealPlan(false)}
                 />
               ) : (
-                <MealPlanView mealPlan={mealPlan} />
+                <div className="space-y-6">
+                  <div>
+                    <div className="mb-3 flex items-center justify-between gap-4">
+                      <div>
+                        <p className="text-sm font-medium text-white">Meal plan</p>
+                        <p className="mt-1 text-sm text-gf-muted">
+                          Apply coach templates here, then adjust the client’s weekly meals directly.
+                        </p>
+                      </div>
+                      {nutritionTemplates.length ? (
+                        <Badge variant="default">{nutritionTemplates.length} templates ready</Badge>
+                      ) : null}
+                    </div>
+                    <MealPlanView mealPlan={mealPlan} />
+                  </div>
+
+                  <div className="border-t border-gf-border pt-6">
+                    <div className="mb-4 flex items-center justify-between gap-4">
+                      <div>
+                        <p className="text-sm font-medium text-white">Nutrition habits</p>
+                        <p className="mt-1 text-sm text-gf-muted">
+                          Assign repeatable nutrition habits that should also remain visible in the client workbook.
+                        </p>
+                      </div>
+                      <Badge variant={nutritionHabitAssignments.some((habit) => habit.status === "active") ? "success" : "default"}>
+                        {nutritionHabitAssignments.filter((habit) => habit.status === "active").length} active
+                      </Badge>
+                    </div>
+
+                    <div className="grid gap-6 lg:grid-cols-[0.95fr,1.05fr]">
+                      <div className="rounded-xl border border-gf-border bg-gf-surface p-4">
+                        <p className="text-xs uppercase tracking-wide text-gf-muted">Assign habit</p>
+                        {nutritionHabitTemplates.length > 0 ? (
+                          <form onSubmit={handleAssignNutritionHabit} className="mt-4 space-y-4">
+                            <div>
+                              <label className="block text-sm font-medium text-gf-muted">Habit template</label>
+                              <select
+                                value={nutritionHabitTemplateId}
+                                onChange={(event) => setNutritionHabitTemplateId(event.target.value)}
+                                className="mt-1 w-full rounded-lg border border-gf-border bg-gf-black px-4 py-2.5 text-white focus:outline-none focus:border-gf-pink"
+                              >
+                                <option value="">Select a habit...</option>
+                                {nutritionHabitTemplates.map((habit) => (
+                                  <option key={habit.id} value={habit.id}>
+                                    {habit.name} • {habit.target_count} per {habit.target_period}
+                                  </option>
+                                ))}
+                              </select>
+                            </div>
+                            <div>
+                              <label className="block text-sm font-medium text-gf-muted">Start date</label>
+                              <input
+                                type="date"
+                                value={nutritionHabitStartDate}
+                                onChange={(event) => setNutritionHabitStartDate(event.target.value)}
+                                className="mt-1 w-full rounded-lg border border-gf-border bg-gf-black px-4 py-2.5 text-white focus:outline-none focus:border-gf-pink"
+                              />
+                            </div>
+                            {nutritionError ? <p className="text-sm text-red-400">{nutritionError}</p> : null}
+                            <Button type="submit" disabled={assigningNutritionHabit}>
+                              {assigningNutritionHabit ? "Assigning..." : "Assign habit"}
+                            </Button>
+                          </form>
+                        ) : (
+                          <div className="mt-4 rounded-xl border border-dashed border-gf-border bg-gf-black/10 px-4 py-5">
+                            <p className="text-sm font-medium text-white">No nutrition habits yet</p>
+                            <p className="mt-1 text-sm text-gf-muted">
+                              Build reusable habits from the Nutrition Core module layer first.
+                            </p>
+                            <Link href="/admin/nutrition-habits" className="mt-3 inline-flex text-sm text-gf-pink hover:text-gf-pink-light transition-colors">
+                              Open nutrition habits
+                            </Link>
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="rounded-xl border border-gf-border bg-gf-surface p-4">
+                        <p className="text-xs uppercase tracking-wide text-gf-muted">Assigned habits</p>
+                        {nutritionHabitAssignments.length > 0 ? (
+                          <div className="mt-4 space-y-3">
+                            {nutritionHabitAssignments.map((habit) => (
+                              <div key={habit.id} className="rounded-xl border border-gf-border bg-gf-black/10 p-4">
+                                <div className="flex items-start justify-between gap-3">
+                                  <div>
+                                    <div className="flex flex-wrap items-center gap-2">
+                                      <p className="font-medium text-white">{habit.habit_name_snapshot}</p>
+                                      <Badge variant={habit.status === "active" ? "success" : habit.status === "completed" ? "default" : "warning"}>
+                                        {habit.status}
+                                      </Badge>
+                                      <Badge variant="default">
+                                        {habit.target_count} per {habit.target_period}
+                                      </Badge>
+                                      <Badge variant="default">{habit.meal_slot}</Badge>
+                                    </div>
+                                    {habit.description_snapshot ? (
+                                      <p className="mt-2 text-sm text-gf-muted">{habit.description_snapshot}</p>
+                                    ) : null}
+                                    {habit.coaching_notes ? (
+                                      <p className="mt-2 text-sm text-gf-muted">{habit.coaching_notes}</p>
+                                    ) : null}
+                                    {habit.assigned_start_date ? (
+                                      <p className="mt-2 text-xs text-gf-muted">
+                                        Start date: {new Date(habit.assigned_start_date).toLocaleDateString("en-GB")}
+                                      </p>
+                                    ) : null}
+                                  </div>
+                                  <div className="flex flex-col items-end gap-2">
+                                    {habit.status === "active" ? (
+                                      <>
+                                        <Button
+                                          type="button"
+                                          variant="ghost"
+                                          size="sm"
+                                          disabled={updatingNutritionHabitId === habit.id}
+                                          onClick={() => handleUpdateNutritionHabit(habit.id, "completed")}
+                                        >
+                                          Complete
+                                        </Button>
+                                        <Button
+                                          type="button"
+                                          variant="ghost"
+                                          size="sm"
+                                          disabled={updatingNutritionHabitId === habit.id}
+                                          className="text-red-400 hover:text-red-300"
+                                          onClick={() => handleUpdateNutritionHabit(habit.id, "cancelled")}
+                                        >
+                                          Cancel
+                                        </Button>
+                                      </>
+                                    ) : (
+                                      <Button
+                                        type="button"
+                                        variant="ghost"
+                                        size="sm"
+                                        disabled={updatingNutritionHabitId === habit.id}
+                                        onClick={() => handleUpdateNutritionHabit(habit.id, "active")}
+                                      >
+                                        Reactivate
+                                      </Button>
+                                    )}
+                                  </div>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        ) : (
+                          <div className="mt-4 rounded-xl border border-dashed border-gf-border bg-gf-black/10 px-4 py-5">
+                            <p className="text-sm font-medium text-white">No habits assigned yet</p>
+                            <p className="mt-1 text-sm text-gf-muted">
+                              Assign coach-defined nutrition habits here to start the accountability loop.
+                            </p>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </div>
               )}
             </Card>
           </section>

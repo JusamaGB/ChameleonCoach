@@ -3,8 +3,20 @@ import { getProfile, getMealPlan, getProgress } from "@/lib/google/sheets"
 import { ClientDetailView } from "@/components/admin/client-detail-view"
 import { resolveActiveModules } from "@/lib/modules"
 import { getClientPTOverviewForCoach, listPTProgramsForCoach } from "@/lib/pt"
+import {
+  listClientNutritionHabitAssignmentsForCoach,
+  listNutritionHabitTemplatesForCoach,
+  listNutritionTemplatesForCoach,
+} from "@/lib/nutrition"
 import { redirect } from "next/navigation"
-import type { MealPlanDay, ProgressEntry, ProfileData } from "@/types"
+import type {
+  ClientNutritionHabitAssignment,
+  MealPlanDay,
+  NutritionHabitTemplate,
+  NutritionMealPlanTemplate,
+  ProgressEntry,
+  ProfileData,
+} from "@/types"
 
 export const dynamic = 'force-dynamic'
 
@@ -73,6 +85,9 @@ export default async function ClientDetailPage({
   let progress: ProgressEntry[] = []
   let ptOverview = { assignment: null, sessions: [], logs: [], assignment_history: [], session_exercises: [] }
   let ptPrograms: any[] = []
+  let nutritionTemplates: Array<NutritionMealPlanTemplate & { days?: any[] }> = []
+  let nutritionHabitTemplates: NutritionHabitTemplate[] = []
+  let nutritionHabitAssignments: ClientNutritionHabitAssignment[] = []
 
   if (client.sheet_id) {
     try {
@@ -97,6 +112,18 @@ export default async function ClientDetailPage({
     }
   }
 
+  if (activeModules.includes("nutrition_core")) {
+    try {
+      ;[nutritionTemplates, nutritionHabitTemplates, nutritionHabitAssignments] = await Promise.all([
+        listNutritionTemplatesForCoach(supabase, user.id) as Promise<any>,
+        listNutritionHabitTemplatesForCoach(supabase, user.id),
+        listClientNutritionHabitAssignmentsForCoach(supabase, user.id, id),
+      ])
+    } catch {
+      // Nutrition data may not be available yet
+    }
+  }
+
   return (
     <ClientDetailView
       client={client}
@@ -107,6 +134,9 @@ export default async function ClientDetailPage({
       activeModules={activeModules}
       ptOverview={ptOverview}
       ptPrograms={ptPrograms}
+      nutritionTemplates={nutritionTemplates as any}
+      nutritionHabitTemplates={nutritionHabitTemplates}
+      nutritionHabitAssignments={nutritionHabitAssignments}
     />
   )
 }

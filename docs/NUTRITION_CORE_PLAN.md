@@ -7,17 +7,21 @@
 - client meal plan view
 - coach meal plan editor inside client workspace
 - client workbook `Meal Plan` tab
-- provisioned nutrition library workbook with only a basic `Recipe Library` starter tab
+- coach recipe library
+- reusable meal-plan templates
+- nutrition habit template library
+- nutrition library workbook sync
+- module-layer nutrition tool links
+- client-workspace template application using coach-owned nutrition templates
+- client nutrition habit assignment flow
+- client workbook tabs for `Nutrition_Habits`, `Nutrition_Check_Ins`, and `Nutrition_Log`
 
 ### What is still missing
 
-- coach recipe library
-- reusable meal-plan templates
-- coach nutrition module tools
-- nutrition habits
 - nutrition check-ins
+- nutrition habit logging
 - coach nutrition review surface
-- structured nutrition library workbook sync
+- richer client nutrition logging/reflection loops
 
 Nutrition Core is still materially thinner than PT Core.
 
@@ -49,6 +53,7 @@ Deliver:
 - apply template to client meal plan
 - coach-side client nutrition assignment flow
 - nutrition template usage inside client workspace
+- initial client nutrition habit assignment in client workspace
 
 ## Phase 3: Nutrition Accountability Loop
 
@@ -84,6 +89,7 @@ Deliver:
 - `nutrition_recipes`
 - `nutrition_meal_plan_templates`
 - `nutrition_meal_plan_template_days`
+- `nutrition_habit_templates`
 
 ### Later client-scoped entities
 
@@ -97,8 +103,9 @@ Deliver:
 - `Recipe Library`
 - `Nutrition_Templates`
 - `Nutrition_Template_Days`
+- `Nutrition_Habit_Templates`
 
-### Client workbook tabs later
+### Client workbook tabs
 
 - `Meal Plan`
 - `Nutrition_Habits`
