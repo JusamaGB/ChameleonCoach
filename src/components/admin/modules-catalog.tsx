@@ -201,7 +201,7 @@ export function ModulesCatalog() {
           <div>
             <CardTitle>Coach niches</CardTitle>
             <p className="mt-2 text-sm text-gf-muted">
-              Every coach type is visible here as a positioning lane. Only built module bundles are enableable today.
+              Every coach type is visible here as a positioning lane. These badges describe platform support, not whether a bundle is enabled for this workspace.
             </p>
           </div>
           <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
@@ -221,7 +221,7 @@ export function ModulesCatalog() {
                   <div className="flex items-center justify-between gap-3">
                     <p className="font-medium text-white">{COACH_TYPE_LABELS[preset]}</p>
                     <Badge variant={status === "live" ? "success" : "default"}>
-                      {status === "live" ? "Live now" : "Coming soon"}
+                      {status === "live" ? "Supported" : "Coming soon"}
                     </Badge>
                   </div>
                   <p className="mt-2 text-sm text-gf-muted">{COACH_TYPE_DESCRIPTIONS[preset]}</p>
@@ -237,6 +237,8 @@ export function ModulesCatalog() {
                   </div>
                   {isCurrentPreset ? (
                     <p className="mt-3 text-xs text-gf-pink-light">Current workspace preset</p>
+                  ) : status === "live" ? (
+                    <p className="mt-3 text-xs text-gf-muted">Supported niche. Enable the matching bundle below if you want it active here.</p>
                   ) : null}
                 </div>
               )
@@ -284,14 +286,26 @@ export function ModulesCatalog() {
                 </p>
                 <div className="flex flex-wrap gap-3">
                   {(MODULE_TOOL_LINKS[module] ?? []).map((tool) => (
-                    <Link
-                      key={tool.href}
-                      href={tool.href}
-                      className="inline-flex items-center gap-1.5 text-sm text-gf-pink hover:text-gf-pink-light transition-colors"
-                    >
-                      {tool.label}
-                      <ArrowRight size={14} />
-                    </Link>
+                    enabled || profile.is_legacy_workspace ? (
+                      <Link
+                        key={tool.href}
+                        href={tool.href}
+                        className="inline-flex items-center gap-1.5 text-sm text-gf-pink hover:text-gf-pink-light transition-colors"
+                      >
+                        {tool.label}
+                        <ArrowRight size={14} />
+                      </Link>
+                    ) : (
+                      <span
+                        key={tool.href}
+                        className="inline-flex items-center gap-1.5 text-sm text-gf-muted"
+                      >
+                        {tool.label}
+                        <span className="rounded-full border border-gf-border px-2 py-0.5 text-[10px] uppercase tracking-wide">
+                          Enable first
+                        </span>
+                      </span>
+                    )
                   ))}
                 </div>
               </div>

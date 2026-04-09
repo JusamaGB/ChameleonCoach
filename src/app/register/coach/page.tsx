@@ -123,7 +123,7 @@ export default function RegisterCoachPage() {
                               : "bg-gf-border text-gf-muted"
                           }`}
                         >
-                          {status === "live" ? "Live now" : "Coming soon"}
+                          {status === "live" ? "Supported" : "Coming soon"}
                         </span>
                       </div>
                       <p className="mt-2 text-sm text-gf-muted">{COACH_TYPE_DESCRIPTIONS[preset]}</p>
@@ -137,6 +137,11 @@ export default function RegisterCoachPage() {
                           </span>
                         ))}
                       </div>
+                      <p className="mt-3 text-xs text-gf-muted">
+                        {status === "live"
+                          ? "This niche is supported by the platform. Specific workspace bundles can still be enabled later."
+                          : "This niche is part of the roadmap and will appear as a fuller bundle later."}
+                      </p>
                     </button>
                   )
                 })}
