@@ -34,6 +34,8 @@ export async function POST(request: NextRequest) {
       goal: body.goal,
       duration_weeks: body.duration_weeks,
       difficulty: body.difficulty,
+      progression_mode: body.progression_mode,
+      progression_notes: body.progression_notes,
       sessions: Array.isArray(body.sessions) ? body.sessions : [],
     })
     return NextResponse.json({ program })

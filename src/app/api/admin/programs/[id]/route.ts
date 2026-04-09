@@ -24,6 +24,8 @@ export async function PATCH(
       goal: body.goal,
       duration_weeks: body.duration_weeks,
       difficulty: body.difficulty,
+      progression_mode: body.progression_mode,
+      progression_notes: body.progression_notes,
       is_archived: body.is_archived,
       sessions: Array.isArray(body.sessions) ? body.sessions : [],
     })

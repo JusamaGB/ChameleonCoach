@@ -38,6 +38,8 @@ const EMPTY_PROGRAM = {
   goal: "",
   duration_weeks: "4",
   difficulty: "",
+  progression_mode: "manual",
+  progression_notes: "",
   sessions: [{ ...EMPTY_SESSION }],
 }
 
@@ -106,6 +108,8 @@ export function ProgramsManager({
       goal: program.goal ?? "",
       duration_weeks: program.duration_weeks.toString(),
       difficulty: program.difficulty ?? "",
+      progression_mode: program.progression_mode ?? "manual",
+      progression_notes: program.progression_notes ?? "",
       sessions: program.sessions.length
         ? program.sessions.map((session, index) => ({
             week_number: session.week_number,
@@ -133,6 +137,8 @@ export function ProgramsManager({
       goal: form.goal,
       duration_weeks: form.duration_weeks,
       difficulty: form.difficulty,
+      progression_mode: form.progression_mode,
+      progression_notes: form.progression_notes,
       sessions: form.sessions
         .filter((session) => session.session_name.trim().length > 0)
         .map((session, index) => ({
@@ -181,6 +187,8 @@ export function ProgramsManager({
           goal: program.goal ?? "",
           duration_weeks: program.duration_weeks,
           difficulty: program.difficulty ?? "",
+          progression_mode: program.progression_mode ?? "manual",
+          progression_notes: program.progression_notes ?? "",
           sessions: program.sessions.map((session, index) => ({
             week_number: Number(session.week_number),
             day_number: Number(session.day_number),
@@ -229,6 +237,8 @@ export function ProgramsManager({
           goal: program.goal ?? "",
           duration_weeks: program.duration_weeks,
           difficulty: program.difficulty ?? "",
+          progression_mode: program.progression_mode ?? "manual",
+          progression_notes: program.progression_notes ?? "",
           sessions: program.sessions.map((session, index) => ({
             week_number: Number(session.week_number),
             day_number: Number(session.day_number),
@@ -270,6 +280,8 @@ export function ProgramsManager({
           goal: program.goal ?? "",
           duration_weeks: program.duration_weeks,
           difficulty: program.difficulty ?? "",
+          progression_mode: program.progression_mode ?? "manual",
+          progression_notes: program.progression_notes ?? "",
           is_archived: true,
           sessions: program.sessions.map((session, index) => ({
             week_number: Number(session.week_number),
@@ -366,8 +378,12 @@ export function ProgramsManager({
                     <Badge>{program.duration_weeks} weeks</Badge>
                     <Badge variant="default">{program.sessions.length} sessions</Badge>
                     {program.difficulty ? <Badge>{program.difficulty}</Badge> : null}
+                    <Badge variant="default">{program.progression_mode.replace(/_/g, " ")}</Badge>
                   </div>
                   {program.description ? <p className="mt-3 text-sm text-gf-muted">{program.description}</p> : null}
+                  {program.progression_notes ? (
+                    <p className="mt-2 text-sm text-gf-muted">Progression: {program.progression_notes}</p>
+                  ) : null}
                   <div className="mt-4 space-y-2">
                     {program.sessions.map((session) => (
                       <div key={session.id} className="rounded-lg border border-gf-border px-3 py-2">
@@ -481,6 +497,24 @@ export function ProgramsManager({
                 placeholder="Beginner / Intermediate / Advanced"
               />
             </div>
+            <Select
+              label="Progression mode"
+              value={form.progression_mode}
+              onChange={(event) => setForm((current) => ({ ...current, progression_mode: event.target.value }))}
+              options={[
+                { value: "manual", label: "Manual progression" },
+                { value: "linear_load", label: "Linear load" },
+                { value: "linear_reps", label: "Linear reps" },
+                { value: "volume_wave", label: "Volume wave" },
+                { value: "deload_ready", label: "Deload ready" },
+              ]}
+            />
+            <TextArea
+              label="Progression notes"
+              value={form.progression_notes}
+              onChange={(event) => setForm((current) => ({ ...current, progression_notes: event.target.value }))}
+              placeholder="Explain how load, reps, volume, or deloads should progress through the plan."
+            />
 
             <div className="space-y-3 border-t border-gf-border pt-4">
               <div className="flex items-center justify-between">

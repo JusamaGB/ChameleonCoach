@@ -452,6 +452,8 @@ export async function createPTProgram(
     goal?: string | null
     duration_weeks?: number | null
     difficulty?: string | null
+    progression_mode?: string | null
+    progression_notes?: string | null
     sessions: ProgramSessionInput[]
   }
 ) {
@@ -466,6 +468,8 @@ export async function createPTProgram(
       goal: cleanText(payload.goal),
       duration_weeks: Math.max(1, Number(payload.duration_weeks) || 1),
       difficulty: cleanText(payload.difficulty),
+      progression_mode: cleanText(payload.progression_mode) ?? "manual",
+      progression_notes: cleanText(payload.progression_notes),
       updated_at: new Date().toISOString(),
     })
     .select("*")
@@ -498,6 +502,8 @@ export async function updatePTProgram(
     goal?: string | null
     duration_weeks?: number | null
     difficulty?: string | null
+    progression_mode?: string | null
+    progression_notes?: string | null
     is_archived?: boolean
     sessions: ProgramSessionInput[]
   }
@@ -511,6 +517,8 @@ export async function updatePTProgram(
       goal: cleanText(payload.goal),
       duration_weeks: Math.max(1, Number(payload.duration_weeks) || 1),
       difficulty: cleanText(payload.difficulty),
+      progression_mode: cleanText(payload.progression_mode) ?? "manual",
+      progression_notes: cleanText(payload.progression_notes),
       is_archived: Boolean(payload.is_archived),
       updated_at: new Date().toISOString(),
     })

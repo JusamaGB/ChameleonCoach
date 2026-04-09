@@ -159,6 +159,8 @@ export interface PTProgram {
   goal: string | null
   duration_weeks: number
   difficulty: string | null
+  progression_mode: "manual" | "linear_load" | "linear_reps" | "volume_wave" | "deload_ready"
+  progression_notes: string | null
   is_template: boolean
   is_archived: boolean
   created_at: string

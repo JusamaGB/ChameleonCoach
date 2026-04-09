@@ -167,6 +167,9 @@ create table pt_programs (
   goal text,
   duration_weeks integer not null default 1,
   difficulty text,
+  progression_mode text not null default 'manual'
+    check (progression_mode in ('manual', 'linear_load', 'linear_reps', 'volume_wave', 'deload_ready')),
+  progression_notes text,
   is_template boolean not null default true,
   is_archived boolean not null default false,
   created_at timestamptz default now(),

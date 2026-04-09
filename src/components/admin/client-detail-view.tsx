@@ -47,7 +47,13 @@ interface ClientDetailViewProps {
     logs: ClientPTLog[]
     assignment_history: ClientPTProgramAssignment[]
   } | null
-  ptPrograms: Array<{ id: string; name: string; duration_weeks: number }>
+  ptPrograms: Array<{
+    id: string
+    name: string
+    duration_weeks: number
+    progression_mode?: string | null
+    progression_notes?: string | null
+  }>
 }
 
 export function ClientDetailView({
@@ -76,6 +82,9 @@ export function ClientDetailView({
     ? `https://docs.google.com/spreadsheets/d/${client.sheet_id}`
     : null
   const folderUrl = client.drive_folder_url
+  const activeProgramRecord = ptOverview?.assignment?.program_id
+    ? ptPrograms.find((program) => program.id === ptOverview.assignment?.program_id)
+    : null
   const workspaceSections = [
     { id: "overview", label: "Overview", enabled: canAccessFeature("client_overview", activeModules) },
     { id: "meal-plan", label: "Meal Plan", enabled: canAccessFeature("client_meal_plan", activeModules) },
@@ -631,6 +640,14 @@ export function ClientDetailView({
                         ) : null}
                         {ptOverview.assignment.assignment_notes ? (
                           <p className="mt-2 text-sm text-gf-muted">{ptOverview.assignment.assignment_notes}</p>
+                        ) : null}
+                        {activeProgramRecord?.progression_mode ? (
+                          <p className="mt-2 text-sm text-gf-muted">
+                            Progression: {activeProgramRecord.progression_mode.replace(/_/g, " ")}
+                            {activeProgramRecord.progression_notes
+                              ? ` • ${activeProgramRecord.progression_notes}`
+                              : ""}
+                          </p>
                         ) : null}
                       {ptOverview.assignment.last_session_completed_at ? (
                           <p className="mt-2 text-sm text-gf-muted">
