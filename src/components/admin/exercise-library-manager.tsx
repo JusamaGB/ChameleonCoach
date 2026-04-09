@@ -258,18 +258,24 @@ export function ExerciseLibraryManager({
           </div>
 
           <div className="mb-4 grid gap-3 md:grid-cols-[minmax(0,1fr)_220px]">
-            <div className="relative">
-              <Search
-                size={16}
-                className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-gf-muted"
-              />
-              <input
-                type="text"
-                value={query}
-                onChange={(event) => setQuery(event.target.value)}
-                placeholder="Search exercises..."
-                className="w-full rounded-lg border border-gf-border bg-gf-surface py-2 pl-9 pr-4 text-sm text-white placeholder:text-gf-muted/50 focus:border-gf-pink focus:outline-none focus:ring-1 focus:ring-gf-pink/30"
-              />
+            <div className="space-y-1.5">
+              <label htmlFor="exercise-search" className="block text-sm font-medium text-gf-muted">
+                Search Library
+              </label>
+              <div className="relative">
+                <Search
+                  size={16}
+                  className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-gf-muted"
+                />
+                <input
+                  id="exercise-search"
+                  type="text"
+                  value={query}
+                  onChange={(event) => setQuery(event.target.value)}
+                  placeholder="Search exercises..."
+                  className="w-full rounded-lg border border-gf-border bg-gf-surface py-2.5 pl-9 pr-4 text-sm text-white placeholder:text-gf-muted/50 focus:border-gf-pink focus:outline-none focus:ring-1 focus:ring-gf-pink/30"
+                />
+              </div>
             </div>
             <Select
               label="Category Filter"
