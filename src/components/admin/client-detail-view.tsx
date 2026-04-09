@@ -17,6 +17,7 @@ import type {
   Client,
   ClientPTLog,
   ClientPTProgramAssignment,
+  ClientPTSessionExercise,
   ClientPTSession,
   MealPlanDay,
   ProfileData,
@@ -46,6 +47,7 @@ interface ClientDetailViewProps {
     sessions: ClientPTSession[]
     logs: ClientPTLog[]
     assignment_history: ClientPTProgramAssignment[]
+    session_exercises: ClientPTSessionExercise[]
   } | null
   ptPrograms: Array<{
     id: string
@@ -81,6 +83,21 @@ export function ClientDetailView({
   const [sessionStatus, setSessionStatus] = useState<"upcoming" | "available" | "completed" | "skipped">("upcoming")
   const [sessionCoachNote, setSessionCoachNote] = useState("")
   const [savingSession, setSavingSession] = useState(false)
+  const [editingSessionExerciseId, setEditingSessionExerciseId] = useState<string | null>(null)
+  const [sessionExerciseForm, setSessionExerciseForm] = useState({
+    block_label: "",
+    sets: "",
+    reps: "",
+    duration_seconds: "",
+    distance_value: "",
+    distance_unit: "",
+    rest_seconds: "",
+    tempo: "",
+    load_guidance: "",
+    rpe_target: "",
+    notes: "",
+  })
+  const [savingSessionExercise, setSavingSessionExercise] = useState(false)
   const [assignmentError, setAssignmentError] = useState("")
 
   const sheetUrl = client.sheet_id
@@ -242,6 +259,67 @@ export function ClientDetailView({
     setSessionScheduledDate("")
     setSessionStatus("upcoming")
     setSessionCoachNote("")
+  }
+
+  function startEditSessionExercise(exercise: ClientPTSessionExercise) {
+    setEditingSessionExerciseId(exercise.id)
+    setSessionExerciseForm({
+      block_label: exercise.block_label ?? "",
+      sets: exercise.sets?.toString() ?? "",
+      reps: exercise.reps ?? "",
+      duration_seconds: exercise.duration_seconds?.toString() ?? "",
+      distance_value: exercise.distance_value?.toString() ?? "",
+      distance_unit: exercise.distance_unit ?? "",
+      rest_seconds: exercise.rest_seconds?.toString() ?? "",
+      tempo: exercise.tempo ?? "",
+      load_guidance: exercise.load_guidance ?? "",
+      rpe_target: exercise.rpe_target?.toString() ?? "",
+      notes: exercise.notes ?? "",
+    })
+    setAssignmentError("")
+  }
+
+  function cancelEditSessionExercise() {
+    setEditingSessionExerciseId(null)
+    setSessionExerciseForm({
+      block_label: "",
+      sets: "",
+      reps: "",
+      duration_seconds: "",
+      distance_value: "",
+      distance_unit: "",
+      rest_seconds: "",
+      tempo: "",
+      load_guidance: "",
+      rpe_target: "",
+      notes: "",
+    })
+  }
+
+  async function handleSaveSessionExercise(sessionId: string, sessionExerciseId: string) {
+    setSavingSessionExercise(true)
+    setAssignmentError("")
+    try {
+      const response = await fetch(
+        `/api/admin/clients/${client.id}/pt-sessions/${sessionId}/exercises/${sessionExerciseId}`,
+        {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(sessionExerciseForm),
+        }
+      )
+      const data = await response.json()
+      if (!response.ok) {
+        setAssignmentError(data.error || "Failed to update PT session exercise")
+        return
+      }
+      cancelEditSessionExercise()
+      router.refresh()
+    } catch {
+      setAssignmentError("Failed to update PT session exercise")
+    } finally {
+      setSavingSessionExercise(false)
+    }
   }
 
   async function handleSaveSession(sessionId: string) {
@@ -741,7 +819,12 @@ export function ClientDetailView({
                     <p className="text-xs uppercase tracking-wide text-gf-muted">Recent sessions</p>
                     {ptOverview?.sessions?.length ? (
                       <div className="mt-3 space-y-2">
-                        {ptOverview.sessions.slice(0, 6).map((session) => (
+                        {ptOverview.sessions.slice(0, 6).map((session) => {
+                          const sessionExercises = (ptOverview.session_exercises ?? []).filter(
+                            (exercise) => exercise.client_session_id === session.id
+                          )
+
+                          return (
                           <div key={session.id} className="rounded-lg border border-gf-border px-3 py-2">
                             <div className="flex items-center justify-between gap-3">
                               <div>
@@ -814,8 +897,150 @@ export function ClientDetailView({
                                 </div>
                               </div>
                             ) : null}
+                            {sessionExercises.length ? (
+                              <div className="mt-3 space-y-2">
+                                {sessionExercises.map((exercise) => (
+                                  <div
+                                    key={exercise.id}
+                                    className="rounded-lg border border-gf-border/80 bg-gf-black/20 px-3 py-2"
+                                  >
+                                    <div className="flex items-start justify-between gap-3">
+                                      <div>
+                                        <p className="text-sm font-medium text-white">
+                                          {exercise.sort_order}. {exercise.exercise_name_snapshot}
+                                        </p>
+                                        <p className="mt-1 text-xs text-gf-muted">
+                                          {exercise.sets ? `${exercise.sets} sets` : ""}
+                                          {exercise.reps ? ` • ${exercise.reps} reps` : ""}
+                                          {exercise.duration_seconds ? ` • ${exercise.duration_seconds}s` : ""}
+                                          {exercise.rest_seconds ? ` • Rest ${exercise.rest_seconds}s` : ""}
+                                          {exercise.tempo ? ` • Tempo ${exercise.tempo}` : ""}
+                                        </p>
+                                      </div>
+                                      <Button
+                                        type="button"
+                                        variant="ghost"
+                                        size="sm"
+                                        onClick={() => startEditSessionExercise(exercise)}
+                                      >
+                                        Edit exercise
+                                      </Button>
+                                    </div>
+                                    {editingSessionExerciseId === exercise.id ? (
+                                      <div className="mt-3 grid gap-3 rounded-lg border border-gf-border/80 bg-gf-surface p-3">
+                                        <div className="grid gap-3 sm:grid-cols-2">
+                                          <Input
+                                            label="Block label"
+                                            value={sessionExerciseForm.block_label}
+                                            onChange={(event) =>
+                                              setSessionExerciseForm((current) => ({ ...current, block_label: event.target.value }))
+                                            }
+                                          />
+                                          <Input
+                                            label="Sets"
+                                            type="number"
+                                            value={sessionExerciseForm.sets}
+                                            onChange={(event) =>
+                                              setSessionExerciseForm((current) => ({ ...current, sets: event.target.value }))
+                                            }
+                                          />
+                                        </div>
+                                        <div className="grid gap-3 sm:grid-cols-2">
+                                          <Input
+                                            label="Reps"
+                                            value={sessionExerciseForm.reps}
+                                            onChange={(event) =>
+                                              setSessionExerciseForm((current) => ({ ...current, reps: event.target.value }))
+                                            }
+                                          />
+                                          <Input
+                                            label="Duration (seconds)"
+                                            type="number"
+                                            value={sessionExerciseForm.duration_seconds}
+                                            onChange={(event) =>
+                                              setSessionExerciseForm((current) => ({ ...current, duration_seconds: event.target.value }))
+                                            }
+                                          />
+                                        </div>
+                                        <div className="grid gap-3 sm:grid-cols-2">
+                                          <Input
+                                            label="Distance"
+                                            type="number"
+                                            value={sessionExerciseForm.distance_value}
+                                            onChange={(event) =>
+                                              setSessionExerciseForm((current) => ({ ...current, distance_value: event.target.value }))
+                                            }
+                                          />
+                                          <Input
+                                            label="Distance unit"
+                                            value={sessionExerciseForm.distance_unit}
+                                            onChange={(event) =>
+                                              setSessionExerciseForm((current) => ({ ...current, distance_unit: event.target.value }))
+                                            }
+                                          />
+                                        </div>
+                                        <div className="grid gap-3 sm:grid-cols-2">
+                                          <Input
+                                            label="Rest (seconds)"
+                                            type="number"
+                                            value={sessionExerciseForm.rest_seconds}
+                                            onChange={(event) =>
+                                              setSessionExerciseForm((current) => ({ ...current, rest_seconds: event.target.value }))
+                                            }
+                                          />
+                                          <Input
+                                            label="Tempo"
+                                            value={sessionExerciseForm.tempo}
+                                            onChange={(event) =>
+                                              setSessionExerciseForm((current) => ({ ...current, tempo: event.target.value }))
+                                            }
+                                          />
+                                        </div>
+                                        <div className="grid gap-3 sm:grid-cols-2">
+                                          <Input
+                                            label="Load guidance"
+                                            value={sessionExerciseForm.load_guidance}
+                                            onChange={(event) =>
+                                              setSessionExerciseForm((current) => ({ ...current, load_guidance: event.target.value }))
+                                            }
+                                          />
+                                          <Input
+                                            label="RPE target"
+                                            type="number"
+                                            value={sessionExerciseForm.rpe_target}
+                                            onChange={(event) =>
+                                              setSessionExerciseForm((current) => ({ ...current, rpe_target: event.target.value }))
+                                            }
+                                          />
+                                        </div>
+                                        <TextArea
+                                          label="Exercise note"
+                                          value={sessionExerciseForm.notes}
+                                          onChange={(event) =>
+                                            setSessionExerciseForm((current) => ({ ...current, notes: event.target.value }))
+                                          }
+                                        />
+                                        <div className="flex items-center gap-2">
+                                          <Button
+                                            type="button"
+                                            size="sm"
+                                            onClick={() => handleSaveSessionExercise(session.id, exercise.id)}
+                                            disabled={savingSessionExercise}
+                                          >
+                                            {savingSessionExercise ? "Saving..." : "Save exercise"}
+                                          </Button>
+                                          <Button type="button" variant="ghost" size="sm" onClick={cancelEditSessionExercise}>
+                                            Cancel
+                                          </Button>
+                                        </div>
+                                      </div>
+                                    ) : null}
+                                  </div>
+                                ))}
+                              </div>
+                            ) : null}
                           </div>
-                        ))}
+                        )})}
                       </div>
                     ) : (
                       <p className="mt-2 text-sm text-gf-muted">No PT sessions materialized yet.</p>

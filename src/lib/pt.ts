@@ -879,6 +879,74 @@ export async function updateClientPTSessionForCoach(
   return updatedSession as ClientPTSession
 }
 
+export async function updateClientPTSessionExerciseForCoach(
+  supabase: { from: (table: string) => any },
+  coachId: string,
+  clientId: string,
+  sessionId: string,
+  sessionExerciseId: string,
+  payload: {
+    block_label?: string | null
+    sets?: number | null
+    reps?: string | null
+    duration_seconds?: number | null
+    distance_value?: number | null
+    distance_unit?: string | null
+    rest_seconds?: number | null
+    tempo?: string | null
+    load_guidance?: string | null
+    rpe_target?: number | null
+    notes?: string | null
+  }
+) {
+  const client = await getCoachClientRecord(supabase, coachId, clientId)
+  if (!client) {
+    throw new Error("Client not found")
+  }
+
+  const { data: session, error: sessionError } = await supabase
+    .from("client_pt_sessions")
+    .select("id, client_id, coach_id")
+    .eq("id", sessionId)
+    .eq("client_id", clientId)
+    .eq("coach_id", coachId)
+    .maybeSingle()
+
+  if (sessionError) throw sessionError
+  if (!session) {
+    throw new Error("PT session not found")
+  }
+
+  const { data: sessionExercise, error } = await supabase
+    .from("client_pt_session_exercises")
+    .update({
+      block_label: payload.block_label === undefined ? undefined : cleanText(payload.block_label),
+      sets: payload.sets === undefined ? undefined : cleanNumber(payload.sets),
+      reps: payload.reps === undefined ? undefined : cleanText(payload.reps),
+      duration_seconds: payload.duration_seconds === undefined ? undefined : cleanNumber(payload.duration_seconds),
+      distance_value: payload.distance_value === undefined ? undefined : cleanNumber(payload.distance_value),
+      distance_unit: payload.distance_unit === undefined ? undefined : cleanText(payload.distance_unit),
+      rest_seconds: payload.rest_seconds === undefined ? undefined : cleanNumber(payload.rest_seconds),
+      tempo: payload.tempo === undefined ? undefined : cleanText(payload.tempo),
+      load_guidance: payload.load_guidance === undefined ? undefined : cleanText(payload.load_guidance),
+      rpe_target: payload.rpe_target === undefined ? undefined : cleanNumber(payload.rpe_target),
+      notes: payload.notes === undefined ? undefined : cleanText(payload.notes),
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", sessionExerciseId)
+    .eq("client_session_id", sessionId)
+    .select("*")
+    .single()
+
+  if (error || !sessionExercise) {
+    throw error ?? new Error("Failed to update PT session exercise")
+  }
+
+  await syncClientPTWorkbook(supabase, coachId, clientId)
+
+  return sessionExercise as ClientPTSessionExercise
+}
+
 export async function getClientPTOverviewForCoach(
   supabase: { from: (table: string) => any },
   coachId: string,
@@ -909,6 +977,7 @@ export async function getClientPTOverviewForCoach(
       sessions: [],
       logs: [],
       assignment_history: (assignmentHistory ?? []) as ClientPTProgramAssignment[],
+      session_exercises: [],
     }
   }
 
@@ -928,11 +997,21 @@ export async function getClientPTOverviewForCoach(
     .order("logged_at", { ascending: false })
     .limit(10)
 
+  const sessionIds = (sessions ?? []).map((session: ClientPTSession) => session.id)
+  const { data: sessionExercises } = sessionIds.length
+    ? await supabase
+        .from("client_pt_session_exercises")
+        .select("*")
+        .in("client_session_id", sessionIds)
+        .order("sort_order", { ascending: true })
+    : { data: [] }
+
   return {
     assignment: assignment as ClientPTProgramAssignment,
     sessions: (sessions ?? []) as ClientPTSession[],
     logs: (logs ?? []) as ClientPTLog[],
     assignment_history: (assignmentHistory ?? []) as ClientPTProgramAssignment[],
+    session_exercises: (sessionExercises ?? []) as ClientPTSessionExercise[],
   }
 }
 
