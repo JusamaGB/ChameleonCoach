@@ -153,6 +153,8 @@ export interface PTProgram {
   id: string
   coach_id: string
   name: string
+  version_label: string
+  parent_program_id: string | null
   description: string | null
   goal: string | null
   duration_weeks: number
@@ -183,6 +185,7 @@ export interface ClientPTProgramAssignment {
   client_id: string
   program_id: string | null
   program_name_snapshot: string
+  program_version_snapshot: string | null
   assigned_start_date: string | null
   assigned_end_date: string | null
   status: "draft" | "active" | "completed" | "cancelled"

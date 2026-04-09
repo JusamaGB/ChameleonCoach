@@ -161,6 +161,8 @@ create table pt_programs (
   id uuid primary key default gen_random_uuid(),
   coach_id uuid not null references auth.users(id) on delete cascade,
   name text not null,
+  version_label text not null default 'v1',
+  parent_program_id uuid references pt_programs(id) on delete set null,
   description text,
   goal text,
   duration_weeks integer not null default 1,
@@ -191,6 +193,7 @@ create table client_pt_program_assignments (
   client_id uuid not null references clients(id) on delete cascade,
   program_id uuid references pt_programs(id) on delete set null,
   program_name_snapshot text not null,
+  program_version_snapshot text,
   assigned_start_date date,
   assigned_end_date date,
   status text not null default 'draft'

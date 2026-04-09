@@ -4,6 +4,7 @@ import {
   assignPTProgramToClient,
   cancelActivePTAssignmentForClient,
   getClientPTOverviewForCoach,
+  restartActivePTAssignmentForClient,
 } from "@/lib/pt"
 
 export async function GET(
@@ -33,6 +34,18 @@ export async function POST(
   const { id } = await params
 
   const body = await request.json()
+  if (body?.action === "restart_active") {
+    try {
+      const assignment = await restartActivePTAssignmentForClient(supabase, user.id, id)
+      return NextResponse.json({ assignment })
+    } catch (error) {
+      return NextResponse.json(
+        { error: error instanceof Error ? error.message : "Failed to restart assignment" },
+        { status: 500 }
+      )
+    }
+  }
+
   if (typeof body.program_id !== "string" || body.program_id.length === 0) {
     return NextResponse.json({ error: "program_id is required" }, { status: 400 })
   }

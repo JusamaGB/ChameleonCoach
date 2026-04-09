@@ -33,6 +33,7 @@ const EMPTY_SESSION: ProgramSessionRow = {
 
 const EMPTY_PROGRAM = {
   name: "",
+  version_label: "v1",
   description: "",
   goal: "",
   duration_weeks: "4",
@@ -100,6 +101,7 @@ export function ProgramsManager({
     setEditingId(program.id)
     setForm({
       name: program.name,
+      version_label: program.version_label ?? "v1",
       description: program.description ?? "",
       goal: program.goal ?? "",
       duration_weeks: program.duration_weeks.toString(),
@@ -126,6 +128,7 @@ export function ProgramsManager({
 
     const payload = {
       name: form.name,
+      version_label: form.version_label,
       description: form.description,
       goal: form.goal,
       duration_weeks: form.duration_weeks,
@@ -172,6 +175,8 @@ export function ProgramsManager({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           name: `${program.name} Copy`,
+          version_label: program.version_label ?? "v1",
+          parent_program_id: program.parent_program_id,
           description: program.description ?? "",
           goal: program.goal ?? "",
           duration_weeks: program.duration_weeks,
@@ -196,6 +201,54 @@ export function ProgramsManager({
       await refreshPrograms()
     } catch {
       setError("Failed to duplicate program")
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  function nextVersionLabel(versionLabel: string | null | undefined) {
+    const normalized = (versionLabel ?? "v1").trim().toLowerCase()
+    const match = normalized.match(/^v(\d+)$/)
+    if (!match) return "v2"
+    return `v${Number(match[1]) + 1}`
+  }
+
+  async function duplicateAsNewVersion(program: ProgramRecord) {
+    setSaving(true)
+    setError("")
+
+    try {
+      const response = await fetch("/api/admin/programs", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: program.name,
+          version_label: nextVersionLabel(program.version_label),
+          parent_program_id: program.parent_program_id ?? program.id,
+          description: program.description ?? "",
+          goal: program.goal ?? "",
+          duration_weeks: program.duration_weeks,
+          difficulty: program.difficulty ?? "",
+          sessions: program.sessions.map((session, index) => ({
+            week_number: Number(session.week_number),
+            day_number: Number(session.day_number),
+            sort_order: index + 1,
+            session_name: session.session_name,
+            workout_id: session.workout_id,
+            focus: session.focus ?? "",
+            notes: session.notes ?? "",
+          })),
+        }),
+      })
+      const data = await response.json()
+      if (!response.ok) {
+        setError(data.error || "Failed to create new version")
+        return
+      }
+
+      await refreshPrograms()
+    } catch {
+      setError("Failed to create new version")
     } finally {
       setSaving(false)
     }
@@ -278,11 +331,18 @@ export function ProgramsManager({
                   <div className="flex items-start justify-between gap-4">
                     <div>
                       <p className="font-medium text-white">{program.name}</p>
-                      {program.goal ? <p className="mt-1 text-sm text-gf-muted">{program.goal}</p> : null}
+                      <div className="mt-2 flex flex-wrap gap-2">
+                        <Badge>{program.version_label ?? "v1"}</Badge>
+                        {program.parent_program_id ? <Badge variant="default">Versioned</Badge> : null}
+                      </div>
+                      {program.goal ? <p className="mt-2 text-sm text-gf-muted">{program.goal}</p> : null}
                     </div>
                     <div className="flex items-center gap-2">
                       <Button type="button" variant="ghost" size="sm" onClick={() => duplicateProgram(program)} disabled={saving}>
                         Duplicate
+                      </Button>
+                      <Button type="button" variant="ghost" size="sm" onClick={() => duplicateAsNewVersion(program)} disabled={saving}>
+                        New version
                       </Button>
                       <Button type="button" variant="ghost" size="sm" onClick={() => startEdit(program)}>
                         Edit
@@ -386,6 +446,13 @@ export function ProgramsManager({
               value={form.name}
               onChange={(event) => setForm((current) => ({ ...current, name: event.target.value }))}
               placeholder="e.g. 8 Week PT Starter"
+              required
+            />
+            <Input
+              label="Version label"
+              value={form.version_label}
+              onChange={(event) => setForm((current) => ({ ...current, version_label: event.target.value }))}
+              placeholder="v1"
               required
             />
             <TextArea

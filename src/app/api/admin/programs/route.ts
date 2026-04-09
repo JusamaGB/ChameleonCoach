@@ -28,6 +28,8 @@ export async function POST(request: NextRequest) {
   try {
     const program = await createPTProgram(supabase, user.id, {
       name: body.name,
+      version_label: body.version_label,
+      parent_program_id: body.parent_program_id,
       description: body.description,
       goal: body.goal,
       duration_weeks: body.duration_weeks,

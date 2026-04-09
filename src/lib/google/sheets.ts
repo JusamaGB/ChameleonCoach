@@ -331,10 +331,11 @@ export async function syncCoachPTLibrarySheets(
     sheetId,
     "PT_Programs",
     [
-      ["program_id", "name", "description", "goal", "duration_weeks", "difficulty", "is_template", "is_archived", "updated_at"],
+      ["program_id", "name", "version_label", "description", "goal", "duration_weeks", "difficulty", "is_template", "is_archived", "updated_at"],
       ...payload.programs.map((program) => [
         program.id,
         program.name,
+        program.version_label ?? "v1",
         program.description ?? "",
         program.goal ?? "",
         program.duration_weeks ?? "",

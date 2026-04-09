@@ -162,6 +162,32 @@ export function ClientDetailView({
     }
   }
 
+  async function handleRestartAssignment() {
+    if (!confirm("Restart the current PT assignment from scratch for this client?")) {
+      return
+    }
+
+    setAssigningProgram(true)
+    setAssignmentError("")
+    try {
+      const response = await fetch(`/api/admin/clients/${client.id}/pt-assignment`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "restart_active" }),
+      })
+      const data = await response.json()
+      if (!response.ok) {
+        setAssignmentError(data.error || "Failed to restart assignment")
+        return
+      }
+      router.refresh()
+    } catch {
+      setAssignmentError("Failed to restart assignment")
+    } finally {
+      setAssigningProgram(false)
+    }
+  }
+
   function formatAppointmentDateTime(value: string | null, createdAt: string) {
     return new Date(value || createdAt).toLocaleString("en-GB", {
       dateStyle: "medium",
@@ -560,6 +586,9 @@ export function ClientDetailView({
                         </p>
                         <div className="mt-3 flex flex-wrap gap-2">
                           <Badge variant="success">{ptOverview.assignment.status}</Badge>
+                          {ptOverview.assignment.program_version_snapshot ? (
+                            <Badge variant="default">{ptOverview.assignment.program_version_snapshot}</Badge>
+                          ) : null}
                           <Badge variant="default">
                             {ptOverview.assignment.completed_sessions_count}/{ptOverview.assignment.total_sessions_count} sessions completed
                           </Badge>
@@ -582,6 +611,15 @@ export function ClientDetailView({
                           </p>
                         ) : null}
                         <div className="mt-4">
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            onClick={handleRestartAssignment}
+                            disabled={assigningProgram}
+                          >
+                            {assigningProgram ? "Restarting..." : "Restart assignment"}
+                          </Button>
                           <Button
                             type="button"
                             variant="ghost"
@@ -666,6 +704,9 @@ export function ClientDetailView({
                                   {assignment.program_name_snapshot}
                                 </p>
                                 <p className="mt-1 text-xs text-gf-muted">
+                                  {assignment.program_version_snapshot
+                                    ? `${assignment.program_version_snapshot} • `
+                                    : ""}
                                   Created {new Date(assignment.created_at).toLocaleDateString("en-GB")}
                                   {assignment.assigned_start_date
                                     ? ` • Start ${new Date(assignment.assigned_start_date).toLocaleDateString("en-GB")}`

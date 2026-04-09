@@ -446,6 +446,8 @@ export async function createPTProgram(
   coachId: string,
   payload: {
     name: string
+    version_label?: string | null
+    parent_program_id?: string | null
     description?: string | null
     goal?: string | null
     duration_weeks?: number | null
@@ -458,6 +460,8 @@ export async function createPTProgram(
     .insert({
       coach_id: coachId,
       name: payload.name.trim(),
+      version_label: cleanText(payload.version_label) ?? "v1",
+      parent_program_id: payload.parent_program_id ?? null,
       description: cleanText(payload.description),
       goal: cleanText(payload.goal),
       duration_weeks: Math.max(1, Number(payload.duration_weeks) || 1),
@@ -489,6 +493,7 @@ export async function updatePTProgram(
   programId: string,
   payload: {
     name: string
+    version_label?: string | null
     description?: string | null
     goal?: string | null
     duration_weeks?: number | null
@@ -501,6 +506,7 @@ export async function updatePTProgram(
     .from("pt_programs")
     .update({
       name: payload.name.trim(),
+      version_label: cleanText(payload.version_label) ?? "v1",
       description: cleanText(payload.description),
       goal: cleanText(payload.goal),
       duration_weeks: Math.max(1, Number(payload.duration_weeks) || 1),
@@ -610,6 +616,7 @@ export async function assignPTProgramToClient(
       client_id: clientId,
       program_id: program.id,
       program_name_snapshot: program.name,
+      program_version_snapshot: program.version_label ?? "v1",
       assigned_start_date: payload.assigned_start_date ?? null,
       status: assignmentStatus,
       assignment_notes: cleanText(payload.assignment_notes),
@@ -685,6 +692,36 @@ export async function assignPTProgramToClient(
   await syncClientPTWorkbook(supabase, coachId, clientId)
 
   return assignment
+}
+
+export async function restartActivePTAssignmentForClient(
+  supabase: { from: (table: string) => any },
+  coachId: string,
+  clientId: string
+) {
+  const client = await getCoachClientRecord(supabase, coachId, clientId)
+  if (!client) {
+    throw new Error("Client not found")
+  }
+
+  const { data: assignment, error } = await supabase
+    .from("client_pt_program_assignments")
+    .select("*")
+    .eq("client_id", clientId)
+    .eq("coach_id", coachId)
+    .eq("status", "active")
+    .maybeSingle()
+
+  if (error) throw error
+  if (!assignment?.program_id) {
+    throw new Error("No active PT assignment to restart")
+  }
+
+  return assignPTProgramToClient(supabase, coachId, clientId, {
+    program_id: assignment.program_id,
+    assigned_start_date: assignment.assigned_start_date,
+    assignment_notes: assignment.assignment_notes,
+  })
 }
 
 export async function cancelActivePTAssignmentForClient(

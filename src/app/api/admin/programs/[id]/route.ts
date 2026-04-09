@@ -19,6 +19,7 @@ export async function PATCH(
   try {
     const program = await updatePTProgram(supabase, user.id, id, {
       name: body.name,
+      version_label: body.version_label,
       description: body.description,
       goal: body.goal,
       duration_weeks: body.duration_weeks,

@@ -407,9 +407,9 @@ async function ensurePtLibraryWorkbookContent(
     ["workout_exercise_id", "workout_id", "workout_name", "sort_order", "block_label", "exercise_id", "exercise_name", "prescription_type", "sets", "reps", "rep_range_min", "rep_range_max", "duration_seconds", "distance_value", "distance_unit", "rest_seconds", "tempo", "load_guidance", "rpe_target", "notes"],
     ["", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", ""],
   ])
-  await updateValues(sheets, spreadsheetId, "PT_Programs!A1:I2", [
-    ["program_id", "name", "description", "goal", "duration_weeks", "difficulty", "is_template", "is_archived", "updated_at"],
-    ["", "", "", "", "", "", "", "", ""],
+  await updateValues(sheets, spreadsheetId, "PT_Programs!A1:J2", [
+    ["program_id", "name", "version_label", "description", "goal", "duration_weeks", "difficulty", "is_template", "is_archived", "updated_at"],
+    ["", "", "", "", "", "", "", "", "", ""],
   ])
   await updateValues(sheets, spreadsheetId, "PT_Program_Sessions!A1:L2", [
     ["program_session_id", "program_id", "program_name", "week_number", "day_number", "sort_order", "session_name", "workout_id", "workout_name", "focus", "notes", "updated_at"],
