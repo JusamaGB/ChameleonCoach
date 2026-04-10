@@ -22,6 +22,13 @@ import type {
   PTProgramSession,
   PTWorkout,
   PTWorkoutExercise,
+  ClientWellnessCheckIn,
+  ClientWellnessGoalAssignment,
+  ClientWellnessHabitAssignment,
+  ClientWellnessHabitLog,
+  ClientWellnessSessionNote,
+  WellnessGoalTemplate,
+  WellnessHabitTemplate,
 } from "@/types"
 
 async function getSheetsApi(coachId: string) {
@@ -688,6 +695,170 @@ export async function syncClientNutritionHabitSheets(
         log.adherence_flag,
         log.hunger_score ?? "",
         log.coach_note ?? "",
+      ]),
+    ],
+    coachId
+  )
+}
+
+export async function syncCoachWellnessLibrarySheets(
+  sheetId: string,
+  coachId: string,
+  payload: {
+    goals: WellnessGoalTemplate[]
+    habits: WellnessHabitTemplate[]
+  }
+) {
+  await ensureSpreadsheetTabs(sheetId, ["Wellness_Goals", "Wellness_Habits"], coachId)
+
+  await overwriteTab(
+    sheetId,
+    "Wellness_Goals",
+    [
+      ["goal_template_id", "name", "category", "description", "target_metric", "target_value", "milestone_label", "coaching_notes"],
+      ...payload.goals.map((goal) => [
+        goal.id,
+        goal.name,
+        goal.category,
+        goal.description ?? "",
+        goal.target_metric ?? "",
+        goal.target_value ?? "",
+        goal.milestone_label ?? "",
+        goal.coaching_notes ?? "",
+      ]),
+    ],
+    coachId
+  )
+
+  await overwriteTab(
+    sheetId,
+    "Wellness_Habits",
+    [
+      ["habit_template_id", "name", "category", "description", "target_count", "target_period", "coaching_notes"],
+      ...payload.habits.map((habit) => [
+        habit.id,
+        habit.name,
+        habit.category,
+        habit.description ?? "",
+        habit.target_count,
+        habit.target_period,
+        habit.coaching_notes ?? "",
+      ]),
+    ],
+    coachId
+  )
+}
+
+export async function syncClientWellnessSheets(
+  sheetId: string,
+  coachId: string,
+  goals: ClientWellnessGoalAssignment[] = [],
+  habits: ClientWellnessHabitAssignment[] = [],
+  habitLogs: ClientWellnessHabitLog[] = [],
+  checkIns: ClientWellnessCheckIn[] = [],
+  sessionNotes: ClientWellnessSessionNote[] = []
+) {
+  await ensureSpreadsheetTabs(
+    sheetId,
+    ["Wellness_Goals", "Wellness_Habits", "Wellness_Habit_Log", "Wellness_Check_Ins", "Wellness_Session_Notes"],
+    coachId
+  )
+
+  await overwriteTab(
+    sheetId,
+    "Wellness_Goals",
+    [
+      ["assignment_id", "goal_template_id", "goal_name", "category", "target_metric", "target_value", "milestone_label", "assigned_start_date", "status", "coaching_notes"],
+      ...goals.map((goal) => [
+        goal.id,
+        goal.goal_template_id ?? "",
+        goal.goal_name_snapshot,
+        goal.category_snapshot,
+        goal.target_metric ?? "",
+        goal.target_value ?? "",
+        goal.milestone_label ?? "",
+        goal.assigned_start_date ?? "",
+        goal.status,
+        goal.coaching_notes ?? "",
+      ]),
+    ],
+    coachId
+  )
+
+  await overwriteTab(
+    sheetId,
+    "Wellness_Habits",
+    [
+      ["assignment_id", "habit_template_id", "habit_name", "category", "target_count", "target_period", "assigned_start_date", "status", "coaching_notes"],
+      ...habits.map((habit) => [
+        habit.id,
+        habit.habit_template_id ?? "",
+        habit.habit_name_snapshot,
+        habit.category_snapshot,
+        habit.target_count,
+        habit.target_period,
+        habit.assigned_start_date ?? "",
+        habit.status,
+        habit.coaching_notes ?? "",
+      ]),
+    ],
+    coachId
+  )
+
+  await overwriteTab(
+    sheetId,
+    "Wellness_Habit_Log",
+    [
+      ["habit_log_id", "assignment_id", "habit_name", "completion_date", "completion_status", "adherence_score", "notes", "coach_note", "logged_at"],
+      ...habitLogs.map((log) => [
+        log.id,
+        log.assignment_id,
+        habits.find((habit) => habit.id === log.assignment_id)?.habit_name_snapshot ?? "",
+        log.completion_date,
+        log.completion_status,
+        log.adherence_score ?? "",
+        log.notes ?? "",
+        log.coach_note ?? "",
+        log.logged_at,
+      ]),
+    ],
+    coachId
+  )
+
+  await overwriteTab(
+    sheetId,
+    "Wellness_Check_Ins",
+    [
+      ["check_in_id", "submitted_at", "week_label", "energy_score", "stress_score", "sleep_score", "confidence_score", "wins", "blockers", "focus_for_next_week"],
+      ...checkIns.map((checkIn) => [
+        checkIn.id,
+        checkIn.submitted_at,
+        checkIn.week_label ?? "",
+        checkIn.energy_score ?? "",
+        checkIn.stress_score ?? "",
+        checkIn.sleep_score ?? "",
+        checkIn.confidence_score ?? "",
+        checkIn.wins ?? "",
+        checkIn.blockers ?? "",
+        checkIn.focus_for_next_week ?? "",
+      ]),
+    ],
+    coachId
+  )
+
+  await overwriteTab(
+    sheetId,
+    "Wellness_Session_Notes",
+    [
+      ["session_note_id", "session_date", "session_type", "summary", "client_wins", "priorities", "action_steps"],
+      ...sessionNotes.map((note) => [
+        note.id,
+        note.session_date,
+        note.session_type,
+        note.summary,
+        note.client_wins ?? "",
+        note.priorities ?? "",
+        note.action_steps ?? "",
       ]),
     ],
     coachId

@@ -60,6 +60,14 @@ For Nutrition Core, the same standard will apply:
 - client meal-plan delivery must live in client workbook structures
 - client nutrition feedback and tracking must live in client workbook structures where relevant
 
+### Wellness Core interpretation
+
+For Wellness Core, the same standard now applies:
+
+- coach wellness goals and wellness habit templates live in a coach-owned wellness library workbook
+- client wellness goals, client wellness habits, client habit logs, client weekly check-ins, and coach session notes live in the client workbook
+- app-only state can still own permissions, internal IDs, and sync metadata, but the operational coaching record must remain usable in Google Sheets
+
 ### Build rule for future modules
 
 Every new module should define, before implementation:

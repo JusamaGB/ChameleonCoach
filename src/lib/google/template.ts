@@ -14,6 +14,7 @@ const CONTROL_WORKBOOK_NAME = `${PLATFORM_NAME} Workspace Control`
 const CLIENTS_FOLDER_NAME = "Clients"
 const PT_LIBRARY_WORKBOOK_NAME = `${PLATFORM_NAME} PT Library`
 const NUTRITION_LIBRARY_WORKBOOK_NAME = `${PLATFORM_NAME} Nutrition Library`
+const WELLNESS_LIBRARY_WORKBOOK_NAME = `${PLATFORM_NAME} Wellness Library`
 
 type DriveFileRef = {
   id: string
@@ -31,6 +32,8 @@ type CoachWorkspaceMetadata = {
   managed_pt_library_sheet_url?: string | null
   managed_nutrition_library_sheet_id?: string | null
   managed_nutrition_library_sheet_url?: string | null
+  managed_wellness_library_sheet_id?: string | null
+  managed_wellness_library_sheet_url?: string | null
 }
 
 type CoachWorkspaceProvisionResult = CoachWorkspaceMetadata & {
@@ -369,7 +372,9 @@ async function ensureControlWorkbookContent(
       "Coach library",
       module === "pt_core"
         ? "Separate PT library workbook provisioned when active"
-        : "Separate nutrition library workbook provisioned when active",
+        : module === "nutrition_core"
+          ? "Separate nutrition library workbook provisioned when active"
+          : "Separate wellness library workbook provisioned when active",
     ]),
   ])
 
@@ -445,6 +450,24 @@ async function ensureNutritionLibraryWorkbookContent(
   ])
 }
 
+async function ensureWellnessLibraryWorkbookContent(
+  sheets: ReturnType<typeof google.sheets>,
+  spreadsheetId: string
+) {
+  await ensureSpreadsheetTabs(sheets, spreadsheetId, [
+    "Wellness_Goals",
+    "Wellness_Habits",
+  ])
+  await updateValues(sheets, spreadsheetId, "Wellness_Goals!A1:H2", [
+    ["goal_template_id", "name", "category", "description", "target_metric", "target_value", "milestone_label", "coaching_notes"],
+    ["", "", "", "", "", "", "", ""],
+  ])
+  await updateValues(sheets, spreadsheetId, "Wellness_Habits!A1:G2", [
+    ["habit_template_id", "name", "category", "description", "target_count", "target_period", "coaching_notes"],
+    ["", "", "", "", "", "", ""],
+  ])
+}
+
 async function ensureClientWorkbookContent(
   sheets: ReturnType<typeof google.sheets>,
   spreadsheetId: string,
@@ -464,6 +487,15 @@ async function ensureClientWorkbookContent(
   }
   if (activeModules.includes("pt_core")) {
     clientTabs.push("Training_Plan", "Training_Plan_Exercises", "Workout_Log", "Workout_Log_Exercises")
+  }
+  if (activeModules.includes("wellness_core")) {
+    clientTabs.push(
+      "Wellness_Goals",
+      "Wellness_Habits",
+      "Wellness_Habit_Log",
+      "Wellness_Check_Ins",
+      "Wellness_Session_Notes"
+    )
   }
   await ensureSpreadsheetTabs(sheets, spreadsheetId, clientTabs)
 
@@ -532,6 +564,29 @@ async function ensureClientWorkbookContent(
     await updateValues(sheets, spreadsheetId, "Workout_Log_Exercises!A1:Q2", [
       ["pt_log_exercise_id", "pt_log_id", "client_session_id", "client_session_exercise_id", "exercise_id", "exercise_name", "set_number", "target_reps", "completed_reps", "weight_value", "weight_unit", "duration_seconds", "distance_value", "distance_unit", "rpe", "notes", "logged_at"],
       ["", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", ""],
+    ])
+  }
+
+  if (activeModules.includes("wellness_core")) {
+    await updateValues(sheets, spreadsheetId, "Wellness_Goals!A1:J2", [
+      ["assignment_id", "goal_template_id", "goal_name", "category", "target_metric", "target_value", "milestone_label", "assigned_start_date", "status", "coaching_notes"],
+      ["", "", "", "", "", "", "", "", "", ""],
+    ])
+    await updateValues(sheets, spreadsheetId, "Wellness_Habits!A1:I2", [
+      ["assignment_id", "habit_template_id", "habit_name", "category", "target_count", "target_period", "assigned_start_date", "status", "coaching_notes"],
+      ["", "", "", "", "", "", "", "", ""],
+    ])
+    await updateValues(sheets, spreadsheetId, "Wellness_Habit_Log!A1:I2", [
+      ["habit_log_id", "assignment_id", "habit_name", "completion_date", "completion_status", "adherence_score", "notes", "coach_note", "logged_at"],
+      ["", "", "", "", "", "", "", "", ""],
+    ])
+    await updateValues(sheets, spreadsheetId, "Wellness_Check_Ins!A1:J2", [
+      ["check_in_id", "submitted_at", "week_label", "energy_score", "stress_score", "sleep_score", "confidence_score", "wins", "blockers", "focus_for_next_week"],
+      ["", "", "", "", "", "", "", "", "", ""],
+    ])
+    await updateValues(sheets, spreadsheetId, "Wellness_Session_Notes!A1:G2", [
+      ["session_note_id", "session_date", "session_type", "summary", "client_wins", "priorities", "action_steps"],
+      ["", "", "", "", "", "", ""],
     ])
   }
 }
@@ -719,6 +774,16 @@ export async function getCoachDriveWorkspaceHealth({
     }
   }
 
+  if (activeModules.includes("wellness_core")) {
+    const wellnessLibrary = await lookupDriveFileById(
+      drive,
+      settings.managed_wellness_library_sheet_id
+    )
+    if (!wellnessLibrary) {
+      missingArtifacts.push("wellness_library_workbook")
+    }
+  }
+
   return {
     status: missingArtifacts.length > 0 ? "missing" : "healthy",
     missingArtifacts,
@@ -795,6 +860,20 @@ export async function ensureCoachDriveWorkspace({
     nutritionLibrarySheetUrl = nutritionLibrary.url
   }
 
+  let wellnessLibrarySheetId = existing?.managed_wellness_library_sheet_id ?? null
+  let wellnessLibrarySheetUrl = existing?.managed_wellness_library_sheet_url ?? null
+  if (activeModules.includes("wellness_core")) {
+    const wellnessLibrary = await ensureSpreadsheetFile(drive, {
+      fileName: WELLNESS_LIBRARY_WORKBOOK_NAME,
+      parentId: rootFolder.id,
+      existingId: existing?.managed_wellness_library_sheet_id,
+    })
+    createdAny = createdAny || wellnessLibrary.created
+    await ensureWellnessLibraryWorkbookContent(sheets, wellnessLibrary.id)
+    wellnessLibrarySheetId = wellnessLibrary.id
+    wellnessLibrarySheetUrl = wellnessLibrary.url
+  }
+
   return {
     createdAny,
     managed_workspace_sheet_id: controlWorkbook.id,
@@ -807,6 +886,8 @@ export async function ensureCoachDriveWorkspace({
     managed_pt_library_sheet_url: ptLibrarySheetUrl,
     managed_nutrition_library_sheet_id: nutritionLibrarySheetId,
     managed_nutrition_library_sheet_url: nutritionLibrarySheetUrl,
+    managed_wellness_library_sheet_id: wellnessLibrarySheetId,
+    managed_wellness_library_sheet_url: wellnessLibrarySheetUrl,
   }
 }
 
@@ -840,6 +921,8 @@ export async function createCoachWorkspaceSheet({
     ptLibrarySheetUrl: workspace.managed_pt_library_sheet_url ?? null,
     nutritionLibrarySheetId: workspace.managed_nutrition_library_sheet_id ?? null,
     nutritionLibrarySheetUrl: workspace.managed_nutrition_library_sheet_url ?? null,
+    wellnessLibrarySheetId: workspace.managed_wellness_library_sheet_id ?? null,
+    wellnessLibrarySheetUrl: workspace.managed_wellness_library_sheet_url ?? null,
   }
 }
 
@@ -937,6 +1020,8 @@ export async function createClientSheet({
       managed_pt_library_sheet_url: workspace.managed_pt_library_sheet_url,
       managed_nutrition_library_sheet_id: workspace.managed_nutrition_library_sheet_id,
       managed_nutrition_library_sheet_url: workspace.managed_nutrition_library_sheet_url,
+      managed_wellness_library_sheet_id: workspace.managed_wellness_library_sheet_id,
+      managed_wellness_library_sheet_url: workspace.managed_wellness_library_sheet_url,
     },
     drive_folder_id: clientFolder.id,
     drive_folder_url: clientFolder.url,

@@ -11,16 +11,32 @@ import {
   listNutritionHabitTemplatesForCoach,
   listNutritionTemplatesForCoach,
 } from "@/lib/nutrition"
+import {
+  listClientWellnessCheckInsForCoach,
+  listClientWellnessGoalAssignmentsForCoach,
+  listClientWellnessHabitAssignmentsForCoach,
+  listClientWellnessHabitLogsForCoach,
+  listClientWellnessSessionNotesForCoach,
+  listWellnessGoalTemplatesForCoach,
+  listWellnessHabitTemplatesForCoach,
+} from "@/lib/wellness"
 import { redirect } from "next/navigation"
 import type {
   ClientNutritionCheckIn,
   ClientNutritionHabitAssignment,
   ClientNutritionLogEntry,
+  ClientWellnessCheckIn,
+  ClientWellnessGoalAssignment,
+  ClientWellnessHabitAssignment,
+  ClientWellnessHabitLog,
+  ClientWellnessSessionNote,
   MealPlanDay,
   NutritionHabitTemplate,
   NutritionMealPlanTemplate,
   ProgressEntry,
   ProfileData,
+  WellnessGoalTemplate,
+  WellnessHabitTemplate,
 } from "@/types"
 
 export const dynamic = 'force-dynamic'
@@ -96,6 +112,13 @@ export default async function ClientDetailPage({
   let nutritionHabitLogs: any[] = []
   let nutritionCheckIns: ClientNutritionCheckIn[] = []
   let nutritionLogs: ClientNutritionLogEntry[] = []
+  let wellnessGoalTemplates: WellnessGoalTemplate[] = []
+  let wellnessHabitTemplates: WellnessHabitTemplate[] = []
+  let wellnessGoalAssignments: ClientWellnessGoalAssignment[] = []
+  let wellnessHabitAssignments: ClientWellnessHabitAssignment[] = []
+  let wellnessHabitLogs: ClientWellnessHabitLog[] = []
+  let wellnessCheckIns: ClientWellnessCheckIn[] = []
+  let wellnessSessionNotes: ClientWellnessSessionNote[] = []
 
   if (client.sheet_id) {
     try {
@@ -135,6 +158,30 @@ export default async function ClientDetailPage({
     }
   }
 
+  if (activeModules.includes("wellness_core")) {
+    try {
+      ;[
+        wellnessGoalTemplates,
+        wellnessHabitTemplates,
+        wellnessGoalAssignments,
+        wellnessHabitAssignments,
+        wellnessHabitLogs,
+        wellnessCheckIns,
+        wellnessSessionNotes,
+      ] = await Promise.all([
+        listWellnessGoalTemplatesForCoach(supabase, user.id),
+        listWellnessHabitTemplatesForCoach(supabase, user.id),
+        listClientWellnessGoalAssignmentsForCoach(supabase, user.id, id),
+        listClientWellnessHabitAssignmentsForCoach(supabase, user.id, id),
+        listClientWellnessHabitLogsForCoach(supabase, user.id, id),
+        listClientWellnessCheckInsForCoach(supabase, user.id, id),
+        listClientWellnessSessionNotesForCoach(supabase, user.id, id),
+      ])
+    } catch {
+      // Wellness data may not be available yet
+    }
+  }
+
   return (
     <ClientDetailView
       client={client}
@@ -151,6 +198,13 @@ export default async function ClientDetailPage({
       nutritionHabitLogs={nutritionHabitLogs}
       nutritionCheckIns={nutritionCheckIns}
       nutritionLogs={nutritionLogs}
+      wellnessGoalTemplates={wellnessGoalTemplates}
+      wellnessHabitTemplates={wellnessHabitTemplates}
+      wellnessGoalAssignments={wellnessGoalAssignments}
+      wellnessHabitAssignments={wellnessHabitAssignments}
+      wellnessHabitLogs={wellnessHabitLogs}
+      wellnessCheckIns={wellnessCheckIns}
+      wellnessSessionNotes={wellnessSessionNotes}
     />
   )
 }

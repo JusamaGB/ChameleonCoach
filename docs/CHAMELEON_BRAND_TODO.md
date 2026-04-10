@@ -82,3 +82,8 @@ Status:
    - Confirm the new coach review signals and habit-log follow-up notes hold up under real usage and make any UX adjustments they expose.
    - Verify managed-sheet reliability, read/write consistency, and end-to-end onboarding validation for Nutrition Core.
    - Keep this aligned with `NUTRITION_CORE_PLAN.md`, where Nutrition Core is now functionally complete for the accountability loop but still thinner than PT Core and still needs live hardening.
+7. Run the first Wellness Core live hardening pass.
+   - Verify Wellness Core library workbook creation for goal and habit templates on real provisioned workspaces.
+   - Verify client workbook sync for wellness goals, wellness habits, wellness habit logs, wellness check-ins, and coach session notes.
+   - Confirm the new coach-side Wellness section inside client workspaces is usable in live end-to-end flows.
+   - Confirm the client portal wellness surface works cleanly for habit logging and weekly check-ins after bundle activation.

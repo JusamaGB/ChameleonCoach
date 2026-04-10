@@ -42,7 +42,7 @@ export async function POST(
 
   const { data: settings } = await supabase
     .from("admin_settings")
-    .select("google_refresh_token, coach_type_preset, active_modules, managed_workspace_sheet_id, managed_workspace_sheet_url, managed_workspace_root_folder_id, managed_workspace_root_folder_url, managed_clients_folder_id, managed_clients_folder_url, managed_pt_library_sheet_id, managed_pt_library_sheet_url, managed_nutrition_library_sheet_id, managed_nutrition_library_sheet_url, managed_workspace_sheet_modules, managed_workspace_sheet_provisioned_at")
+    .select("google_refresh_token, coach_type_preset, active_modules, managed_workspace_sheet_id, managed_workspace_sheet_url, managed_workspace_root_folder_id, managed_workspace_root_folder_url, managed_clients_folder_id, managed_clients_folder_url, managed_pt_library_sheet_id, managed_pt_library_sheet_url, managed_nutrition_library_sheet_id, managed_nutrition_library_sheet_url, managed_wellness_library_sheet_id, managed_wellness_library_sheet_url, managed_workspace_sheet_modules, managed_workspace_sheet_provisioned_at")
     .eq("user_id", user.id)
     .maybeSingle()
 
@@ -118,6 +118,10 @@ export async function POST(
             clientWorkspace.coachWorkspace.managed_nutrition_library_sheet_id ?? null,
           managed_nutrition_library_sheet_url:
             clientWorkspace.coachWorkspace.managed_nutrition_library_sheet_url ?? null,
+          managed_wellness_library_sheet_id:
+            clientWorkspace.coachWorkspace.managed_wellness_library_sheet_id ?? null,
+          managed_wellness_library_sheet_url:
+            clientWorkspace.coachWorkspace.managed_wellness_library_sheet_url ?? null,
           managed_workspace_sheet_modules: modules.enableable_modules,
           managed_workspace_sheet_provisioned_at: completedAt,
           updated_at: completedAt,

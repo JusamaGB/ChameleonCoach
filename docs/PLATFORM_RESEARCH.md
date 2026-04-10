@@ -534,8 +534,14 @@ This should deliberately defer secure messaging, group coaching, course delivery
 
 ### Nutrition Core Follow-Through
 
-- Nutrition Core remains the other active foundation module and still needs hardening around managed-sheet reliability, read/write consistency, and end-to-end onboarding validation.
-- No new coach core should be added until PT Core and Nutrition Core both feel structurally complete and stable in app + Sheets.
+- Nutrition Core remains one of the active foundation modules and still needs hardening around managed-sheet reliability, read/write consistency, and end-to-end onboarding validation.
+
+### Wellness Core Follow-Through
+
+- Wellness Core is now live as a real enableable bundle rather than a positioning-only niche.
+- V1 scope now includes coach-scoped goal templates, coach-scoped wellness habit templates, client goal assignments, client wellness habit assignments, client habit logs, client weekly wellness check-ins, coach session notes, client portal wellness surfaces, and managed Google Sheets sync.
+- The next work on Wellness Core should be hardening and UX refinement, not redefining the contract from scratch.
+- Appointments, messaging, community, CRM, and AI support still remain follow-on layers rather than part of the current Wellness Core contract.
 
 ### PT Core Exact Schema
 
@@ -1225,4 +1231,4 @@ Default implementation assumptions unless overridden:
 | 2026-04-09 | Coach payments now include a dedicated `/admin/payments` area for Stripe Connect onboarding, hosted invoice creation, and invoice status tracking. This is implemented product scope, but live end-to-end validation remains a release-hardening task rather than a completed validation milestone. |
 | 2026-04-09 | Nutrition Core now includes client-side habit logging, weekly check-ins, nutrition logs, and an initial coach review layer in client workspaces. Remaining Nutrition Core work is now primarily hardening and review polish rather than missing the accountability loop entirely. |
 | 2026-04-09 | All approved coach-type niches are now intentionally visible in onboarding and the Modules workspace as positioning lanes. Only built bundles are real entitlements; future lanes remain clearly marked `Coming soon` until their module contract and starter slice are implemented. |
-| 2026-04-09 | Wellness Coach is now the next niche-definition candidate after PT Core and Nutrition Core hardening. Its starter slice should center on goals, check-ins, habits, session notes, appointments, and Google Sheets sync before adding messaging, community, CRM, or AI layers. |
+| 2026-04-09 | Wellness Core is now live as a real module bundle: coach goal/habit libraries, client assignments, client wellness logging, coach session notes, client portal surfaces, and managed Google Sheets sync are implemented. The next step is hardening and validation rather than initial definition. |

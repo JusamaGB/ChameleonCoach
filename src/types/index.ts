@@ -142,6 +142,8 @@ export interface AdminSettings {
   managed_pt_library_sheet_url: string | null
   managed_nutrition_library_sheet_id: string | null
   managed_nutrition_library_sheet_url: string | null
+  managed_wellness_library_sheet_id: string | null
+  managed_wellness_library_sheet_url: string | null
   managed_workspace_sheet_modules: string[] | null
   managed_workspace_sheet_provisioned_at: string | null
   appointment_booking_mode: 'coach_only' | 'client_request_visible_slots' | null
@@ -492,6 +494,117 @@ export interface ClientNutritionLogEntry {
   adherence_flag: "on_plan" | "off_plan" | "flexible"
   hunger_score: number | null
   coach_note: string | null
+  created_at: string
+  updated_at: string
+}
+
+export interface WellnessGoalTemplate {
+  id: string
+  coach_id: string
+  name: string
+  category: string
+  description: string | null
+  target_metric: string | null
+  target_value: string | null
+  milestone_label: string | null
+  coaching_notes: string | null
+  is_archived: boolean
+  created_at: string
+  updated_at: string
+}
+
+export interface WellnessHabitTemplate {
+  id: string
+  coach_id: string
+  name: string
+  description: string | null
+  category: string
+  target_count: number
+  target_period: "day" | "week"
+  coaching_notes: string | null
+  is_archived: boolean
+  created_at: string
+  updated_at: string
+}
+
+export interface ClientWellnessGoalAssignment {
+  id: string
+  coach_id: string
+  client_id: string
+  goal_template_id: string | null
+  goal_name_snapshot: string
+  description_snapshot: string | null
+  category_snapshot: string
+  target_metric: string | null
+  target_value: string | null
+  milestone_label: string | null
+  coaching_notes: string | null
+  assigned_start_date: string | null
+  status: "active" | "completed" | "cancelled"
+  created_at: string
+  updated_at: string
+}
+
+export interface ClientWellnessHabitAssignment {
+  id: string
+  coach_id: string
+  client_id: string
+  habit_template_id: string | null
+  habit_name_snapshot: string
+  description_snapshot: string | null
+  category_snapshot: string
+  target_count: number
+  target_period: "day" | "week"
+  coaching_notes: string | null
+  assigned_start_date: string | null
+  status: "active" | "completed" | "cancelled"
+  created_at: string
+  updated_at: string
+}
+
+export interface ClientWellnessHabitLog {
+  id: string
+  coach_id: string
+  client_id: string
+  assignment_id: string
+  logged_at: string
+  completion_date: string
+  completion_status: "completed" | "partial" | "missed"
+  adherence_score: number | null
+  notes: string | null
+  coach_note: string | null
+  created_at: string
+  updated_at: string
+}
+
+export interface ClientWellnessCheckIn {
+  id: string
+  coach_id: string
+  client_id: string
+  submitted_at: string
+  week_label: string | null
+  energy_score: number | null
+  stress_score: number | null
+  sleep_score: number | null
+  confidence_score: number | null
+  wins: string | null
+  blockers: string | null
+  focus_for_next_week: string | null
+  coach_follow_up_note: string | null
+  created_at: string
+  updated_at: string
+}
+
+export interface ClientWellnessSessionNote {
+  id: string
+  coach_id: string
+  client_id: string
+  session_date: string
+  session_type: string
+  summary: string
+  client_wins: string | null
+  priorities: string | null
+  action_steps: string | null
   created_at: string
   updated_at: string
 }

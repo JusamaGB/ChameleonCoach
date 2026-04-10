@@ -19,7 +19,7 @@ export async function POST() {
   const admin = createAdmin()
   const { data: settings } = await admin
     .from("admin_settings")
-    .select("id, user_id, google_refresh_token, coach_type_preset, active_modules, managed_workspace_sheet_id, managed_workspace_sheet_url, managed_workspace_sheet_modules, managed_workspace_sheet_provisioned_at, managed_workspace_root_folder_id, managed_workspace_root_folder_url, managed_clients_folder_id, managed_clients_folder_url, managed_pt_library_sheet_id, managed_pt_library_sheet_url, managed_nutrition_library_sheet_id, managed_nutrition_library_sheet_url")
+    .select("id, user_id, google_refresh_token, coach_type_preset, active_modules, managed_workspace_sheet_id, managed_workspace_sheet_url, managed_workspace_sheet_modules, managed_workspace_sheet_provisioned_at, managed_workspace_root_folder_id, managed_workspace_root_folder_url, managed_clients_folder_id, managed_clients_folder_url, managed_pt_library_sheet_id, managed_pt_library_sheet_url, managed_nutrition_library_sheet_id, managed_nutrition_library_sheet_url, managed_wellness_library_sheet_id, managed_wellness_library_sheet_url")
     .eq("user_id", user.id)
     .maybeSingle()
 
@@ -51,6 +51,7 @@ export async function POST() {
         managed_clients_folder_id: workspaceSheet.clientsFolderId,
         managed_pt_library_sheet_id: workspaceSheet.ptLibrarySheetId,
         managed_nutrition_library_sheet_id: workspaceSheet.nutritionLibrarySheetId,
+        managed_wellness_library_sheet_id: workspaceSheet.wellnessLibrarySheetId,
         managed_workspace_sheet_provisioned_at: provisionedAt,
       },
     })
@@ -78,6 +79,8 @@ export async function POST() {
       managed_pt_library_sheet_url: workspaceSheet.ptLibrarySheetUrl,
       managed_nutrition_library_sheet_id: workspaceSheet.nutritionLibrarySheetId,
       managed_nutrition_library_sheet_url: workspaceSheet.nutritionLibrarySheetUrl,
+      managed_wellness_library_sheet_id: workspaceSheet.wellnessLibrarySheetId,
+      managed_wellness_library_sheet_url: workspaceSheet.wellnessLibrarySheetUrl,
       managed_workspace_sheet_modules: currentModules,
       managed_workspace_sheet_provisioned_at: provisionedAt,
       updated_at: new Date().toISOString(),
@@ -109,6 +112,8 @@ export async function POST() {
       managed_pt_library_sheet_url: workspaceSheet.ptLibrarySheetUrl,
       managed_nutrition_library_sheet_id: workspaceSheet.nutritionLibrarySheetId,
       managed_nutrition_library_sheet_url: workspaceSheet.nutritionLibrarySheetUrl,
+      managed_wellness_library_sheet_id: workspaceSheet.wellnessLibrarySheetId,
+      managed_wellness_library_sheet_url: workspaceSheet.wellnessLibrarySheetUrl,
       active_modules: currentModules,
       workspace_status: verifiedHealth.status,
       missing_artifacts: verifiedHealth.missingArtifacts,

@@ -48,6 +48,7 @@ export default async function DashboardPage() {
   const activeModules = portal.modules.active_modules
   const showMealPlan = canAccessFeature("client_portal_meal_plan", activeModules)
   const showTraining = canAccessFeature("client_portal_training", activeModules)
+  const showWellness = canAccessFeature("client_portal_wellness", activeModules)
 
   return (
     <div className="flex min-h-screen">
@@ -138,6 +139,22 @@ export default async function DashboardPage() {
                   style={{ color: branding.brand_primary_color }}
                 >
                   Open training
+                </a>
+              </Card>
+            ) : null}
+            {showWellness ? (
+              <Card>
+                <p className="text-xs text-gf-muted">Wellness Core</p>
+                <h2 className="mt-1 text-lg font-semibold text-white">Wellness workspace available</h2>
+                <p className="mt-2 text-sm text-gf-muted">
+                  Check your goals, log wellness habits, and submit weekly reflections for your coach.
+                </p>
+                <a
+                  href="/wellness"
+                  className="mt-4 inline-flex text-sm font-semibold"
+                  style={{ color: branding.brand_primary_color }}
+                >
+                  Open wellness workspace
                 </a>
               </Card>
             ) : null}

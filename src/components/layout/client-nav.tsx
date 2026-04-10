@@ -15,6 +15,7 @@ import {
   Dumbbell,
   Lightbulb,
   ClipboardCheck,
+  HeartHandshake,
 } from "lucide-react"
 import { DEFAULT_COACH_BRANDING, type CoachBranding } from "@/lib/branding"
 import { canAccessFeature } from "@/lib/modules"
@@ -25,6 +26,7 @@ const navItems = [
   { href: "/training", label: "Training", icon: Dumbbell, feature: "client_portal_training" as const },
   { href: "/meal-plan", label: "Meal Plan", icon: UtensilsCrossed, feature: "client_portal_meal_plan" as const },
   { href: "/nutrition", label: "Nutrition", icon: ClipboardCheck, feature: "client_portal_meal_plan" as const },
+  { href: "/wellness", label: "Wellness", icon: HeartHandshake, feature: "client_portal_wellness" as const },
   { href: "/progress", label: "Progress", icon: TrendingUp },
   { href: "/appointments", label: "Appointments", icon: Calendar },
   { href: "/profile", label: "Profile", icon: User },

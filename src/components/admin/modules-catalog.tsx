@@ -50,6 +50,7 @@ const EMPTY_PROFILE: ProfilePayload = {
 const MODULE_DESCRIPTIONS: Record<EnableableModule, string> = {
   pt_core: "Exercise library and future training/programming capabilities. Enable here at the workspace level, then apply PT work inside each client workspace.",
   nutrition_core: "Meal-plan and nutrition-oriented client work. Enable it once for this workspace, then manage each client's nutrition work from their workspace.",
+  wellness_core: "Goal tracking, habit accountability, check-ins, and coaching follow-up for wellness-focused client work.",
 }
 
 const MODULE_TOOL_LINKS: Partial<Record<EnableableModule, Array<{ href: string; label: string }>>> = {
@@ -62,6 +63,10 @@ const MODULE_TOOL_LINKS: Partial<Record<EnableableModule, Array<{ href: string; 
     { href: "/admin/recipes", label: "Recipe library" },
     { href: "/admin/nutrition-templates", label: "Meal plan templates" },
     { href: "/admin/nutrition-habits", label: "Nutrition habits" },
+  ],
+  wellness_core: [
+    { href: "/admin/wellness-goals", label: "Wellness goals" },
+    { href: "/admin/wellness-habits", label: "Wellness habits" },
   ],
 }
 
@@ -248,7 +253,7 @@ export function ModulesCatalog() {
       </Card>
 
       <div className="grid gap-4 lg:grid-cols-2">
-        {(["pt_core", "nutrition_core"] as EnableableModule[]).map((module) => {
+        {(["pt_core", "nutrition_core", "wellness_core"] as EnableableModule[]).map((module) => {
           const enabled = profile.active_modules.includes(module)
           const isSavingThisModule = savingModule === module
 
@@ -281,7 +286,9 @@ export function ModulesCatalog() {
                   {enabled || profile.is_legacy_workspace
                     ? module === "pt_core"
                       ? "PT tools live inside the module layer instead of the main sidebar. Client-specific PT delivery still happens from each client workspace."
-                      : "Nutrition tools live inside the module layer instead of the main sidebar. Client-specific nutrition delivery still happens from each client workspace."
+                      : module === "nutrition_core"
+                        ? "Nutrition tools live inside the module layer instead of the main sidebar. Client-specific nutrition delivery still happens from each client workspace."
+                        : "Wellness tools live inside the module layer instead of the main sidebar. Client-specific wellness delivery still happens from each client workspace."
                     : "These module sections are ready here. Enable the bundle first, then use them at the workspace level before delivering the work inside each client workspace."}
                 </p>
                 <div className="flex flex-wrap gap-3">

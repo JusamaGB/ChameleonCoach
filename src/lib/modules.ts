@@ -30,7 +30,7 @@ export const COACH_TYPE_DESCRIPTIONS: Record<CoachTypePreset, string> = {
 export const COACH_TYPE_STATUS: Record<CoachTypePreset, "live" | "coming_soon"> = {
   personal_trainer: "live",
   nutritionist: "live",
-  wellness_coach: "coming_soon",
+  wellness_coach: "live",
   sports_performance_coach: "coming_soon",
   yoga_pilates_instructor: "coming_soon",
   gym_studio_owner: "coming_soon",
@@ -45,7 +45,7 @@ export const COACH_TYPE_HIGHLIGHTS: Record<CoachTypePreset, string[]> = {
   gym_studio_owner: ["Membership operations", "Staff scheduling", "Studio reporting and retention"],
 }
 
-export const ENABLEABLE_MODULES = ["pt_core", "nutrition_core"] as const
+export const ENABLEABLE_MODULES = ["pt_core", "nutrition_core", "wellness_core"] as const
 
 export type EnableableModule = (typeof ENABLEABLE_MODULES)[number]
 export type ModuleKey = "shared_core" | EnableableModule
@@ -61,18 +61,23 @@ export type SurfaceFeature =
   | "exercises"
   | "workouts"
   | "programs"
+  | "wellness_goals"
+  | "wellness_habits"
   | "client_overview"
   | "client_meal_plan"
+  | "client_wellness"
   | "client_progress"
   | "client_appointments"
   | "client_training"
   | "client_training_history"
   | "client_portal_meal_plan"
   | "client_portal_training"
+  | "client_portal_wellness"
 
 export const MODULE_LABELS: Record<EnableableModule, string> = {
   pt_core: "PT Core",
   nutrition_core: "Nutrition Core",
+  wellness_core: "Wellness Core",
 }
 
 const FEATURE_DEFINITIONS: Record<
@@ -92,14 +97,18 @@ const FEATURE_DEFINITIONS: Record<
   exercises: { scope: "coach", requiredModule: "pt_core" },
   workouts: { scope: "coach", requiredModule: "pt_core" },
   programs: { scope: "coach", requiredModule: "pt_core" },
+  wellness_goals: { scope: "coach", requiredModule: "wellness_core" },
+  wellness_habits: { scope: "coach", requiredModule: "wellness_core" },
   client_overview: { scope: "client", requiredModule: "shared_core" },
   client_meal_plan: { scope: "client", requiredModule: "nutrition_core" },
+  client_wellness: { scope: "client", requiredModule: "wellness_core" },
   client_progress: { scope: "client", requiredModule: "shared_core" },
   client_appointments: { scope: "client", requiredModule: "shared_core" },
   client_training: { scope: "client", requiredModule: "pt_core" },
   client_training_history: { scope: "client", requiredModule: "pt_core" },
   client_portal_meal_plan: { scope: "client", requiredModule: "nutrition_core" },
   client_portal_training: { scope: "client", requiredModule: "pt_core" },
+  client_portal_wellness: { scope: "client", requiredModule: "wellness_core" },
 }
 
 export function isCoachTypePreset(value: unknown): value is CoachTypePreset {
@@ -127,6 +136,8 @@ export function seedModulesForPreset(preset: CoachTypePreset): EnableableModule[
       return ["pt_core"]
     case "nutritionist":
       return ["nutrition_core"]
+    case "wellness_coach":
+      return ["wellness_core"]
     default:
       return []
   }

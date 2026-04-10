@@ -36,6 +36,8 @@ create table admin_settings (
   managed_pt_library_sheet_url text,
   managed_nutrition_library_sheet_id text,
   managed_nutrition_library_sheet_url text,
+  managed_wellness_library_sheet_id text,
+  managed_wellness_library_sheet_url text,
   managed_workspace_sheet_modules text[],
   managed_workspace_sheet_provisioned_at timestamptz,
   appointment_booking_mode text default 'coach_only',
@@ -500,6 +502,122 @@ create table client_nutrition_log_entries (
   updated_at timestamptz default now()
 );
 
+create table wellness_goal_templates (
+  id uuid primary key default gen_random_uuid(),
+  coach_id uuid not null references auth.users(id) on delete cascade,
+  name text not null,
+  category text not null default 'general',
+  description text,
+  target_metric text,
+  target_value text,
+  milestone_label text,
+  coaching_notes text,
+  is_archived boolean not null default false,
+  created_at timestamptz default now(),
+  updated_at timestamptz default now()
+);
+
+create table wellness_habit_templates (
+  id uuid primary key default gen_random_uuid(),
+  coach_id uuid not null references auth.users(id) on delete cascade,
+  name text not null,
+  description text,
+  category text not null default 'general',
+  target_count integer not null default 1 check (target_count > 0),
+  target_period text not null default 'day'
+    check (target_period in ('day', 'week')),
+  coaching_notes text,
+  is_archived boolean not null default false,
+  created_at timestamptz default now(),
+  updated_at timestamptz default now()
+);
+
+create table client_wellness_goal_assignments (
+  id uuid primary key default gen_random_uuid(),
+  coach_id uuid not null references auth.users(id) on delete cascade,
+  client_id uuid not null references clients(id) on delete cascade,
+  goal_template_id uuid references wellness_goal_templates(id) on delete set null,
+  goal_name_snapshot text not null,
+  description_snapshot text,
+  category_snapshot text not null default 'general',
+  target_metric text,
+  target_value text,
+  milestone_label text,
+  coaching_notes text,
+  assigned_start_date date,
+  status text not null default 'active'
+    check (status in ('active', 'completed', 'cancelled')),
+  created_at timestamptz default now(),
+  updated_at timestamptz default now()
+);
+
+create table client_wellness_habit_assignments (
+  id uuid primary key default gen_random_uuid(),
+  coach_id uuid not null references auth.users(id) on delete cascade,
+  client_id uuid not null references clients(id) on delete cascade,
+  habit_template_id uuid references wellness_habit_templates(id) on delete set null,
+  habit_name_snapshot text not null,
+  description_snapshot text,
+  category_snapshot text not null default 'general',
+  target_count integer not null default 1 check (target_count > 0),
+  target_period text not null default 'day'
+    check (target_period in ('day', 'week')),
+  coaching_notes text,
+  assigned_start_date date,
+  status text not null default 'active'
+    check (status in ('active', 'completed', 'cancelled')),
+  created_at timestamptz default now(),
+  updated_at timestamptz default now()
+);
+
+create table client_wellness_habit_logs (
+  id uuid primary key default gen_random_uuid(),
+  coach_id uuid not null references auth.users(id) on delete cascade,
+  client_id uuid not null references clients(id) on delete cascade,
+  assignment_id uuid not null references client_wellness_habit_assignments(id) on delete cascade,
+  logged_at timestamptz not null default now(),
+  completion_date date not null,
+  completion_status text not null default 'completed'
+    check (completion_status in ('completed', 'partial', 'missed')),
+  adherence_score integer check (adherence_score between 1 and 10),
+  notes text,
+  coach_note text,
+  created_at timestamptz default now(),
+  updated_at timestamptz default now()
+);
+
+create table client_wellness_check_ins (
+  id uuid primary key default gen_random_uuid(),
+  coach_id uuid not null references auth.users(id) on delete cascade,
+  client_id uuid not null references clients(id) on delete cascade,
+  submitted_at timestamptz not null default now(),
+  week_label text,
+  energy_score integer check (energy_score between 1 and 10),
+  stress_score integer check (stress_score between 1 and 10),
+  sleep_score integer check (sleep_score between 1 and 10),
+  confidence_score integer check (confidence_score between 1 and 10),
+  wins text,
+  blockers text,
+  focus_for_next_week text,
+  coach_follow_up_note text,
+  created_at timestamptz default now(),
+  updated_at timestamptz default now()
+);
+
+create table client_wellness_session_notes (
+  id uuid primary key default gen_random_uuid(),
+  coach_id uuid not null references auth.users(id) on delete cascade,
+  client_id uuid not null references clients(id) on delete cascade,
+  session_date date not null,
+  session_type text not null default 'coaching_session',
+  summary text not null,
+  client_wins text,
+  priorities text,
+  action_steps text,
+  created_at timestamptz default now(),
+  updated_at timestamptz default now()
+);
+
 create table product_requests (
   id uuid primary key default gen_random_uuid(),
   title text not null,
@@ -653,8 +771,16 @@ alter table nutrition_meal_plan_templates enable row level security;
 alter table nutrition_meal_plan_template_days enable row level security;
 alter table nutrition_habit_templates enable row level security;
 alter table client_nutrition_habit_assignments enable row level security;
+alter table client_nutrition_habit_logs enable row level security;
 alter table client_nutrition_check_ins enable row level security;
 alter table client_nutrition_log_entries enable row level security;
+alter table wellness_goal_templates enable row level security;
+alter table wellness_habit_templates enable row level security;
+alter table client_wellness_goal_assignments enable row level security;
+alter table client_wellness_habit_assignments enable row level security;
+alter table client_wellness_habit_logs enable row level security;
+alter table client_wellness_check_ins enable row level security;
+alter table client_wellness_session_notes enable row level security;
 alter table product_requests enable row level security;
 alter table product_request_votes enable row level security;
 alter table product_request_comments enable row level security;
@@ -845,11 +971,130 @@ create policy "coach_own_nutrition_habit_templates" on nutrition_habit_templates
 create policy "coach_own_client_nutrition_habit_assignments" on client_nutrition_habit_assignments
   for all using (coach_id = auth.uid());
 
+create policy "coach_own_client_nutrition_habit_logs" on client_nutrition_habit_logs
+  for all using (coach_id = auth.uid());
+
 create policy "coach_own_client_nutrition_check_ins" on client_nutrition_check_ins
   for all using (coach_id = auth.uid());
 
 create policy "coach_own_client_nutrition_log_entries" on client_nutrition_log_entries
   for all using (coach_id = auth.uid());
+
+create policy "client_read_own_nutrition_habit_assignments" on client_nutrition_habit_assignments
+  for select using (
+    client_id in (select id from clients where user_id = auth.uid())
+  );
+
+create policy "client_read_own_nutrition_habit_logs" on client_nutrition_habit_logs
+  for select using (
+    client_id in (select id from clients where user_id = auth.uid())
+  );
+
+create policy "client_insert_own_nutrition_habit_logs" on client_nutrition_habit_logs
+  for insert with check (
+    client_id in (select id from clients where user_id = auth.uid())
+  );
+
+create policy "client_update_own_nutrition_habit_logs" on client_nutrition_habit_logs
+  for update using (
+    client_id in (select id from clients where user_id = auth.uid())
+  );
+
+create policy "client_read_own_nutrition_check_ins" on client_nutrition_check_ins
+  for select using (
+    client_id in (select id from clients where user_id = auth.uid())
+  );
+
+create policy "client_insert_own_nutrition_check_ins" on client_nutrition_check_ins
+  for insert with check (
+    client_id in (select id from clients where user_id = auth.uid())
+  );
+
+create policy "client_update_own_nutrition_check_ins" on client_nutrition_check_ins
+  for update using (
+    client_id in (select id from clients where user_id = auth.uid())
+  );
+
+create policy "client_read_own_nutrition_log_entries" on client_nutrition_log_entries
+  for select using (
+    client_id in (select id from clients where user_id = auth.uid())
+  );
+
+create policy "client_insert_own_nutrition_log_entries" on client_nutrition_log_entries
+  for insert with check (
+    client_id in (select id from clients where user_id = auth.uid())
+  );
+
+create policy "client_update_own_nutrition_log_entries" on client_nutrition_log_entries
+  for update using (
+    client_id in (select id from clients where user_id = auth.uid())
+  );
+
+create policy "coach_own_wellness_goal_templates" on wellness_goal_templates
+  for all using (coach_id = auth.uid());
+
+create policy "coach_own_wellness_habit_templates" on wellness_habit_templates
+  for all using (coach_id = auth.uid());
+
+create policy "coach_own_client_wellness_goal_assignments" on client_wellness_goal_assignments
+  for all using (coach_id = auth.uid());
+
+create policy "coach_own_client_wellness_habit_assignments" on client_wellness_habit_assignments
+  for all using (coach_id = auth.uid());
+
+create policy "coach_own_client_wellness_habit_logs" on client_wellness_habit_logs
+  for all using (coach_id = auth.uid());
+
+create policy "coach_own_client_wellness_check_ins" on client_wellness_check_ins
+  for all using (coach_id = auth.uid());
+
+create policy "coach_own_client_wellness_session_notes" on client_wellness_session_notes
+  for all using (coach_id = auth.uid());
+
+create policy "client_read_own_wellness_goal_assignments" on client_wellness_goal_assignments
+  for select using (
+    client_id in (select id from clients where user_id = auth.uid())
+  );
+
+create policy "client_read_own_wellness_habit_assignments" on client_wellness_habit_assignments
+  for select using (
+    client_id in (select id from clients where user_id = auth.uid())
+  );
+
+create policy "client_read_own_wellness_habit_logs" on client_wellness_habit_logs
+  for select using (
+    client_id in (select id from clients where user_id = auth.uid())
+  );
+
+create policy "client_insert_own_wellness_habit_logs" on client_wellness_habit_logs
+  for insert with check (
+    client_id in (select id from clients where user_id = auth.uid())
+  );
+
+create policy "client_update_own_wellness_habit_logs" on client_wellness_habit_logs
+  for update using (
+    client_id in (select id from clients where user_id = auth.uid())
+  );
+
+create policy "client_read_own_wellness_check_ins" on client_wellness_check_ins
+  for select using (
+    client_id in (select id from clients where user_id = auth.uid())
+  );
+
+create policy "client_insert_own_wellness_check_ins" on client_wellness_check_ins
+  for insert with check (
+    client_id in (select id from clients where user_id = auth.uid())
+  );
+
+create policy "client_update_own_wellness_check_ins" on client_wellness_check_ins
+  for update using (
+    client_id in (select id from clients where user_id = auth.uid())
+  );
+
+create policy "client_read_own_wellness_session_notes" on client_wellness_session_notes
+  for select using (
+    client_id in (select id from clients where user_id = auth.uid())
+  );
 
 create policy "authenticated_read_product_requests" on product_requests
   for select using (auth.uid() is not null);
@@ -978,6 +1223,14 @@ create index idx_client_nutrition_habit_logs_assignment_id on client_nutrition_h
 create index idx_client_nutrition_habit_logs_client_id on client_nutrition_habit_logs(client_id, completion_date desc);
 create index idx_client_nutrition_check_ins_client_id on client_nutrition_check_ins(client_id, submitted_at desc);
 create index idx_client_nutrition_log_entries_client_id on client_nutrition_log_entries(client_id, logged_at desc);
+create index idx_wellness_goal_templates_coach_id on wellness_goal_templates(coach_id, name);
+create index idx_wellness_habit_templates_coach_id on wellness_habit_templates(coach_id, name);
+create index idx_client_wellness_goal_assignments_client_id on client_wellness_goal_assignments(client_id, status, created_at desc);
+create index idx_client_wellness_habit_assignments_client_id on client_wellness_habit_assignments(client_id, status, created_at desc);
+create index idx_client_wellness_habit_logs_assignment_id on client_wellness_habit_logs(assignment_id, completion_date desc);
+create index idx_client_wellness_habit_logs_client_id on client_wellness_habit_logs(client_id, completion_date desc);
+create index idx_client_wellness_check_ins_client_id on client_wellness_check_ins(client_id, submitted_at desc);
+create index idx_client_wellness_session_notes_client_id on client_wellness_session_notes(client_id, session_date desc);
 create index idx_product_requests_status on product_requests(status, created_at desc);
 create index idx_product_requests_module_area on product_requests(module_area, created_at desc);
 create index idx_product_requests_requester on product_requests(requester_user_id, created_at desc);

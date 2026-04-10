@@ -11,6 +11,7 @@ import { MealPlanView } from "@/components/meal-plan/meal-plan-view"
 import { ProgressChart, ProgressHistory } from "@/components/progress/progress-chart"
 import { ClientProfileEditor } from "./client-profile-editor"
 import { MealPlanEditor } from "./meal-plan-editor"
+import { WellnessClientSection } from "./wellness-client-section"
 import Link from "next/link"
 import { ArrowLeft, ExternalLink, Pencil, Trash2 } from "lucide-react"
 import type {
@@ -29,6 +30,13 @@ import type {
   NutritionMealPlanTemplateDay,
   ProfileData,
   ProgressEntry,
+  WellnessGoalTemplate,
+  WellnessHabitTemplate,
+  ClientWellnessGoalAssignment,
+  ClientWellnessHabitAssignment,
+  ClientWellnessHabitLog,
+  ClientWellnessCheckIn,
+  ClientWellnessSessionNote,
 } from "@/types"
 
 function todayKey() {
@@ -81,6 +89,13 @@ interface ClientDetailViewProps {
   nutritionHabitLogs: ClientNutritionHabitLog[]
   nutritionCheckIns: ClientNutritionCheckIn[]
   nutritionLogs: ClientNutritionLogEntry[]
+  wellnessGoalTemplates: WellnessGoalTemplate[]
+  wellnessHabitTemplates: WellnessHabitTemplate[]
+  wellnessGoalAssignments: ClientWellnessGoalAssignment[]
+  wellnessHabitAssignments: ClientWellnessHabitAssignment[]
+  wellnessHabitLogs: ClientWellnessHabitLog[]
+  wellnessCheckIns: ClientWellnessCheckIn[]
+  wellnessSessionNotes: ClientWellnessSessionNote[]
 }
 
 export function ClientDetailView({
@@ -98,6 +113,13 @@ export function ClientDetailView({
   nutritionHabitLogs,
   nutritionCheckIns,
   nutritionLogs,
+  wellnessGoalTemplates,
+  wellnessHabitTemplates,
+  wellnessGoalAssignments,
+  wellnessHabitAssignments,
+  wellnessHabitLogs,
+  wellnessCheckIns,
+  wellnessSessionNotes,
 }: ClientDetailViewProps) {
   const router = useRouter()
   const [editingProfile, setEditingProfile] = useState(false)
@@ -182,6 +204,7 @@ export function ClientDetailView({
   const workspaceSections = [
     { id: "overview", label: "Overview", enabled: canAccessFeature("client_overview", activeModules) },
     { id: "meal-plan", label: "Nutrition", enabled: canAccessFeature("client_meal_plan", activeModules) },
+    { id: "wellness", label: "Wellness", enabled: canAccessFeature("client_wellness", activeModules) },
     { id: "progress", label: "Progress", enabled: canAccessFeature("client_progress", activeModules) },
     { id: "appointments", label: "Appointments", enabled: canAccessFeature("client_appointments", activeModules) },
     { id: "training", label: "Training", enabled: canAccessFeature("client_training", activeModules) },
@@ -1860,6 +1883,21 @@ export function ClientDetailView({
               )}
             </Card>
           </section>
+        ) : null}
+
+        {canAccessFeature("client_wellness", activeModules) ? (
+          <div id="wellness">
+            <WellnessClientSection
+              clientId={client.id}
+              goalTemplates={wellnessGoalTemplates}
+              habitTemplates={wellnessHabitTemplates}
+              goalAssignments={wellnessGoalAssignments}
+              habitAssignments={wellnessHabitAssignments}
+              habitLogs={wellnessHabitLogs}
+              checkIns={wellnessCheckIns}
+              sessionNotes={wellnessSessionNotes}
+            />
+          </div>
         ) : null}
 
         {canAccessFeature("client_training", activeModules) ? (
