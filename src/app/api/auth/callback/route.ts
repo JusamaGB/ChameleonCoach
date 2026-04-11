@@ -2,6 +2,10 @@ import { createServerClient } from "@supabase/ssr"
 import { cookies } from "next/headers"
 import { NextResponse, type NextRequest } from "next/server"
 
+function isMissingColumnError(error: { code?: string | null } | null) {
+  return error?.code === "PGRST204"
+}
+
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url)
   const code = searchParams.get("code")
@@ -40,11 +44,17 @@ export async function GET(request: NextRequest) {
       if (!role) {
         const metaRole = user.app_metadata?.role as string | undefined
         if (metaRole && ["coach", "admin", "client"].includes(metaRole)) {
-          await supabase.from("user_roles").upsert({
-            user_id: user.id,
-            role: metaRole,
-            stripe_subscription_status: "trialing",
-          }, { onConflict: "user_id", ignoreDuplicates: true })
+          const { error } = await supabase.from("user_roles").upsert(
+            {
+              user_id: user.id,
+              role: metaRole,
+            },
+            { onConflict: "user_id", ignoreDuplicates: true }
+          )
+
+          if (error && !isMissingColumnError(error)) {
+            throw error
+          }
           role = { role: metaRole }
         }
       }

@@ -50,7 +50,7 @@ export async function middleware(request: NextRequest) {
   if (pathname.startsWith("/admin")) {
     const { data: role } = await supabase
       .from("user_roles")
-      .select("role, stripe_subscription_status, trial_ends_at")
+      .select("role")
       .eq("user_id", user.id)
       .single()
 
@@ -61,12 +61,18 @@ export async function middleware(request: NextRequest) {
 
     // Subscription gate — expired trial or cancelled/unpaid subscription
     if (pathname !== "/admin/billing" && !pathname.startsWith("/admin/billing")) {
-      const status = role?.stripe_subscription_status as string | undefined
-      const trialEnds = role?.trial_ends_at as string | undefined
+      const { data: billing } = await supabase
+        .from("user_roles")
+        .select("stripe_subscription_status, trial_ends_at")
+        .eq("user_id", user.id)
+        .single()
+
+      const status = billing?.stripe_subscription_status as string | undefined
+      const trialEnds = billing?.trial_ends_at as string | undefined
       const isLapsed =
+        Boolean(trialEnds) &&
         (status === "canceled" || status === "unpaid") &&
-        trialEnds &&
-        new Date(trialEnds) < new Date()
+        new Date(trialEnds as string) < new Date()
 
       if (isLapsed) {
         return NextResponse.redirect(new URL("/admin/billing", request.url))

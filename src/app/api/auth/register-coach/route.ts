@@ -3,6 +3,10 @@ import { createAdmin } from "@/lib/supabase/server"
 import { createStripeCustomer, createTrialSubscription } from "@/lib/stripe"
 import { normalizeCoachTypePreset, seedModulesForPreset } from "@/lib/modules"
 
+function isMissingColumnError(error: { code?: string | null; message?: string | null } | null) {
+  return error?.code === "PGRST204"
+}
+
 export async function POST(request: NextRequest) {
   const body = await request.json().catch(() => ({}))
   const { name, email, password, coach_type_preset } = body
@@ -49,33 +53,44 @@ export async function POST(request: NextRequest) {
     )
   }
 
-  // Create Stripe customer + trial subscription
-  let stripeCustomerId: string | null = null
-  let stripeSubscriptionId: string | null = null
-  if (process.env.STRIPE_SECRET_KEY && process.env.STRIPE_COACH_PRICE_ID) {
-    try {
-      stripeCustomerId = await createStripeCustomer(email, name)
-      stripeSubscriptionId = await createTrialSubscription(stripeCustomerId)
-    } catch {
-      // Non-fatal — coach can still use the platform during trial window
-    }
-  }
-
-  // Assign coach role with Stripe IDs
+  // Always create the coach role first.
+  // Billing metadata is optional and should never block account creation.
   const { error: roleError } = await supabase
     .from("user_roles")
     .insert({
       user_id: authData.user.id,
       role: "coach",
-      stripe_customer_id: stripeCustomerId,
-      stripe_subscription_id: stripeSubscriptionId,
-      stripe_subscription_status: "trialing",
     })
 
   if (roleError) {
     // Clean up auth user if role insert fails
     await supabase.auth.admin.deleteUser(authData.user.id)
     return NextResponse.json({ error: `Failed to assign coach role: ${roleError.message} (code: ${roleError.code})` }, { status: 500 })
+  }
+
+  if (process.env.STRIPE_SECRET_KEY && process.env.STRIPE_COACH_PRICE_ID) {
+    try {
+      const stripeCustomerId = await createStripeCustomer(email, name)
+      const stripeSubscriptionId = await createTrialSubscription(stripeCustomerId)
+
+      const { error: billingError } = await supabase
+        .from("user_roles")
+        .update({
+          stripe_customer_id: stripeCustomerId,
+          stripe_subscription_id: stripeSubscriptionId,
+          stripe_subscription_status: "trialing",
+        })
+        .eq("user_id", authData.user.id)
+
+      if (billingError && !isMissingColumnError(billingError)) {
+        return NextResponse.json(
+          { error: `Failed to save billing state: ${billingError.message} (code: ${billingError.code})` },
+          { status: 500 }
+        )
+      }
+    } catch {
+      // Non-fatal — coach can still use the platform even if Stripe setup is unavailable.
+    }
   }
 
   const { error: settingsError } = await supabase

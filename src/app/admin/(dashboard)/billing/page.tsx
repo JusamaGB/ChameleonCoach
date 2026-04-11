@@ -53,12 +53,13 @@ export default async function BillingPage() {
   if (!user) redirect("/login")
 
   const admin = createAdmin()
-  const { data: role } = await admin
+  const { data: role, error: roleError } = await admin
     .from("user_roles")
     .select("stripe_subscription_status, stripe_subscription_id, trial_ends_at, subscription_ends_at")
     .eq("user_id", user.id)
     .single()
 
+  const billingColumnsMissing = roleError?.code === "PGRST204"
   const status = role?.stripe_subscription_status ?? "trialing"
   const trialEnds = role?.trial_ends_at ?? null
   const subEnds = role?.subscription_ends_at ?? null
@@ -73,6 +74,12 @@ export default async function BillingPage() {
 
       <Card>
         <div className="space-y-4">
+          {billingColumnsMissing && (
+            <div className="rounded-lg border border-gf-border bg-gf-surface p-3 text-sm text-gf-muted">
+              Billing fields are not set up in this Supabase project yet, so subscription status is
+              showing the fallback trial view.
+            </div>
+          )}
           <div className="flex items-center justify-between">
             <span className="text-gf-muted text-sm">Plan</span>
             <span className="font-medium">{planName}</span>
