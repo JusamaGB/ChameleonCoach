@@ -338,9 +338,18 @@ export async function findClientByIdForCoach(
     return scopedQuery
   }
 
+  const fallbackClause =
+    selectClause === "*"
+      ? selectClause
+      : selectClause
+          .split(",")
+          .map((part) => part.trim())
+          .filter((part) => part !== "coach_id")
+          .join(", ")
+
   return supabase
     .from("clients")
-    .select(selectClause)
+    .select(fallbackClause)
     .eq("id", clientId)
     .maybeSingle()
 }
