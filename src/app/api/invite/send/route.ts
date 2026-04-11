@@ -8,9 +8,31 @@ import {
   normalizeInviteContactValue,
 } from "@/lib/utils"
 import { getCoachBrandingByCoachId } from "@/lib/branding-server"
-import { resolveActiveModules } from "@/lib/modules"
-import { getCoachDriveWorkspaceHealth } from "@/lib/google/template"
-import { findClientByEmailForCoach, findPendingClientInviteForCoach, insertClientForCoach, isMissingInviteMetadataColumns } from "@/lib/clients"
+import { normalizeCoachTypePreset, resolveActiveModules } from "@/lib/modules"
+import { createClientSheet, getCoachDriveWorkspaceHealth } from "@/lib/google/template"
+import {
+  findClientByEmailForCoach,
+  findClientInviteByToken,
+  findPendingClientInviteForCoach,
+  insertClientForCoach,
+  isMissingInviteMetadataColumns,
+} from "@/lib/clients"
+
+function buildPendingOnboarding(name: string) {
+  return {
+    name,
+    age: 0,
+    gender: "",
+    height: "",
+    current_weight: "",
+    goal_weight: "",
+    fitness_goals: "",
+    dietary_restrictions: "",
+    health_conditions: "",
+    activity_level: "moderately_active" as const,
+    notes: "Client workspace was pre-provisioned before onboarding.",
+  }
+}
 
 export async function POST(request: NextRequest) {
   try {
@@ -152,6 +174,117 @@ export async function POST(request: NextRequest) {
       if (error) {
         throw new Error(error.message || "Failed to create client invite")
       }
+    }
+
+    const { data: invitedClient, error: invitedClientError } = await findClientInviteByToken(
+      supabase,
+      token,
+      "*, coach_id"
+    )
+
+    if (invitedClientError || !invitedClient) {
+      throw new Error(invitedClientError?.message || "Failed to load the invited client.")
+    }
+
+    const provisioningStartedAt = new Date().toISOString()
+    await supabase
+      .from("clients")
+      .update({
+        provisioning_status: "provisioning",
+        provisioning_started_at: provisioningStartedAt,
+        provisioning_completed_at: null,
+        provisioning_last_error: null,
+        updated_at: provisioningStartedAt,
+      })
+      .eq("id", invitedClient.id)
+
+    try {
+      const clientWorkspace = await createClientSheet({
+        clientId: invitedClient.id,
+        clientName: name,
+        clientEmail: email,
+        onboarding: buildPendingOnboarding(name),
+        coachId: user.id,
+        coachTypePreset: normalizeCoachTypePreset(settings?.coach_type_preset),
+        activeModules: modules.enableable_modules,
+        coachWorkspace: settings,
+        clientWorkspace: invitedClient,
+        shareWithClient: false,
+      })
+
+      const completedAt = new Date().toISOString()
+
+      const { error: adminSettingsError } = await supabase
+        .from("admin_settings")
+        .upsert(
+          {
+            user_id: user.id,
+            managed_workspace_sheet_id: clientWorkspace.coachWorkspace.managed_workspace_sheet_id ?? null,
+            managed_workspace_sheet_url: clientWorkspace.coachWorkspace.managed_workspace_sheet_url ?? null,
+            managed_workspace_root_folder_id:
+              clientWorkspace.coachWorkspace.managed_workspace_root_folder_id ?? null,
+            managed_workspace_root_folder_url:
+              clientWorkspace.coachWorkspace.managed_workspace_root_folder_url ?? null,
+            managed_clients_folder_id: clientWorkspace.coachWorkspace.managed_clients_folder_id ?? null,
+            managed_clients_folder_url: clientWorkspace.coachWorkspace.managed_clients_folder_url ?? null,
+            managed_pt_library_sheet_id:
+              clientWorkspace.coachWorkspace.managed_pt_library_sheet_id ?? null,
+            managed_pt_library_sheet_url:
+              clientWorkspace.coachWorkspace.managed_pt_library_sheet_url ?? null,
+            managed_nutrition_library_sheet_id:
+              clientWorkspace.coachWorkspace.managed_nutrition_library_sheet_id ?? null,
+            managed_nutrition_library_sheet_url:
+              clientWorkspace.coachWorkspace.managed_nutrition_library_sheet_url ?? null,
+            managed_wellness_library_sheet_id:
+              clientWorkspace.coachWorkspace.managed_wellness_library_sheet_id ?? null,
+            managed_wellness_library_sheet_url:
+              clientWorkspace.coachWorkspace.managed_wellness_library_sheet_url ?? null,
+            managed_workspace_sheet_modules: modules.enableable_modules,
+            managed_workspace_sheet_provisioned_at: completedAt,
+            updated_at: completedAt,
+          },
+          { onConflict: "user_id" }
+        )
+
+      if (adminSettingsError) {
+        throw new Error("Failed to save coach workspace metadata.")
+      }
+
+      const { error: clientProvisionError } = await supabase
+        .from("clients")
+        .update({
+          name,
+          email,
+          sheet_id: clientWorkspace.sheetId,
+          drive_folder_id: clientWorkspace.driveFolderId,
+          drive_folder_url: clientWorkspace.driveFolderUrl,
+          sheet_shared_email: clientWorkspace.sheet_shared_email ?? null,
+          sheet_shared_permission_id: clientWorkspace.sheet_shared_permission_id ?? null,
+          sheet_shared_at: clientWorkspace.sheet_shared_at ?? null,
+          provisioning_status: "ready",
+          provisioning_started_at: invitedClient.provisioning_started_at ?? provisioningStartedAt,
+          provisioning_completed_at: completedAt,
+          provisioning_last_error: null,
+          updated_at: completedAt,
+        })
+        .eq("id", invitedClient.id)
+
+      if (clientProvisionError) {
+        throw new Error(clientProvisionError.message || "Failed to save provisioned client workspace.")
+      }
+    } catch (provisionError) {
+      await supabase
+        .from("clients")
+        .update({
+          provisioning_status: "failed",
+          provisioning_completed_at: null,
+          provisioning_last_error:
+            provisionError instanceof Error ? provisionError.message : "Client workspace provisioning failed.",
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", invitedClient.id)
+
+      throw provisionError
     }
 
     const branding = await getCoachBrandingByCoachId(user.id)
