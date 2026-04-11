@@ -109,7 +109,31 @@ function normalizeCell(value: unknown) {
 }
 
 function classifyTab(tabName: string, headers: string[]): MigrationTabAnalysis["classification"] {
-  const haystack = `${tabName} ${headers.join(" ")}`.toLowerCase()
+  const normalizedTabName = tabName.toLowerCase()
+  const normalizedHeaders = headers.map((header) => header.toLowerCase())
+  const headerSet = new Set(normalizedHeaders)
+  const haystack = `${normalizedTabName} ${normalizedHeaders.join(" ")}`
+
+  const looksLikeProfile =
+    normalizedTabName.includes("client detail")
+    || normalizedTabName.includes("profile")
+    || (
+      (headerSet.has("name") || headerSet.has("client name"))
+      && (headerSet.has("email") || headerSet.has("email address"))
+    )
+
+  if (looksLikeProfile) {
+    return "profile"
+  }
+
+  const looksLikeWellnessHabits =
+    (normalizedTabName.includes("wellness") || normalizedTabName.includes("habit"))
+    && headerSet.has("habit")
+    && (headerSet.has("target") || headerSet.has("frequency") || headerSet.has("status"))
+
+  if (looksLikeWellnessHabits) {
+    return "wellness"
+  }
 
   if (haystack.includes("meal") || haystack.includes("breakfast") || haystack.includes("lunch") || haystack.includes("dinner")) {
     return "meal_plan"
@@ -129,10 +153,6 @@ function classifyTab(tabName: string, headers: string[]): MigrationTabAnalysis["
 
   if (haystack.includes("wellness") || haystack.includes("goal") || haystack.includes("reflection") || haystack.includes("mood")) {
     return "wellness"
-  }
-
-  if (haystack.includes("profile") || haystack.includes("name") || haystack.includes("email") || haystack.includes("gender") || haystack.includes("age")) {
-    return "profile"
   }
 
   return "unknown"

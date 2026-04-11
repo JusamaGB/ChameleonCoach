@@ -627,6 +627,15 @@ export async function executeCoachWorkbookMigration({
   }
 
   for (const tab of tabs) {
+    const isEffectivelyEmpty =
+      tab.rows.length === 0
+      || tab.rows.every((row) => row.every((cell) => !String(cell ?? "").trim()))
+
+    if (isEffectivelyEmpty) {
+      handledTabs.add(tab.tabName)
+      continue
+    }
+
     if (!handledTabs.has(tab.tabName)) {
       warnings.push(`${tab.tabName} was inspected but not migrated yet.`)
     }
