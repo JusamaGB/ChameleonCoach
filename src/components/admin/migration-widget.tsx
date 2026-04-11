@@ -188,7 +188,6 @@ export function MigrationWidget() {
     }))
 
     let cancelled = false
-    const timeouts: ReturnType<typeof setTimeout>[] = []
 
     void (async () => {
       try {
@@ -201,46 +200,78 @@ export function MigrationWidget() {
           }),
         })
 
-        const data = await res.json()
-        if (!res.ok) {
+        if (!res.ok || !res.body) {
+          const data = await res.json().catch(() => ({}))
           throw new Error(data.error || "Migration failed.")
         }
 
-        if (cancelled) {
-          return
-        }
+        const reader = res.body.getReader()
+        const decoder = new TextDecoder()
+        let buffer = ""
 
-        const completedSteps: MigrationStep[] = (data.steps ?? []).map((step: { id: string; label: string }) => ({
-          ...step,
-          status: "pending" as const,
-        }))
-        const summaryLines = [
-          ...((data.summary ?? []) as string[]),
-          ...((data.warnings ?? []) as string[]).map((warning) => `Warning: ${warning}`),
-        ]
-
-        setWorkbookProgress((current) => {
-          const existing = current[activeAnalysis.workbook.id]
-          if (!existing) {
-            return current
+        while (!cancelled) {
+          const { value, done } = await reader.read()
+          if (done) {
+            break
           }
 
-          return {
-            ...current,
-            [activeAnalysis.workbook.id]: {
-              ...existing,
-              steps: completedSteps,
-              summary: [],
-            },
-          }
-        })
+          buffer += decoder.decode(value, { stream: true })
+          const lines = buffer.split("\n")
+          buffer = lines.pop() ?? ""
 
-        completedSteps.forEach((step, index) => {
-          timeouts.push(
-            setTimeout(() => {
-              if (cancelled) {
-                return
-              }
+          for (const line of lines) {
+            const trimmed = line.trim()
+            if (!trimmed) {
+              continue
+            }
+
+            const event = JSON.parse(trimmed) as
+              | { type: "start" }
+              | { type: "step"; step: { id: string; label: string } }
+              | { type: "complete"; result: { summary?: string[]; warnings?: string[] } }
+              | { type: "error"; error: string }
+
+            if (cancelled) {
+              return
+            }
+
+            if (event.type === "step") {
+              setWorkbookProgress((current) => {
+                const existing = current[activeAnalysis.workbook.id]
+                if (!existing) {
+                  return current
+                }
+
+                const alreadyExists = existing.steps.some((item) => item.id === event.step.id)
+                const nextSteps = alreadyExists
+                  ? existing.steps.map((item) =>
+                      item.id === event.step.id ? { ...item, status: "done" as const } : item
+                    )
+                  : [
+                      ...existing.steps,
+                      {
+                        id: event.step.id,
+                        label: event.step.label,
+                        status: "done" as const,
+                      },
+                    ]
+
+                return {
+                  ...current,
+                  [activeAnalysis.workbook.id]: {
+                    ...existing,
+                    status: "in_progress",
+                    steps: nextSteps,
+                  },
+                }
+              })
+            }
+
+            if (event.type === "complete") {
+              const summaryLines = [
+                ...(event.result.summary ?? []),
+                ...(event.result.warnings ?? []).map((warning) => `Warning: ${warning}`),
+              ]
 
               setWorkbookProgress((current) => {
                 const existing = current[activeAnalysis.workbook.id]
@@ -248,32 +279,29 @@ export function MigrationWidget() {
                   return current
                 }
 
-                const updatedSteps: MigrationStep[] = existing.steps.map((item) =>
-                  item.id === step.id ? { ...item, status: "done" as const } : item
-                )
-                const isLast = index === completedSteps.length - 1
-
                 return {
                   ...current,
                   [activeAnalysis.workbook.id]: {
-                    status: isLast ? "completed" : "in_progress",
-                    steps: updatedSteps,
-                    messages: isLast
-                      ? appendMessage(existing.messages, {
-                          id: `${activeAnalysis.workbook.id}-summary`,
-                          role: "assistant",
-                          content: summaryLines.length > 0
-                            ? summaryLines.join(" ")
-                            : `${matchedClient.name}'s workbook migration completed.`,
-                        })
-                      : existing.messages,
-                    summary: isLast ? summaryLines : existing.summary,
+                    ...existing,
+                    status: "completed",
+                    messages: appendMessage(existing.messages, {
+                      id: `${activeAnalysis.workbook.id}-summary`,
+                      role: "assistant",
+                      content: summaryLines.length > 0
+                        ? summaryLines.join(" ")
+                        : `${matchedClient.name}'s workbook migration completed.`,
+                    }),
+                    summary: summaryLines,
                   },
                 }
               })
-            }, index * 250)
-          )
-        })
+            }
+
+            if (event.type === "error") {
+              throw new Error(event.error)
+            }
+          }
+        }
       } catch (err) {
         if (cancelled) {
           return
@@ -303,9 +331,6 @@ export function MigrationWidget() {
 
     return () => {
       cancelled = true
-      for (const timeout of timeouts) {
-        clearTimeout(timeout)
-      }
     }
   }, [activeAnalysis, bootstrap, clientMappings, stage])
 

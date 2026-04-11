@@ -48,6 +48,10 @@ export type MigrationExecutionResult = {
   warnings: string[]
 }
 
+type MigrationExecutionCallbacks = {
+  onStep?: (step: MigrationExecutionStep) => void | Promise<void>
+}
+
 function normalizeHeader(value: string) {
   return value.trim().toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "")
 }
@@ -458,11 +462,13 @@ export async function executeCoachWorkbookMigration({
   coachId,
   clientId,
   workbook,
+  onStep,
 }: {
   supabase: SupabaseLike
   coachId: string
   clientId: string
   workbook: MigrationWorkbook
+  onStep?: MigrationExecutionCallbacks["onStep"]
 }): Promise<MigrationExecutionResult> {
   const { data: client } = await supabase
     .from("clients")
@@ -480,13 +486,17 @@ export async function executeCoachWorkbookMigration({
   const steps: MigrationExecutionStep[] = []
   const summary: string[] = []
   const warnings: string[] = []
+  const emitStep = async (step: MigrationExecutionStep) => {
+    steps.push(step)
+    await onStep?.(step)
+  }
 
-  steps.push({
+  await emitStep({
     id: "read-source",
     label: `Read ${tabs.length} source tab${tabs.length === 1 ? "" : "s"} from ${workbook.name}`,
   })
 
-  steps.push({
+  await emitStep({
     id: "resolve-client",
     label: `Resolved ${targetClient.name}'s Chameleon workbook`,
   })
@@ -494,7 +504,7 @@ export async function executeCoachWorkbookMigration({
   const profile = mergeProfileData(tabs, targetClient.email ?? "")
   if (Object.keys(profile).length > 0) {
     await updateProfile(targetClient.sheet_id!, profile, coachId)
-    steps.push({
+    await emitStep({
       id: "profile",
       label: "Updated the target Profile tab with migrated client details",
     })
@@ -504,7 +514,7 @@ export async function executeCoachWorkbookMigration({
   const mealPlan = extractMealPlan(tabs)
   if (mealPlan.length > 0) {
     await updateMealPlan(targetClient.sheet_id!, mealPlan, coachId)
-    steps.push({
+    await emitStep({
       id: "meal-plan",
       label: `Wrote ${mealPlan.length} meal-plan row${mealPlan.length === 1 ? "" : "s"} into Meal Plan`,
     })
@@ -514,7 +524,7 @@ export async function executeCoachWorkbookMigration({
   const progressEntries = extractProgressEntries(tabs)
   if (progressEntries.length > 0) {
     await replaceProgressEntries(targetClient.sheet_id!, progressEntries, coachId)
-    steps.push({
+    await emitStep({
       id: "progress",
       label: `Replaced the Progress tab with ${progressEntries.length} migrated entr${progressEntries.length === 1 ? "y" : "ies"}`,
     })
@@ -526,7 +536,7 @@ export async function executeCoachWorkbookMigration({
   if (wellnessAssignments.length > 0 || wellnessCheckIns.length > 0) {
     if (wellnessAssignments.length > 0) {
       await upsertWellnessAssignments(supabase, coachId, clientId, wellnessAssignments)
-      steps.push({
+      await emitStep({
         id: "wellness-habits",
         label: `Migrated ${wellnessAssignments.length} wellness habit assignment${wellnessAssignments.length === 1 ? "" : "s"}`,
       })
@@ -534,7 +544,7 @@ export async function executeCoachWorkbookMigration({
 
     if (wellnessCheckIns.length > 0) {
       await upsertWellnessCheckIns(supabase, coachId, clientId, wellnessCheckIns)
-      steps.push({
+      await emitStep({
         id: "wellness-checkins",
         label: `Migrated ${wellnessCheckIns.length} wellness check-in${wellnessCheckIns.length === 1 ? "" : "s"}`,
       })
@@ -558,7 +568,7 @@ export async function executeCoachWorkbookMigration({
       sessionNotes
     )
 
-    steps.push({
+    await emitStep({
       id: "wellness-sync",
       label: "Synced the migrated wellness data into the client workbook tabs",
     })
@@ -587,7 +597,7 @@ export async function executeCoachWorkbookMigration({
       logs
     )
 
-    steps.push({
+    await emitStep({
       id: "nutrition-checkins",
       label: `Migrated ${nutritionCheckIns.length} nutrition check-in${nutritionCheckIns.length === 1 ? "" : "s"} and synced Nutrition tabs`,
     })
