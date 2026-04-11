@@ -259,7 +259,7 @@ export function MigrationWidget() {
         clearTimeout(timeout)
       }
     }
-  }, [activeAnalysis, bootstrap, clientMappings, stage, workbookProgress])
+  }, [activeAnalysis, bootstrap, clientMappings, stage])
 
   async function loadBootstrap() {
     setLoadingBootstrap(true)
