@@ -25,6 +25,7 @@ import {
   listClientNutritionHabitLogsForCoach,
   listClientNutritionLogEntriesForCoach,
 } from "@/lib/nutrition"
+import { findClientByIdForCoach } from "@/lib/clients"
 import {
   listClientWellnessCheckInsForCoach,
   listClientWellnessGoalAssignmentsForCoach,
@@ -470,12 +471,16 @@ export async function executeCoachWorkbookMigration({
   workbook: MigrationWorkbook
   onStep?: MigrationExecutionCallbacks["onStep"]
 }): Promise<MigrationExecutionResult> {
-  const { data: client } = await supabase
-    .from("clients")
-    .select("id, name, email, coach_id, sheet_id")
-    .eq("id", clientId)
-    .eq("coach_id", coachId)
-    .single()
+  const { data: client, error: clientError } = await findClientByIdForCoach(
+    supabase,
+    coachId,
+    clientId,
+    "id, name, email, coach_id, sheet_id"
+  )
+
+  if (clientError || !client) {
+    throw new Error(clientError?.message || "Target client could not be found.")
+  }
 
   if (!client?.sheet_id) {
     throw new Error("Target client does not have a Chameleon workbook yet.")
