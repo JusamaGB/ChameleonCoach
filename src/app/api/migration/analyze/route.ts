@@ -7,11 +7,11 @@ export async function POST(request: NextRequest) {
   if (!isCoachResult(result)) return result
   const { user } = result
 
-  const { workbooks, clientId } = await request.json().catch(() => ({ workbooks: [], clientId: "" }))
+  const { workbooks } = await request.json().catch(() => ({ workbooks: [] }))
 
-  if (!Array.isArray(workbooks) || workbooks.length === 0 || !clientId) {
+  if (!Array.isArray(workbooks) || workbooks.length === 0) {
     return NextResponse.json(
-      { error: "Select at least one workbook and one target client." },
+      { error: "Select at least one workbook to analyze." },
       { status: 400 }
     )
   }

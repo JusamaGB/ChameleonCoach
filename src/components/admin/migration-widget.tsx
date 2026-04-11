@@ -38,6 +38,7 @@ type MigrationTabAnalysis = {
 type WorkbookAnalysis = {
   workbook: MigrationWorkbook
   tabs: MigrationTabAnalysis[]
+  suggestedClientName: string | null
 }
 
 export function MigrationWidget() {
@@ -99,9 +100,6 @@ export function MigrationWidget() {
       }
 
       setBootstrap(data)
-      if (!selectedClientId && Array.isArray(data.clients) && data.clients.length > 0) {
-        setSelectedClientId(data.clients[0].id)
-      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load migration setup.")
     } finally {
@@ -130,7 +128,7 @@ export function MigrationWidget() {
   }
 
   async function analyzeSelectedWorkbooks() {
-    if (!selectedClientId || selectedWorkbooks.length === 0) {
+    if (selectedWorkbooks.length === 0) {
       return
     }
 
@@ -142,7 +140,6 @@ export function MigrationWidget() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          clientId: selectedClientId,
           workbooks: selectedWorkbooks,
         }),
       })
@@ -247,7 +244,7 @@ export function MigrationWidget() {
                   I can inspect your existing Google Sheets, classify each tab, and propose where it should land inside Chameleon.
                 </p>
                 <p className="mt-2">
-                  V1 is Google Sheets only. Pick one or more source workbooks, choose the Chameleon client they belong to, and I&apos;ll analyse them one at a time before any import step.
+                  V1 is Google Sheets only. Pick one or more source workbooks first, then I&apos;ll analyse them and help you match each one to the right Chameleon client.
                 </p>
                 <Button
                   type="button"
@@ -268,7 +265,7 @@ export function MigrationWidget() {
               </div>
             ) : null}
 
-            {bootstrap && (
+            {bootstrap && introDismissed && (
               <div className="space-y-4">
                 <div className="grid grid-cols-2 gap-3">
                   <StatusPill label="Google" value={bootstrap.google_connected ? "Connected" : "Not connected"} good={bootstrap.google_connected} />
@@ -298,16 +295,6 @@ export function MigrationWidget() {
                   </div>
                 ) : (
                   <>
-                    <Select
-                      label="Target Client"
-                      options={bootstrap.clients.map((client) => ({
-                        value: client.id,
-                        label: client.name,
-                      }))}
-                      value={selectedClientId}
-                      onChange={(e) => setSelectedClientId(e.target.value)}
-                    />
-
                     <div className="rounded-xl border border-gf-border bg-gf-surface/70 p-4">
                       <div className="mb-3 flex items-center justify-between gap-3">
                         <div>
@@ -437,7 +424,7 @@ export function MigrationWidget() {
                     <Button
                       type="button"
                       className="w-full"
-                      disabled={!selectedClientId || selectedWorkbookIds.length === 0 || analyzing}
+                      disabled={selectedWorkbookIds.length === 0 || analyzing}
                       onClick={() => void analyzeSelectedWorkbooks()}
                     >
                       {analyzing
@@ -455,6 +442,11 @@ export function MigrationWidget() {
                       <Sparkles size={14} className="text-gf-pink" />
                       Analysis mode: {analysisMode === "hybrid" ? "hybrid" : "heuristic"}
                     </div>
+                    <div className="rounded-xl border border-blue-500/20 bg-blue-500/5 p-3 text-sm text-blue-100">
+                      {bootstrap.clients.length === 0
+                        ? "No target clients exist yet. Analyze first, then invite or create the matching clients before migration."
+                        : "Next step: match each analyzed workbook to an existing client, or create/invite a client if one does not exist yet."}
+                    </div>
                     {analyses.map((analysis) => (
                       <div key={analysis.workbook.id} className="rounded-xl border border-gf-border bg-gf-black/30 p-4">
                         <div className="mb-3">
@@ -462,6 +454,29 @@ export function MigrationWidget() {
                           <p className="text-xs text-gf-muted">
                             {analysis.tabs.length} tabs inspected
                           </p>
+                          {analysis.suggestedClientName && (
+                            <p className="mt-2 text-sm text-gf-muted">
+                              Suggested client: <span className="text-white">{analysis.suggestedClientName}</span>
+                            </p>
+                          )}
+                        </div>
+                        <div className="mb-3 rounded-xl border border-gf-border bg-gf-surface/40 p-3">
+                          <p className="text-xs uppercase tracking-[0.16em] text-gf-muted">Client Mapping</p>
+                          {bootstrap.clients.length > 0 ? (
+                            <Select
+                              label="Match to existing client"
+                              options={bootstrap.clients.map((client) => ({
+                                value: client.id,
+                                label: client.name,
+                              }))}
+                              value={selectedClientId}
+                              onChange={(e) => setSelectedClientId(e.target.value)}
+                            />
+                          ) : (
+                            <p className="mt-2 text-sm text-gf-muted">
+                              No target clients yet. Create or invite the client first, then we can map this workbook into their Chameleon workspace.
+                            </p>
+                          )}
                         </div>
                         <div className="space-y-3">
                           {analysis.tabs.map((tab) => (

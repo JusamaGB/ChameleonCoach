@@ -31,6 +31,7 @@ export type MigrationTabAnalysis = {
 export type WorkbookMigrationAnalysis = {
   workbook: MigrationWorkbook
   tabs: MigrationTabAnalysis[]
+  suggestedClientName: string | null
 }
 
 const MANAGED_WORKBOOK_PREFIX = `${PLATFORM_NAME} - `
@@ -207,6 +208,33 @@ function notesForClassification(
   }
 
   return notes
+}
+
+function inferClientNameFromWorkbookName(name: string) {
+  const cleaned = name
+    .replace(/^legacy\s+/i, "")
+    .replace(/^chameleon coach\s*-\s*/i, "")
+    .replace(/\.(xlsx|csv|xls)$/i, "")
+    .trim()
+
+  const patterns = [
+    /^pt demo - (.+)$/i,
+    /^nutrition demo - (.+)$/i,
+    /^wellness demo - (.+)$/i,
+    /^pt - (.+)$/i,
+    /^nutrition - (.+)$/i,
+    /^wellness - (.+)$/i,
+    /^(.+?)\s+(workout|meal plan|nutrition|wellness|progress|check-?in)s?$/i,
+  ]
+
+  for (const pattern of patterns) {
+    const match = cleaned.match(pattern)
+    if (match?.[1]) {
+      return match[1].trim()
+    }
+  }
+
+  return null
 }
 
 export async function listCoachMigrationWorkbooks(coachId: string): Promise<MigrationWorkbook[]> {
@@ -579,9 +607,10 @@ export async function analyzeCoachMigrationWorkbook(
 
     const buffer = Buffer.from(fileResponse.data as ArrayBuffer)
 
-    return {
-      workbook,
-      tabs: readUploadedWorkbook(buffer, workbook.mimeType),
+  return {
+    workbook,
+    tabs: readUploadedWorkbook(buffer, workbook.mimeType),
+    suggestedClientName: inferClientNameFromWorkbookName(workbook.name),
     }
   }
 
@@ -622,5 +651,6 @@ export async function analyzeCoachMigrationWorkbook(
   return {
     workbook,
     tabs,
+    suggestedClientName: inferClientNameFromWorkbookName(workbook.name),
   }
 }
