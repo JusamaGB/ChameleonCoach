@@ -1,5 +1,6 @@
 import { google } from "googleapis"
 import { getAuthedClient } from "./auth"
+import { PLATFORM_NAME } from "@/lib/platform"
 
 export type MigrationWorkbook = {
   id: string
@@ -29,6 +30,14 @@ export type WorkbookMigrationAnalysis = {
   workbook: MigrationWorkbook
   tabs: MigrationTabAnalysis[]
 }
+
+const MANAGED_WORKBOOK_PREFIX = `${PLATFORM_NAME} - `
+const MANAGED_WORKBOOK_NAMES = new Set([
+  `${PLATFORM_NAME} Workspace Control`,
+  `${PLATFORM_NAME} PT Library`,
+  `${PLATFORM_NAME} Nutrition Library`,
+  `${PLATFORM_NAME} Wellness Library`,
+])
 
 function extractSpreadsheetId(value: string) {
   const trimmed = value.trim()
@@ -174,17 +183,38 @@ function notesForClassification(
 
 export async function listCoachMigrationWorkbooks(coachId: string): Promise<MigrationWorkbook[]> {
   const drive = await getDriveApi(coachId)
-  const response = await drive.files.list({
-    q: "mimeType = 'application/vnd.google-apps.spreadsheet' and trashed = false",
-    fields: "files(id, name, modifiedTime, webViewLink)",
-    orderBy: "modifiedTime desc",
-    pageSize: 25,
-    includeItemsFromAllDrives: true,
-    supportsAllDrives: true,
-  })
+  const files: Array<{
+    id: string
+    name: string
+    modifiedTime?: string | null
+    webViewLink?: string | null
+  }> = []
+  let pageToken: string | undefined
 
-  return (response.data.files ?? [])
-    .filter((file): file is { id: string; name: string; modifiedTime?: string | null; webViewLink?: string | null } => Boolean(file.id && file.name))
+  do {
+    const response = await drive.files.list({
+      q: "mimeType = 'application/vnd.google-apps.spreadsheet' and trashed = false",
+      fields: "nextPageToken, files(id, name, modifiedTime, webViewLink)",
+      orderBy: "modifiedTime desc",
+      pageSize: 100,
+      pageToken,
+      corpora: "user",
+      includeItemsFromAllDrives: true,
+      supportsAllDrives: true,
+    })
+
+    files.push(
+      ...(response.data.files ?? []).filter(
+        (file): file is { id: string; name: string; modifiedTime?: string | null; webViewLink?: string | null } =>
+          Boolean(file.id && file.name)
+      )
+    )
+
+    pageToken = response.data.nextPageToken ?? undefined
+  } while (pageToken && files.length < 300)
+
+  return files
+    .filter((file) => !MANAGED_WORKBOOK_NAMES.has(file.name) && !file.name.startsWith(MANAGED_WORKBOOK_PREFIX))
     .map((file) => ({
       id: file.id,
       name: file.name,

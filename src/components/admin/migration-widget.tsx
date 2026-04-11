@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { Input, Select } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
-import { Bot, ChevronDown, Loader2, Sparkles, X } from "lucide-react"
+import { Bot, ChevronDown, Loader2, Search, Sparkles, X } from "lucide-react"
 import type { Client } from "@/types"
 
 type MigrationBootstrap = {
@@ -54,6 +54,8 @@ export function MigrationWidget() {
   const [introDismissed, setIntroDismissed] = useState(false)
   const [manualSource, setManualSource] = useState("")
   const [addingManualSource, setAddingManualSource] = useState(false)
+  const [showManualImport, setShowManualImport] = useState(false)
+  const [sheetSearch, setSheetSearch] = useState("")
 
   useEffect(() => {
     if (!open || bootstrap) {
@@ -65,8 +67,18 @@ export function MigrationWidget() {
 
   const visibleWorkbooks = useMemo(() => {
     const managedIds = new Set(bootstrap?.managed_workbook_ids ?? [])
-    return workbooks.filter((workbook) => !managedIds.has(workbook.id))
-  }, [bootstrap, workbooks])
+    const normalizedSearch = sheetSearch.trim().toLowerCase()
+
+    return workbooks
+      .filter((workbook) => !managedIds.has(workbook.id))
+      .filter((workbook) => {
+        if (!normalizedSearch) {
+          return true
+        }
+
+        return workbook.name.toLowerCase().includes(normalizedSearch)
+      })
+  }, [bootstrap, sheetSearch, workbooks])
 
   const selectedWorkbook = useMemo(
     () => workbooks.find((workbook) => workbook.id === selectedWorkbookId) ?? null,
@@ -258,10 +270,6 @@ export function MigrationWidget() {
                   </div>
                 )}
 
-                <div className="rounded-xl border border-blue-500/20 bg-blue-500/5 p-3 text-sm text-blue-100">
-                  Legacy Drive listing needs the broader Google permission we just added. If you only see Chameleon-created sheets here, reconnect Google once in Settings, or paste a Google Sheets URL/ID below and continue now.
-                </div>
-
                 {!bootstrap.google_connected || bootstrap.workspace_status !== "healthy" ? (
                   <div className="rounded-xl border border-yellow-500/25 bg-yellow-500/5 p-4 text-sm text-yellow-200">
                     <p>
@@ -290,7 +298,7 @@ export function MigrationWidget() {
                         <div>
                           <p className="text-sm font-semibold text-white">Source Google Sheets</p>
                           <p className="text-xs text-gf-muted">
-                            Pick one source workbook to inspect first. We can queue multi-sheet imports once the mapping step is solid.
+                            Load and browse your legacy spreadsheets, then inspect one source workbook at a time.
                           </p>
                         </div>
                         <Button
@@ -304,25 +312,24 @@ export function MigrationWidget() {
                         </Button>
                       </div>
 
-                      <div className="mb-4 grid gap-2">
-                        <Input
-                          label="Paste Google Sheets URL or ID"
-                          placeholder="https://docs.google.com/spreadsheets/d/... or spreadsheet ID"
-                          value={manualSource}
-                          onChange={(e) => setManualSource(e.target.value)}
-                        />
-                        <Button
-                          type="button"
-                          variant="secondary"
-                          onClick={() => void addManualWorkbook()}
-                          disabled={addingManualSource || !manualSource.trim()}
-                        >
-                          {addingManualSource ? "Adding sheet..." : "Add sheet by URL or ID"}
-                        </Button>
+                      <div className="mb-4 rounded-xl border border-gf-border bg-gf-black/20 p-3">
+                        <div className="flex items-center gap-2">
+                          <Search size={14} className="text-gf-muted" />
+                          <input
+                            value={sheetSearch}
+                            onChange={(e) => setSheetSearch(e.target.value)}
+                            placeholder="Search loaded Google Sheets"
+                            className="w-full bg-transparent text-sm text-white placeholder:text-gf-muted/60 focus:outline-none"
+                          />
+                        </div>
                       </div>
 
                       {visibleWorkbooks.length === 0 && !loadingWorkbooks ? (
-                        <p className="text-sm text-gf-muted">No legacy source sheets loaded yet.</p>
+                        <p className="text-sm text-gf-muted">
+                          {workbooks.length === 0
+                            ? "No legacy source sheets loaded yet."
+                            : "No loaded sheets match that search."}
+                        </p>
                       ) : null}
 
                       <div className="max-h-72 space-y-2 overflow-y-auto pr-1">
@@ -354,6 +361,33 @@ export function MigrationWidget() {
                           )
                         })}
                       </div>
+
+                      <button
+                        type="button"
+                        onClick={() => setShowManualImport((current) => !current)}
+                        className="mt-3 text-xs font-medium text-gf-muted transition-colors hover:text-white"
+                      >
+                        {showManualImport ? "Hide manual sheet lookup" : "Can't find a sheet? Add one by URL or ID"}
+                      </button>
+
+                      {showManualImport && (
+                        <div className="mt-3 grid gap-2 rounded-xl border border-gf-border bg-gf-black/20 p-3">
+                          <Input
+                            label="Google Sheets URL or ID"
+                            placeholder="Paste a sheet URL or spreadsheet ID"
+                            value={manualSource}
+                            onChange={(e) => setManualSource(e.target.value)}
+                          />
+                          <Button
+                            type="button"
+                            variant="secondary"
+                            onClick={() => void addManualWorkbook()}
+                            disabled={addingManualSource || !manualSource.trim()}
+                          >
+                            {addingManualSource ? "Adding sheet..." : "Add sheet manually"}
+                          </Button>
+                        </div>
+                      )}
                     </div>
 
                     {selectedWorkbook && (
