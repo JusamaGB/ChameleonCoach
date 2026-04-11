@@ -2,21 +2,29 @@
 
 import { useState, useEffect, useCallback } from "react"
 import Link from "next/link"
-import { Input } from "@/components/ui/input"
+import { Input, Select } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { Card, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { Send, CheckCircle, Clock } from "lucide-react"
+import { Send, CheckCircle, Clock, Copy } from "lucide-react"
 import type { Client } from "@/types"
 
 type WorkspaceStatus = "healthy" | "missing" | "not_provisioned" | "disconnected" | "unknown"
 
+const contactOptions = [
+  { value: "email", label: "Email address" },
+  { value: "phone", label: "Mobile number" },
+]
+
 export default function InvitePage() {
   const [name, setName] = useState("")
-  const [email, setEmail] = useState("")
+  const [contactType, setContactType] = useState<"email" | "phone">("email")
+  const [contactValue, setContactValue] = useState("")
+  const [sendEmail, setSendEmail] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState("")
   const [success, setSuccess] = useState("")
+  const [latestInviteCode, setLatestInviteCode] = useState("")
   const [pending, setPending] = useState<Client[]>([])
   const [workspaceLoading, setWorkspaceLoading] = useState(true)
   const [workspaceReady, setWorkspaceReady] = useState(false)
@@ -86,34 +94,41 @@ export default function InvitePage() {
 
   async function handleInvite(e: React.FormEvent) {
     e.preventDefault()
-    if (!name.trim() || !email.trim()) return
+    if (!name.trim() || !contactValue.trim()) return
     if (!workspaceReady) return
 
     setLoading(true)
     setError("")
     setSuccess("")
+    setLatestInviteCode("")
 
     try {
       const res = await fetch("/api/invite/send", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: name.trim(), email: email.trim() }),
+        body: JSON.stringify({
+          name: name.trim(),
+          contact_type: contactType,
+          contact_value: contactValue.trim(),
+          send_email: sendEmail,
+        }),
       })
 
+      const body = await res.json()
+
       if (!res.ok) {
-        let message = "Failed to send invite"
-        try {
-          const body = await res.json()
-          message = body.error || message
-        } catch {
-          // fall back to generic message when the server returns a non-JSON error response
-        }
-        throw new Error(message)
+        throw new Error(body.error || "Failed to create invite")
       }
 
-      setSuccess(`Invite sent to ${email}`)
+      setSuccess(
+        sendEmail && contactType === "email"
+          ? `Invite created and emailed to ${contactValue.trim()}.`
+          : "Invite created. Copy the code and send it to your client."
+      )
+      setLatestInviteCode(body.invite_code ?? "")
       setName("")
-      setEmail("")
+      setContactValue("")
+      setSendEmail(false)
       loadPending()
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong")
@@ -122,39 +137,17 @@ export default function InvitePage() {
     }
   }
 
-  async function resend(clientName: string, clientEmail: string) {
-    setError("")
-    setSuccess("")
-    if (!workspaceReady) return
-    try {
-      const res = await fetch("/api/invite/send", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: clientName, email: clientEmail }),
-      })
-      if (!res.ok) {
-        let message = "Failed to resend invite"
-        try {
-          const body = await res.json()
-          message = body.error || message
-        } catch {
-          // fall back to generic message when the server returns a non-JSON error response
-        }
-        throw new Error(message)
-      }
-      setSuccess(`Invite resent to ${clientEmail}`)
-      loadPending()
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Something went wrong")
-    }
+  async function copyInviteCode(code: string) {
+    await navigator.clipboard.writeText(code)
+    setSuccess(`Invite code ${code} copied.`)
   }
 
   const now = new Date()
   return (
-    <div className="max-w-lg mx-auto">
+    <div className="max-w-2xl mx-auto">
       <h1 className="text-2xl font-bold mb-2">Invite Client</h1>
       <p className="text-gf-muted mb-8">
-        Send an onboarding invite to a new client
+        Create a join code for a client, then send it however you usually communicate.
       </p>
 
       <Card className="mb-8">
@@ -175,7 +168,7 @@ export default function InvitePage() {
         {!workspaceLoading && workspaceReady ? (
           <form onSubmit={handleInvite} className="space-y-4 mt-4">
             <div className="rounded-xl border border-green-500/30 bg-green-500/5 p-3 text-sm text-green-300">
-              Client workspace path: Chameleon template. Each client workbook is created during onboarding inside your managed Chameleon workspace.
+              Clients will use a code first, then confirm either the email address or mobile number attached to that invite.
             </div>
 
             <Input
@@ -185,14 +178,31 @@ export default function InvitePage() {
               placeholder="e.g. John Smith"
               required
             />
+            <Select
+              label="Verification Method"
+              options={contactOptions}
+              value={contactType}
+              onChange={(e) => setContactType((e.target.value === "phone" ? "phone" : "email"))}
+            />
             <Input
-              label="Email Address"
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder="client@example.com"
+              label={contactType === "phone" ? "Mobile Number" : "Email Address"}
+              type={contactType === "phone" ? "tel" : "email"}
+              value={contactValue}
+              onChange={(e) => setContactValue(e.target.value)}
+              placeholder={contactType === "phone" ? "e.g. +44 7123 456789" : "client@example.com"}
               required
             />
+
+            {contactType === "email" && (
+              <label className="flex items-center gap-3 rounded-lg border border-gf-border bg-gf-surface px-4 py-3 text-sm text-gf-muted">
+                <input
+                  type="checkbox"
+                  checked={sendEmail}
+                  onChange={(e) => setSendEmail(e.target.checked)}
+                />
+                Email the invite code as well
+              </label>
+            )}
 
             {error && <p className="text-sm text-red-400">{error}</p>}
 
@@ -203,9 +213,27 @@ export default function InvitePage() {
               </div>
             )}
 
+            {latestInviteCode && (
+              <div className="rounded-xl border border-gf-pink/30 bg-gf-pink/5 p-4">
+                <p className="text-xs uppercase tracking-[0.18em] text-gf-muted">Latest invite code</p>
+                <div className="mt-2 flex items-center justify-between gap-3">
+                  <p className="text-2xl font-bold tracking-[0.2em] text-white">{latestInviteCode}</p>
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    size="sm"
+                    onClick={() => copyInviteCode(latestInviteCode)}
+                  >
+                    <Copy size={14} className="mr-2" />
+                    Copy
+                  </Button>
+                </div>
+              </div>
+            )}
+
             <Button type="submit" disabled={loading || workspaceLoading || !workspaceReady} className="w-full">
               <Send size={16} className="mr-2" />
-              {loading ? "Sending..." : workspaceReady ? "Send Invite" : "Invite blocked until workspace is ready"}
+              {loading ? "Creating invite..." : "Create Invite Code"}
             </Button>
           </form>
         ) : null}
@@ -217,38 +245,53 @@ export default function InvitePage() {
           <p className="text-gf-muted text-sm">No pending invitations.</p>
         ) : (
           <div className="space-y-3">
-            {pending.map((c) => {
-              const expired = c.invite_expires_at ? new Date(c.invite_expires_at) < now : false
+            {pending.map((client) => {
+              const expired = client.invite_expires_at ? new Date(client.invite_expires_at) < now : false
+              const inviteCode = client.invite_code || (client.drive_folder_url?.startsWith("http") ? null : client.drive_folder_url)
+              const inviteContactType =
+                client.invite_contact_type
+                || (
+                  client.sheet_shared_permission_id === "phone" || client.sheet_shared_permission_id === "email"
+                    ? client.sheet_shared_permission_id
+                    : "email"
+                )
+              const inviteContactValue = client.invite_contact_value || client.sheet_shared_email || client.email
+
               return (
-                <Card key={c.id}>
+                <Card key={client.id}>
                   <div className="flex items-start justify-between gap-4">
-                    <div className="space-y-1">
-                      <p className="font-medium">{c.name}</p>
-                      <p className="text-xs text-gf-muted">{c.email}</p>
-                      {c.invite_expires_at && (
+                    <div className="space-y-2">
+                      <div className="flex items-center gap-2">
+                        <p className="font-medium">{client.name}</p>
+                        {expired ? <Badge variant="default">Expired</Badge> : <Badge variant="warning">Pending</Badge>}
+                      </div>
+                      <p className="text-xs text-gf-muted">
+                        {inviteContactType === "phone" ? "Phone" : "Email"}: {inviteContactValue}
+                      </p>
+                      {inviteCode && (
+                        <p className="text-xs text-gf-muted">
+                          Code: <span className="font-semibold tracking-[0.18em] text-white">{inviteCode}</span>
+                        </p>
+                      )}
+                      {client.invite_expires_at && (
                         <p className="text-xs text-gf-muted flex items-center gap-1">
                           <Clock size={11} />
                           {expired
                             ? "Expired"
-                            : `Expires ${new Date(c.invite_expires_at).toLocaleDateString("en-GB")}`}
+                            : `Expires ${new Date(client.invite_expires_at).toLocaleDateString("en-GB")}`}
                         </p>
                       )}
                     </div>
-                    <div className="flex items-center gap-2 shrink-0">
-                      {expired ? (
-                        <Badge variant="default">Expired</Badge>
-                      ) : (
-                        <Badge variant="warning">Pending</Badge>
-                      )}
+                    {inviteCode && (
                       <Button
                         size="sm"
                         variant="secondary"
-                        disabled={!workspaceReady}
-                        onClick={() => resend(c.name, c.email)}
+                        onClick={() => copyInviteCode(inviteCode)}
                       >
-                        Resend
+                        <Copy size={14} className="mr-2" />
+                        Copy
                       </Button>
-                    </div>
+                    )}
                   </div>
                 </Card>
               )
@@ -258,9 +301,7 @@ export default function InvitePage() {
       </div>
 
       <p className="text-xs text-gf-muted text-center mt-8">
-        The client will receive an email with a link to complete their
-        onboarding questionnaire and create their account. The link expires
-        after 7 days.
+        The client enters their invite code first, then confirms the exact email address or mobile number you used for that invite.
       </p>
     </div>
   )

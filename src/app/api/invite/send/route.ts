@@ -1,11 +1,16 @@
 import { NextResponse, type NextRequest } from "next/server"
 import { verifyCoach, isCoachResult } from "@/lib/auth-helpers"
 import { sendInviteEmail } from "@/lib/resend"
-import { generateToken } from "@/lib/utils"
+import {
+  buildPendingInviteEmail,
+  generateInviteCode,
+  generateToken,
+  normalizeInviteContactValue,
+} from "@/lib/utils"
 import { getCoachBrandingByCoachId } from "@/lib/branding-server"
 import { resolveActiveModules } from "@/lib/modules"
 import { getCoachDriveWorkspaceHealth } from "@/lib/google/template"
-import { findClientByEmailForCoach, insertClientForCoach } from "@/lib/clients"
+import { findClientByEmailForCoach, findPendingClientInviteForCoach, insertClientForCoach, isMissingInviteMetadataColumns } from "@/lib/clients"
 
 export async function POST(request: NextRequest) {
   try {
@@ -13,14 +18,26 @@ export async function POST(request: NextRequest) {
     if (!isCoachResult(result)) return result
     const { user, supabase } = result
 
-    const { name, email } = await request.json()
+    const {
+      name,
+      contact_type,
+      contact_value,
+      send_email,
+    } = await request.json()
 
-    if (!name || !email) {
+    if (!name || !contact_type || !contact_value) {
       return NextResponse.json(
-        { error: "Name and email are required" },
+        { error: "Name and contact details are required" },
         { status: 400 }
       )
     }
+
+    const contactType = contact_type === "phone" ? "phone" : "email"
+    const normalizedContactValue = normalizeInviteContactValue(contactType, contact_value)
+    const email =
+      contactType === "email"
+        ? normalizedContactValue
+        : buildPendingInviteEmail(generateToken())
 
     const { data: settings } = await supabase
       .from("admin_settings")
@@ -48,11 +65,13 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: reason }, { status: 400 })
     }
 
-    const { data: existing, error: existingError } = await findClientByEmailForCoach(
-      supabase,
-      user.id,
-      email
-    )
+    const contactLookup =
+      contactType === "email"
+        ? await findClientByEmailForCoach(supabase, user.id, normalizedContactValue)
+        : await findPendingClientInviteForCoach(supabase, user.id, contactType, normalizedContactValue)
+
+    const existing = contactLookup.data
+    const existingError = contactLookup.error
 
     if (existingError) {
       throw new Error(existingError.message || "Failed to look up existing client")
@@ -66,14 +85,22 @@ export async function POST(request: NextRequest) {
     }
 
     const token = generateToken()
+    const inviteCode = generateInviteCode()
     const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString()
 
     if (existing) {
-      const { error } = await supabase
+      let { error } = await supabase
         .from("clients")
         .update({
           name,
+          email,
           invite_token: token,
+          invite_code: inviteCode,
+          invite_contact_type: contactType,
+          invite_contact_value: normalizedContactValue,
+          drive_folder_url: inviteCode,
+          sheet_shared_permission_id: contactType,
+          sheet_shared_email: normalizedContactValue,
           invite_expires_at: expiresAt,
           provisioning_status: "pending",
           provisioning_started_at: null,
@@ -84,6 +111,29 @@ export async function POST(request: NextRequest) {
         })
         .eq("id", existing.id)
 
+      if (isMissingInviteMetadataColumns(error)) {
+        const fallbackUpdate = await supabase
+          .from("clients")
+          .update({
+            name,
+            email,
+            invite_token: token,
+            drive_folder_url: inviteCode,
+            sheet_shared_permission_id: contactType,
+            sheet_shared_email: normalizedContactValue,
+            invite_expires_at: expiresAt,
+            provisioning_status: "pending",
+            provisioning_started_at: null,
+            provisioning_completed_at: null,
+            provisioning_last_error: null,
+            onboarding_completed: false,
+            updated_at: new Date().toISOString(),
+          })
+          .eq("id", existing.id)
+
+        error = fallbackUpdate.error
+      }
+
       if (error) {
         throw new Error(error.message || "Failed to update client invite")
       }
@@ -93,6 +143,9 @@ export async function POST(request: NextRequest) {
         name,
         email,
         inviteToken: token,
+        inviteCode,
+        inviteContactType: contactType,
+        inviteContactValue: normalizedContactValue,
         inviteExpiresAt: expiresAt,
       })
 
@@ -102,9 +155,17 @@ export async function POST(request: NextRequest) {
     }
 
     const branding = await getCoachBrandingByCoachId(user.id)
-    await sendInviteEmail(email, name, token, branding)
+    if (send_email && contactType === "email") {
+      await sendInviteEmail(email, name, inviteCode, contactType, branding)
+    }
 
-    return NextResponse.json({ ok: true })
+    return NextResponse.json({
+      ok: true,
+      invite_code: inviteCode,
+      contact_type: contactType,
+      contact_value: normalizedContactValue,
+      join_url: `${process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"}/onboarding`,
+    })
   } catch (error) {
     return NextResponse.json(
       {

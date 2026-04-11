@@ -18,7 +18,9 @@ export async function verifyCoach(): Promise<
     .eq('user_id', user.id)
     .single()
 
-  if (role?.role !== 'coach' && role?.role !== 'admin') {
+  const effectiveRole = role?.role ?? user.app_metadata?.role
+
+  if (effectiveRole !== 'coach' && effectiveRole !== 'admin') {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 

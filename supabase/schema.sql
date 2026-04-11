@@ -51,6 +51,10 @@ create table clients (
   user_id uuid references auth.users(id) on delete set null,
   name text not null,
   email text not null unique,
+  invite_code text unique,
+  invite_contact_type text
+    check (invite_contact_type in ('email', 'phone')),
+  invite_contact_value text,
   sheet_id text,
   drive_folder_id text,
   drive_folder_url text,
@@ -1182,6 +1186,8 @@ create trigger on_role_change
 
 -- Indexes
 create index idx_clients_email on clients(email);
+create index idx_clients_invite_code on clients(invite_code);
+create index idx_clients_invite_contact on clients(invite_contact_type, invite_contact_value);
 create index idx_clients_invite_token on clients(invite_token);
 create index idx_clients_user_id on clients(user_id);
 create index idx_appointments_coach_id on appointments(coach_id);

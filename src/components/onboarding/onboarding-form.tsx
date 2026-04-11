@@ -46,6 +46,7 @@ export function OnboardingForm({ token, email, branding }: Props) {
   const [step, setStep] = useState(0)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState("")
+  const [accountEmail, setAccountEmail] = useState(email)
   const [password, setPassword] = useState("")
   const [confirmPassword, setConfirmPassword] = useState("")
   const [data, setData] = useState<OnboardingData>({
@@ -75,6 +76,10 @@ export function OnboardingForm({ token, email, branding }: Props) {
       setError("Passwords don't match")
       return
     }
+    if (!accountEmail.trim()) {
+      setError("Email address is required")
+      return
+    }
 
     setLoading(true)
     setError("")
@@ -83,7 +88,12 @@ export function OnboardingForm({ token, email, branding }: Props) {
       const res = await fetch("/api/invite/accept", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ token, password, onboarding: data }),
+        body: JSON.stringify({
+          token,
+          password,
+          onboarding: data,
+          accountEmail: accountEmail.trim(),
+        }),
       })
 
       if (!res.ok) {
@@ -215,7 +225,14 @@ export function OnboardingForm({ token, email, branding }: Props) {
         {step === 4 && (
           <div className="space-y-4">
             <h2 className="text-xl font-semibold mb-6">Create Your Account</h2>
-            <Input label="Email" value={email} disabled />
+            <Input
+              label="Email"
+              type="email"
+              value={accountEmail}
+              onChange={(e) => setAccountEmail(e.target.value)}
+              disabled={Boolean(email)}
+              placeholder="you@example.com"
+            />
             <Input
               label="Password"
               type="password"

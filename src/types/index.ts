@@ -4,6 +4,9 @@ export interface Client {
   coach_id: string | null
   name: string
   email: string
+  invite_code: string | null
+  invite_contact_type: "email" | "phone" | null
+  invite_contact_value: string | null
   sheet_id: string | null
   drive_folder_id: string | null
   drive_folder_url: string | null

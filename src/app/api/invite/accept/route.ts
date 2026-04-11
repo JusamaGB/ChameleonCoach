@@ -4,7 +4,8 @@ import { createClientSheet, getCoachDriveWorkspaceHealth } from "@/lib/google/te
 import type { OnboardingData } from "@/types"
 import { getCoachBrandingByCoachId } from "@/lib/branding-server"
 import { normalizeCoachTypePreset, resolveActiveModules } from "@/lib/modules"
-import { findClientInviteByToken } from "@/lib/clients"
+import { findClientInviteByToken, getClientInviteContactType, isMissingInviteMetadataColumns } from "@/lib/clients"
+import { isPendingInviteEmail, normalizeEmail } from "@/lib/utils"
 
 async function markProvisioningState(
   supabase: ReturnType<typeof createAdmin>,
@@ -59,14 +60,19 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ valid: false, reason: "expired", branding })
   }
 
-  return NextResponse.json({ valid: true, email: client.email, branding })
+  return NextResponse.json({
+    valid: true,
+    email: isPendingInviteEmail(client.email) ? "" : client.email,
+    branding,
+  })
 }
 
 // POST: complete onboarding
 export async function POST(request: NextRequest) {
-  const { token, password, onboarding } = (await request.json()) as {
+  const { token, password, onboarding, accountEmail } = (await request.json()) as {
     token: string
     password: string
+    accountEmail?: string
     onboarding: OnboardingData
   }
 
@@ -106,6 +112,23 @@ export async function POST(request: NextRequest) {
     new Date(client.invite_expires_at) < new Date()
   ) {
     return NextResponse.json({ error: "Invite expired" }, { status: 400 })
+  }
+
+  const inviteContactType = getClientInviteContactType(client)
+  const resolvedEmail = isPendingInviteEmail(client.email)
+    ? normalizeEmail(accountEmail ?? "")
+    : normalizeEmail(client.email)
+
+  if (!resolvedEmail) {
+    return NextResponse.json(
+      {
+        error:
+          inviteContactType === "phone"
+            ? "An email address is required to create the client login."
+            : "Missing client email address.",
+      },
+      { status: 400 }
+    )
   }
 
   const { data: settings } = client.coach_id
@@ -153,7 +176,7 @@ export async function POST(request: NextRequest) {
   // Create Supabase auth user
   const { data: authData, error: authError } =
     await supabase.auth.admin.createUser({
-      email: client.email,
+      email: resolvedEmail,
       password,
       email_confirm: true,
     })
@@ -181,7 +204,7 @@ export async function POST(request: NextRequest) {
       const clientWorkspace = await createClientSheet({
         clientId: client.id,
         clientName: onboarding.name,
-        clientEmail: client.email,
+        clientEmail: resolvedEmail,
         onboarding,
         coachId: client.coach_id,
         coachTypePreset: normalizeCoachTypePreset(settings?.coach_type_preset),
@@ -236,17 +259,21 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    const { error: clientUpdateError } = await supabase
+    let { error: clientUpdateError } = await supabase
       .from("clients")
       .update({
         user_id: authData.user.id,
         name: onboarding.name,
+        email: resolvedEmail,
         sheet_id: sheetId,
         drive_folder_id: driveFolderId,
         drive_folder_url: driveFolderUrl,
         sheet_shared_email: sheetSharedEmail,
         sheet_shared_permission_id: sheetSharedPermissionId,
         sheet_shared_at: sheetSharedAt,
+        invite_code: null,
+        invite_contact_type: null,
+        invite_contact_value: null,
         invite_accepted_at: acceptedAt,
         onboarding_completed: true,
         provisioning_status: "ready",
@@ -257,6 +284,33 @@ export async function POST(request: NextRequest) {
         updated_at: new Date().toISOString(),
       })
       .eq("id", client.id)
+
+    if (isMissingInviteMetadataColumns(clientUpdateError)) {
+      const fallbackUpdate = await supabase
+        .from("clients")
+        .update({
+          user_id: authData.user.id,
+          name: onboarding.name,
+          email: resolvedEmail,
+          sheet_id: sheetId,
+          drive_folder_id: driveFolderId,
+          drive_folder_url: driveFolderUrl,
+          sheet_shared_email: sheetSharedEmail,
+          sheet_shared_permission_id: sheetSharedPermissionId,
+          sheet_shared_at: sheetSharedAt,
+          invite_accepted_at: acceptedAt,
+          onboarding_completed: true,
+          provisioning_status: "ready",
+          provisioning_started_at: acceptedAt,
+          provisioning_completed_at: new Date().toISOString(),
+          provisioning_last_error: null,
+          invite_token: null,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", client.id)
+
+      clientUpdateError = fallbackUpdate.error
+    }
 
     if (clientUpdateError) {
       throw new Error("Failed to finish onboarding.")

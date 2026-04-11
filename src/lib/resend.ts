@@ -9,11 +9,12 @@ function getResend() {
 export async function sendInviteEmail(
   to: string,
   clientName: string,
-  inviteToken: string,
+  inviteCode: string,
+  inviteContactType: "email" | "phone",
   branding?: CoachBranding
 ) {
   const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"
-  const inviteUrl = `${appUrl}/onboarding?token=${inviteToken}`
+  const inviteUrl = `${appUrl}/onboarding`
   const brandTitle = branding?.brand_title || PLATFORM_BRAND_NAME
   const brandLogo = branding?.brand_logo_url
   const primaryColor = branding?.brand_primary_color || "#ff2d8a"
@@ -44,13 +45,16 @@ export async function sendInviteEmail(
           Hi ${clientName},
         </p>
         <p style="font-size: 16px; line-height: 1.6; margin: 0 0 24px 0;">
-          You've been invited to set up your ${brandTitle} profile. Click the button below to get started with your onboarding questionnaire.
+          You've been invited to set up your ${brandTitle} profile. Use the invite code below, then confirm with the same ${inviteContactType === "phone" ? "mobile number" : "email address"} your coach used for you.
         </p>
+        <div style="display: inline-block; margin: 0 0 24px; padding: 14px 18px; border-radius: 14px; background: #1a1a1a; border: 1px solid #2a2a2a; font-size: 24px; font-weight: 800; letter-spacing: 0.16em;">
+          ${inviteCode}
+        </div>
         <a href="${inviteUrl}" style="display: inline-block; background: ${primaryColor}; color: #ffffff; text-decoration: none; padding: 14px 32px; border-radius: 8px; font-weight: 600; font-size: 16px;">
-          Get Started
+          Open Onboarding
         </a>
         <p style="font-size: 13px; color: #888888; margin: 32px 0 0 0;">
-          This link expires in 7 days. If you didn't expect this email, you can ignore it.
+          This invite expires in 7 days. If you didn't expect this email, you can ignore it.
         </p>
         ${
           showPoweredBy

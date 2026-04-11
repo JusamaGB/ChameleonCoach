@@ -11,6 +11,59 @@ export function isMissingCoachIdColumn(error: { code?: string; message?: string 
   )
 }
 
+export function isMissingInviteMetadataColumns(error: { code?: string; message?: string } | null | undefined) {
+  if (!error) {
+    return false
+  }
+
+  return (
+    error.code === "42703"
+    || error.code === "PGRST204"
+    || error.message?.includes("invite_code") === true
+    || error.message?.includes("invite_contact_type") === true
+    || error.message?.includes("invite_contact_value") === true
+  )
+}
+
+export function getClientInviteCode(client: {
+  invite_code?: string | null
+  drive_folder_url?: string | null
+  invite_token?: string | null
+}) {
+  if (client.invite_code) {
+    return client.invite_code
+  }
+
+  if (client.drive_folder_url && !client.drive_folder_url.startsWith("http")) {
+    return client.drive_folder_url
+  }
+
+  return client.invite_token ? client.invite_token.slice(0, 8).toUpperCase() : null
+}
+
+export function getClientInviteContactType(client: {
+  invite_contact_type?: string | null
+  sheet_shared_permission_id?: string | null
+}) {
+  if (client.invite_contact_type === "email" || client.invite_contact_type === "phone") {
+    return client.invite_contact_type
+  }
+
+  if (client.sheet_shared_permission_id === "email" || client.sheet_shared_permission_id === "phone") {
+    return client.sheet_shared_permission_id
+  }
+
+  return "email"
+}
+
+export function getClientInviteContactValue(client: {
+  invite_contact_value?: string | null
+  sheet_shared_email?: string | null
+  email?: string | null
+}) {
+  return client.invite_contact_value ?? client.sheet_shared_email ?? client.email ?? null
+}
+
 export async function resolveLegacyCoachId(
   supabase: { from: (table: string) => any }
 ) {
@@ -119,12 +172,18 @@ export async function insertClientForCoach(
     name,
     email,
     inviteToken,
+    inviteCode,
+    inviteContactType,
+    inviteContactValue,
     inviteExpiresAt,
   }: {
     coachId: string
     name: string
     email: string
     inviteToken: string
+    inviteCode: string
+    inviteContactType: "email" | "phone"
+    inviteContactValue: string
     inviteExpiresAt: string
   }
 ) {
@@ -133,18 +192,25 @@ export async function insertClientForCoach(
     email,
     coach_id: coachId,
     invite_token: inviteToken,
+    invite_code: inviteCode,
+    invite_contact_type: inviteContactType,
+    invite_contact_value: inviteContactValue,
     invite_expires_at: inviteExpiresAt,
     provisioning_status: "pending",
   })
 
-  if (!isMissingCoachIdColumn(scopedInsert.error)) {
+  if (!isMissingCoachIdColumn(scopedInsert.error) && !isMissingInviteMetadataColumns(scopedInsert.error)) {
     return scopedInsert
   }
 
   return supabase.from("clients").insert({
     name,
     email,
+    coach_id: isMissingCoachIdColumn(scopedInsert.error) ? undefined : coachId,
     invite_token: inviteToken,
+    drive_folder_url: inviteCode,
+    sheet_shared_permission_id: inviteContactType,
+    sheet_shared_email: inviteContactValue,
     invite_expires_at: inviteExpiresAt,
     provisioning_status: "pending",
   })
@@ -193,6 +259,66 @@ export async function findClientInviteByToken(
     },
     error: null,
   }
+}
+
+export async function findClientInviteByCode(
+  supabase: { from: (table: string) => any },
+  code: string,
+  selectClause: string
+) {
+  const preferredQuery = await supabase
+    .from("clients")
+    .select(selectClause)
+    .eq("invite_code", code)
+    .maybeSingle()
+
+  if (!isMissingInviteMetadataColumns(preferredQuery.error)) {
+    return preferredQuery
+  }
+
+  const fallbackClause = selectClause
+    .split(",")
+    .map((part) => part.trim())
+    .filter((part) => !["invite_code", "invite_contact_type", "invite_contact_value"].includes(part))
+    .join(", ")
+
+  return supabase
+    .from("clients")
+    .select(fallbackClause)
+    .eq("drive_folder_url", code)
+    .maybeSingle()
+}
+
+export async function findPendingClientInviteForCoach(
+  supabase: { from: (table: string) => any },
+  coachId: string,
+  contactType: "email" | "phone",
+  contactValue: string
+) {
+  const preferredQuery = await supabase
+    .from("clients")
+    .select("id, onboarding_completed")
+    .eq("coach_id", coachId)
+    .eq("invite_contact_type", contactType)
+    .eq("invite_contact_value", contactValue)
+    .maybeSingle()
+
+  if (!isMissingCoachIdColumn(preferredQuery.error) && !isMissingInviteMetadataColumns(preferredQuery.error)) {
+    return preferredQuery
+  }
+
+  let query = supabase
+    .from("clients")
+    .select("id, onboarding_completed")
+
+  if (!isMissingCoachIdColumn(preferredQuery.error)) {
+    query = query.eq("coach_id", coachId)
+  }
+
+  return query
+    .eq("sheet_shared_permission_id", contactType)
+    .eq("sheet_shared_email", contactValue)
+    .maybeSingle()
 }
 
 export async function findClientByIdForCoach(
