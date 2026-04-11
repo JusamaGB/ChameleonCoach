@@ -397,6 +397,54 @@ async function ensureSpreadsheetTabsForDemo(
   })
 }
 
+async function removeBlankDefaultDemoSheet(
+  sheets: ReturnType<typeof google.sheets>,
+  spreadsheetId: string,
+  protectedTitles: string[]
+) {
+  const spreadsheet = await sheets.spreadsheets.get({
+    spreadsheetId,
+    fields: "sheets(properties(sheetId,title))",
+  })
+
+  const sheet1 = (spreadsheet.data.sheets ?? []).find((sheet) => sheet.properties?.title === "Sheet1")
+  const otherSheets = (spreadsheet.data.sheets ?? []).filter((sheet) => sheet.properties?.title !== "Sheet1")
+
+  if (!sheet1?.properties?.sheetId || otherSheets.length === 0) {
+    return
+  }
+
+  if (protectedTitles.includes("Sheet1")) {
+    return
+  }
+
+  const valuesResponse = await sheets.spreadsheets.values.get({
+    spreadsheetId,
+    range: "'Sheet1'!A1:Z20",
+  }).catch(() => null)
+
+  const hasContent = (valuesResponse?.data.values ?? []).some((row) =>
+    row.some((cell) => normalizeCell(cell).length > 0)
+  )
+
+  if (hasContent) {
+    return
+  }
+
+  await sheets.spreadsheets.batchUpdate({
+    spreadsheetId,
+    requestBody: {
+      requests: [
+        {
+          deleteSheet: {
+            sheetId: sheet1.properties.sheetId,
+          },
+        },
+      ],
+    },
+  })
+}
+
 async function overwriteDemoTab(
   sheets: ReturnType<typeof google.sheets>,
   spreadsheetId: string,
@@ -416,6 +464,24 @@ async function overwriteDemoTab(
       values,
     },
   })
+}
+
+async function syncDefaultDemoSheet(
+  sheets: ReturnType<typeof google.sheets>,
+  spreadsheetId: string,
+  values: Array<Array<string | number | boolean>>
+) {
+  const spreadsheet = await sheets.spreadsheets.get({
+    spreadsheetId,
+    fields: "sheets.properties.title",
+  })
+
+  const hasSheet1 = (spreadsheet.data.sheets ?? []).some((sheet) => sheet.properties?.title === "Sheet1")
+  if (!hasSheet1) {
+    return
+  }
+
+  await overwriteDemoTab(sheets, spreadsheetId, "Sheet1", values)
 }
 
 type DemoWorkbookSeed = {
@@ -536,6 +602,16 @@ export async function createMockMigrationWorkbooks(coachId: string) {
       await overwriteDemoTab(sheets, workbook.id, tab.title, tab.rows)
     }
 
+    if (seed.tabs[0]?.rows) {
+      await syncDefaultDemoSheet(sheets, workbook.id, seed.tabs[0].rows)
+    }
+
+    await removeBlankDefaultDemoSheet(
+      sheets,
+      workbook.id,
+      seed.tabs.map((tab) => tab.title)
+    )
+
     created.push(workbook)
   }
 
@@ -647,12 +723,22 @@ export async function readCoachMigrationWorkbookTabs(
   const tabs: MigrationWorkbookTab[] = []
 
   for (const tabName of tabTitles.slice(0, 20)) {
+    if (tabName === "Sheet1" && tabTitles.length > 1) {
+      continue
+    }
+
     const valuesResponse = await sheets.spreadsheets.values.get({
       spreadsheetId: workbook.id,
       range: `'${tabName}'!A1:ZZ1000`,
     }).catch(() => null)
 
     const values = valuesResponse?.data.values ?? []
+    const hasAnyContent = values.some((row) => row.some((cell) => normalizeCell(cell).length > 0))
+
+    if (!hasAnyContent) {
+      continue
+    }
+
     const headers = (values[0] ?? []).map(normalizeCell).filter(Boolean)
     const sampleRows = values.slice(1, 4).map((row) => row.map(normalizeCell))
     const classification = classifyTab(tabName, headers)
