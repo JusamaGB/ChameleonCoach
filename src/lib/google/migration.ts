@@ -1,12 +1,14 @@
 import { google } from "googleapis"
 import { getAuthedClient } from "./auth"
 import { PLATFORM_NAME } from "@/lib/platform"
+import * as XLSX from "xlsx"
 
 export type MigrationWorkbook = {
   id: string
   name: string
   url: string
   modifiedAt: string | null
+  mimeType: string
 }
 
 export type MigrationTabAnalysis = {
@@ -38,6 +40,24 @@ const MANAGED_WORKBOOK_NAMES = new Set([
   `${PLATFORM_NAME} Nutrition Library`,
   `${PLATFORM_NAME} Wellness Library`,
 ])
+const SUPPORTED_SPREADSHEET_MIME_TYPES = new Set([
+  "application/vnd.google-apps.spreadsheet",
+  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  "application/vnd.ms-excel",
+  "text/csv",
+  "application/csv",
+  "text/tab-separated-values",
+])
+const SPREADSHEET_MIME_QUERY = [
+  "application/vnd.google-apps.spreadsheet",
+  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  "application/vnd.ms-excel",
+  "text/csv",
+  "application/csv",
+  "text/tab-separated-values",
+]
+  .map((mimeType) => `mimeType = '${mimeType}'`)
+  .join(" or ")
 
 function extractSpreadsheetId(value: string) {
   const trimmed = value.trim()
@@ -69,6 +89,10 @@ async function getSheetsApi(coachId: string) {
 
 function workbookUrl(id: string) {
   return `https://docs.google.com/spreadsheets/d/${id}/edit`
+}
+
+function fileUrl(id: string) {
+  return `https://drive.google.com/file/d/${id}/view`
 }
 
 function normalizeCell(value: unknown) {
@@ -186,6 +210,7 @@ export async function listCoachMigrationWorkbooks(coachId: string): Promise<Migr
   const files: Array<{
     id: string
     name: string
+    mimeType?: string | null
     modifiedTime?: string | null
     webViewLink?: string | null
   }> = []
@@ -193,8 +218,8 @@ export async function listCoachMigrationWorkbooks(coachId: string): Promise<Migr
 
   do {
     const response = await drive.files.list({
-      q: "mimeType = 'application/vnd.google-apps.spreadsheet' and trashed = false",
-      fields: "nextPageToken, files(id, name, modifiedTime, webViewLink)",
+      q: `(${SPREADSHEET_MIME_QUERY}) and trashed = false`,
+      fields: "nextPageToken, files(id, name, mimeType, modifiedTime, webViewLink)",
       orderBy: "modifiedTime desc",
       pageSize: 100,
       pageToken,
@@ -205,8 +230,8 @@ export async function listCoachMigrationWorkbooks(coachId: string): Promise<Migr
 
     files.push(
       ...(response.data.files ?? []).filter(
-        (file): file is { id: string; name: string; modifiedTime?: string | null; webViewLink?: string | null } =>
-          Boolean(file.id && file.name)
+        (file): file is { id: string; name: string; mimeType?: string | null; modifiedTime?: string | null; webViewLink?: string | null } =>
+          Boolean(file.id && file.name && file.mimeType && SUPPORTED_SPREADSHEET_MIME_TYPES.has(file.mimeType))
       )
     )
 
@@ -218,8 +243,11 @@ export async function listCoachMigrationWorkbooks(coachId: string): Promise<Migr
     .map((file) => ({
       id: file.id,
       name: file.name,
-      url: file.webViewLink || workbookUrl(file.id),
+      url:
+        file.webViewLink
+        || (file.mimeType === "application/vnd.google-apps.spreadsheet" ? workbookUrl(file.id) : fileUrl(file.id)),
       modifiedAt: file.modifiedTime ?? null,
+      mimeType: file.mimeType ?? "application/octet-stream",
     }))
 }
 
@@ -250,13 +278,74 @@ export async function resolveCoachMigrationWorkbook(
     name: resolvedName,
     url: spreadsheet.data.spreadsheetUrl || workbookUrl(resolvedId),
     modifiedAt: null,
+    mimeType: "application/vnd.google-apps.spreadsheet",
   }
+}
+
+function readUploadedWorkbook(
+  buffer: Buffer,
+  mimeType: string
+): MigrationTabAnalysis[] {
+  const workbook = XLSX.read(buffer, {
+    type: "buffer",
+    raw: false,
+    dense: false,
+  })
+
+  return workbook.SheetNames.slice(0, 20).map((sheetName) => {
+    const sheet = workbook.Sheets[sheetName]
+    const rows = XLSX.utils.sheet_to_json<string[]>(sheet, {
+      header: 1,
+      blankrows: false,
+      raw: false,
+      defval: "",
+    }) as string[][]
+
+    const headers = (rows[0] ?? []).map(normalizeCell).filter(Boolean)
+    const sampleRows = rows.slice(1, 4).map((row) => row.map(normalizeCell))
+    const classification = classifyTab(sheetName, headers)
+
+    return {
+      tabName: sheetName,
+      headers,
+      sampleRows,
+      classification,
+      suggestedDestination: destinationForClassification(classification),
+      confidence: confidenceForClassification(classification, headers),
+      notes: [
+        ...notesForClassification(classification, headers),
+        mimeType === "text/csv" || mimeType === "application/csv"
+          ? "Source file is CSV, so this import is based on a single flat sheet."
+          : "Source file is an uploaded spreadsheet rather than a native Google Sheet.",
+      ],
+    }
+  })
 }
 
 export async function analyzeCoachMigrationWorkbook(
   coachId: string,
   workbook: MigrationWorkbook
 ): Promise<WorkbookMigrationAnalysis> {
+  if (workbook.mimeType !== "application/vnd.google-apps.spreadsheet") {
+    const drive = await getDriveApi(coachId)
+    const fileResponse = await drive.files.get(
+      {
+        fileId: workbook.id,
+        alt: "media",
+      },
+      {
+        responseType: "arraybuffer",
+      }
+    )
+
+    const buffer = Buffer.from(fileResponse.data as ArrayBuffer)
+
+    return {
+      workbook,
+      tabs: readUploadedWorkbook(buffer, workbook.mimeType),
+    }
+  }
+
   const sheets = await getSheetsApi(coachId)
   const spreadsheet = await sheets.spreadsheets.get({
     spreadsheetId: workbook.id,

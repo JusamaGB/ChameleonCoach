@@ -22,6 +22,7 @@ type MigrationWorkbook = {
   name: string
   url: string
   modifiedAt: string | null
+  mimeType: string
 }
 
 type MigrationTabAnalysis = {
@@ -354,6 +355,13 @@ export function MigrationWidget() {
                                     {workbook.modifiedAt
                                       ? `Updated ${new Date(workbook.modifiedAt).toLocaleString("en-GB")}`
                                       : "Modified date unavailable"}
+                                  </p>
+                                  <p className="mt-1 text-[11px] uppercase tracking-[0.16em] text-gf-muted/80">
+                                    {workbook.mimeType === "application/vnd.google-apps.spreadsheet"
+                                      ? "Google Sheet"
+                                      : workbook.mimeType === "text/csv" || workbook.mimeType === "application/csv"
+                                        ? "CSV"
+                                        : "Excel"}
                                   </p>
                                 </div>
                               </div>
