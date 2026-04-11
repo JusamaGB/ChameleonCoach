@@ -78,7 +78,14 @@ export default function PremiumPage() {
   return (
     <div className="max-w-lg mx-auto">
       <h1 className="text-2xl font-bold mb-2">Premium</h1>
-      <p className="text-gf-muted mb-8">Premium features and client branding</p>
+      <p className="text-gf-muted mb-8">Premium features, migration tooling, and client branding</p>
+
+      <Card className="mb-8">
+        <CardTitle>AI Migration</CardTitle>
+        <p className="mt-2 text-sm text-gf-muted">
+          The migration assistant now lives as a floating widget across the coach admin area. Use it to inspect legacy Google Sheets, select the Chameleon client they belong to, and review proposed tab mappings before we wire in the actual import step.
+        </p>
+      </Card>
 
       <Card>
         <CardTitle>Client Branding</CardTitle>

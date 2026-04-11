@@ -1,4 +1,5 @@
 import { AdminNav } from "@/components/layout/admin-nav"
+import { MigrationWidget } from "@/components/admin/migration-widget"
 import { createClient, createAdmin } from "@/lib/supabase/server"
 import { resolveActiveModules } from "@/lib/modules"
 import { getCoachDriveWorkspaceHealth } from "@/lib/google/template"
@@ -41,6 +42,7 @@ export default async function AdminLayout({
     <div className="flex min-h-screen">
       <AdminNav activeModules={activeModules} />
       <main className="flex-1 p-6 md:p-10 pt-20 md:pt-6">{children}</main>
+      <MigrationWidget />
     </div>
   )
 }
