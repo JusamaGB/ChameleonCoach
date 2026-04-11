@@ -318,17 +318,19 @@ export function MigrationWidget() {
                         </Button>
                       </div>
 
-                      <div className="mb-4 rounded-xl border border-gf-border bg-gf-black/20 p-3">
-                        <div className="flex items-center gap-2">
-                          <Search size={14} className="text-gf-muted" />
-                          <input
-                            value={sheetSearch}
-                            onChange={(e) => setSheetSearch(e.target.value)}
-                            placeholder="Search loaded Google Sheets"
-                            className="w-full bg-transparent text-sm text-white placeholder:text-gf-muted/60 focus:outline-none"
-                          />
+                      {workbooks.length > 0 ? (
+                        <div className="mb-4 rounded-xl border border-gf-border bg-gf-black/20 p-3">
+                          <div className="flex items-center gap-2">
+                            <Search size={14} className="text-gf-muted" />
+                            <input
+                              value={sheetSearch}
+                              onChange={(e) => setSheetSearch(e.target.value)}
+                              placeholder="Search loaded Google Sheets"
+                              className="w-full bg-transparent text-sm text-white placeholder:text-gf-muted/60 focus:outline-none"
+                            />
+                          </div>
                         </div>
-                      </div>
+                      ) : null}
 
                       {visibleWorkbooks.length === 0 && !loadingWorkbooks ? (
                         <p className="text-sm text-gf-muted">
