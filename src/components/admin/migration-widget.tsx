@@ -14,6 +14,7 @@ type MigrationBootstrap = {
   missing_artifacts: string[]
   clients: Client[]
   openai_configured: boolean
+  managed_workbook_ids: string[]
 }
 
 type MigrationWorkbook = {
@@ -47,10 +48,12 @@ export function MigrationWidget() {
   const [error, setError] = useState("")
   const [workbooks, setWorkbooks] = useState<MigrationWorkbook[]>([])
   const [selectedClientId, setSelectedClientId] = useState("")
-  const [selectedWorkbookIds, setSelectedWorkbookIds] = useState<string[]>([])
+  const [selectedWorkbookId, setSelectedWorkbookId] = useState("")
   const [analyses, setAnalyses] = useState<WorkbookAnalysis[]>([])
   const [analysisMode, setAnalysisMode] = useState<"heuristic" | "hybrid">("heuristic")
   const [introDismissed, setIntroDismissed] = useState(false)
+  const [manualSource, setManualSource] = useState("")
+  const [addingManualSource, setAddingManualSource] = useState(false)
 
   useEffect(() => {
     if (!open || bootstrap) {
@@ -60,9 +63,14 @@ export function MigrationWidget() {
     void loadBootstrap()
   }, [open, bootstrap])
 
-  const selectedWorkbooks = useMemo(
-    () => workbooks.filter((workbook) => selectedWorkbookIds.includes(workbook.id)),
-    [selectedWorkbookIds, workbooks]
+  const visibleWorkbooks = useMemo(() => {
+    const managedIds = new Set(bootstrap?.managed_workbook_ids ?? [])
+    return workbooks.filter((workbook) => !managedIds.has(workbook.id))
+  }, [bootstrap, workbooks])
+
+  const selectedWorkbook = useMemo(
+    () => workbooks.find((workbook) => workbook.id === selectedWorkbookId) ?? null,
+    [selectedWorkbookId, workbooks]
   )
 
   async function loadBootstrap() {
@@ -109,7 +117,7 @@ export function MigrationWidget() {
   }
 
   async function analyzeSelectedWorkbooks() {
-    if (!selectedClientId || selectedWorkbooks.length === 0) {
+    if (!selectedClientId || !selectedWorkbook) {
       return
     }
 
@@ -122,7 +130,7 @@ export function MigrationWidget() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           clientId: selectedClientId,
-          workbooks: selectedWorkbooks,
+          workbooks: [selectedWorkbook],
         }),
       })
       const data = await res.json()
@@ -140,12 +148,41 @@ export function MigrationWidget() {
     }
   }
 
-  function toggleWorkbook(workbookId: string) {
-    setSelectedWorkbookIds((current) =>
-      current.includes(workbookId)
-        ? current.filter((id) => id !== workbookId)
-        : [...current, workbookId]
-    )
+  async function addManualWorkbook() {
+    if (!manualSource.trim()) {
+      return
+    }
+
+    setAddingManualSource(true)
+    setError("")
+
+    try {
+      const res = await fetch("/api/migration/source", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ source: manualSource }),
+      })
+      const data = await res.json()
+
+      if (!res.ok) {
+        throw new Error(data.error || "Failed to load that Google Sheet.")
+      }
+
+      setWorkbooks((current) => {
+        const existing = current.find((workbook) => workbook.id === data.workbook.id)
+        if (existing) {
+          return current
+        }
+
+        return [data.workbook, ...current]
+      })
+      setSelectedWorkbookId(data.workbook.id)
+      setManualSource("")
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to load that Google Sheet.")
+    } finally {
+      setAddingManualSource(false)
+    }
   }
 
   return (
@@ -221,6 +258,10 @@ export function MigrationWidget() {
                   </div>
                 )}
 
+                <div className="rounded-xl border border-blue-500/20 bg-blue-500/5 p-3 text-sm text-blue-100">
+                  Legacy Drive listing needs the broader Google permission we just added. If you only see Chameleon-created sheets here, reconnect Google once in Settings, or paste a Google Sheets URL/ID below and continue now.
+                </div>
+
                 {!bootstrap.google_connected || bootstrap.workspace_status !== "healthy" ? (
                   <div className="rounded-xl border border-yellow-500/25 bg-yellow-500/5 p-4 text-sm text-yellow-200">
                     <p>
@@ -249,7 +290,7 @@ export function MigrationWidget() {
                         <div>
                           <p className="text-sm font-semibold text-white">Source Google Sheets</p>
                           <p className="text-xs text-gf-muted">
-                            Pick one or more source workbooks to inspect.
+                            Pick one source workbook to inspect first. We can queue multi-sheet imports once the mapping step is solid.
                           </p>
                         </div>
                         <Button
@@ -263,16 +304,35 @@ export function MigrationWidget() {
                         </Button>
                       </div>
 
-                      {workbooks.length === 0 && !loadingWorkbooks ? (
-                        <p className="text-sm text-gf-muted">No source sheets loaded yet.</p>
+                      <div className="mb-4 grid gap-2">
+                        <Input
+                          label="Paste Google Sheets URL or ID"
+                          placeholder="https://docs.google.com/spreadsheets/d/... or spreadsheet ID"
+                          value={manualSource}
+                          onChange={(e) => setManualSource(e.target.value)}
+                        />
+                        <Button
+                          type="button"
+                          variant="secondary"
+                          onClick={() => void addManualWorkbook()}
+                          disabled={addingManualSource || !manualSource.trim()}
+                        >
+                          {addingManualSource ? "Adding sheet..." : "Add sheet by URL or ID"}
+                        </Button>
+                      </div>
+
+                      {visibleWorkbooks.length === 0 && !loadingWorkbooks ? (
+                        <p className="text-sm text-gf-muted">No legacy source sheets loaded yet.</p>
                       ) : null}
 
-                      <div className="space-y-2">
-                        {workbooks.map((workbook) => {
-                          const selected = selectedWorkbookIds.includes(workbook.id)
+                      <div className="max-h-72 space-y-2 overflow-y-auto pr-1">
+                        {visibleWorkbooks.map((workbook) => {
+                          const selected = selectedWorkbookId === workbook.id
                           return (
-                            <label
+                            <button
                               key={workbook.id}
+                              type="button"
+                              onClick={() => setSelectedWorkbookId(workbook.id)}
                               className={`block rounded-xl border px-3 py-3 text-sm transition-colors ${
                                 selected
                                   ? "border-gf-pink/40 bg-gf-pink/10"
@@ -280,12 +340,7 @@ export function MigrationWidget() {
                               }`}
                             >
                               <div className="flex items-start gap-3">
-                                <input
-                                  type="checkbox"
-                                  checked={selected}
-                                  onChange={() => toggleWorkbook(workbook.id)}
-                                  className="mt-1"
-                                />
+                                <div className={`mt-1 h-3 w-3 rounded-full border ${selected ? "border-gf-pink bg-gf-pink" : "border-gf-muted"}`} />
                                 <div className="min-w-0">
                                   <p className="truncate font-medium text-white">{workbook.name}</p>
                                   <p className="text-xs text-gf-muted">
@@ -295,19 +350,26 @@ export function MigrationWidget() {
                                   </p>
                                 </div>
                               </div>
-                            </label>
+                            </button>
                           )
                         })}
                       </div>
                     </div>
 
+                    {selectedWorkbook && (
+                      <div className="rounded-xl border border-gf-pink/20 bg-gf-pink/5 p-3 text-sm text-gf-muted">
+                        <p className="text-white">Selected source</p>
+                        <p className="mt-1">{selectedWorkbook.name}</p>
+                      </div>
+                    )}
+
                     <Button
                       type="button"
                       className="w-full"
-                      disabled={!selectedClientId || selectedWorkbookIds.length === 0 || analyzing}
+                      disabled={!selectedClientId || !selectedWorkbookId || analyzing}
                       onClick={() => void analyzeSelectedWorkbooks()}
                     >
-                      {analyzing ? "Analysing selected sheets..." : "Analyse selected sheets"}
+                      {analyzing ? "Analysing selected sheet..." : "Analyse selected sheet"}
                     </Button>
                   </>
                 )}

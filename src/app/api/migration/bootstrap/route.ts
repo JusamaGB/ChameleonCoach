@@ -35,5 +35,11 @@ export async function GET() {
     missing_artifacts: workspaceHealth.missingArtifacts,
     clients: clients ?? [],
     openai_configured: Boolean(process.env.OPENAI_API_KEY),
+    managed_workbook_ids: [
+      settings?.managed_workspace_sheet_id,
+      settings?.managed_pt_library_sheet_id,
+      settings?.managed_nutrition_library_sheet_id,
+      settings?.managed_wellness_library_sheet_id,
+    ].filter((value): value is string => Boolean(value)),
   })
 }

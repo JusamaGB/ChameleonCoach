@@ -30,6 +30,24 @@ export type WorkbookMigrationAnalysis = {
   tabs: MigrationTabAnalysis[]
 }
 
+function extractSpreadsheetId(value: string) {
+  const trimmed = value.trim()
+  if (!trimmed) {
+    return null
+  }
+
+  const match = trimmed.match(/\/spreadsheets\/d\/([a-zA-Z0-9-_]+)/)
+  if (match?.[1]) {
+    return match[1]
+  }
+
+  if (/^[a-zA-Z0-9-_]{20,}$/.test(trimmed)) {
+    return trimmed
+  }
+
+  return null
+}
+
 async function getDriveApi(coachId: string) {
   const auth = await getAuthedClient(coachId)
   return google.drive({ version: "v3", auth })
@@ -161,6 +179,8 @@ export async function listCoachMigrationWorkbooks(coachId: string): Promise<Migr
     fields: "files(id, name, modifiedTime, webViewLink)",
     orderBy: "modifiedTime desc",
     pageSize: 25,
+    includeItemsFromAllDrives: true,
+    supportsAllDrives: true,
   })
 
   return (response.data.files ?? [])
@@ -171,6 +191,36 @@ export async function listCoachMigrationWorkbooks(coachId: string): Promise<Migr
       url: file.webViewLink || workbookUrl(file.id),
       modifiedAt: file.modifiedTime ?? null,
     }))
+}
+
+export async function resolveCoachMigrationWorkbook(
+  coachId: string,
+  source: string
+): Promise<MigrationWorkbook> {
+  const spreadsheetId = extractSpreadsheetId(source)
+  if (!spreadsheetId) {
+    throw new Error("Paste a valid Google Sheets URL or spreadsheet ID.")
+  }
+
+  const sheets = await getSheetsApi(coachId)
+  const spreadsheet = await sheets.spreadsheets.get({
+    spreadsheetId,
+    fields: "spreadsheetId,properties.title,spreadsheetUrl",
+  })
+
+  const resolvedId = spreadsheet.data.spreadsheetId
+  const resolvedName = spreadsheet.data.properties?.title
+
+  if (!resolvedId || !resolvedName) {
+    throw new Error("Unable to load that Google Sheet.")
+  }
+
+  return {
+    id: resolvedId,
+    name: resolvedName,
+    url: spreadsheet.data.spreadsheetUrl || workbookUrl(resolvedId),
+    modifiedAt: null,
+  }
 }
 
 export async function analyzeCoachMigrationWorkbook(
