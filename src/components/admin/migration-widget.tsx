@@ -210,11 +210,7 @@ export function MigrationWidget() {
                 steps: existing.steps.map((item) =>
                   item.id === step.id ? { ...item, status: "active" as const } : item
                 ),
-                messages: appendMessage(existing.messages, {
-                  id: `${step.id}-active`,
-                  role: "system",
-                  content: step.label,
-                }),
+                messages: existing.messages,
               },
             }
           })
