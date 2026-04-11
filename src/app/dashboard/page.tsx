@@ -19,6 +19,9 @@ export default async function DashboardPage() {
   } = await supabase.auth.getUser()
 
   if (!user) redirect("/login")
+  if (user.app_metadata?.role === "coach" || user.app_metadata?.role === "admin") {
+    redirect("/admin")
+  }
 
   const { data: client } = await supabase
     .from("clients")

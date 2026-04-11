@@ -56,7 +56,9 @@ export default function LoginForm() {
         .eq("user_id", data.user!.id)
         .single()
 
-      if (role?.role === "coach" || role?.role === "admin") {
+      const effectiveRole = role?.role ?? data.user?.app_metadata?.role
+
+      if (effectiveRole === "coach" || effectiveRole === "admin") {
         router.push("/admin")
       } else {
         router.push(redirect)

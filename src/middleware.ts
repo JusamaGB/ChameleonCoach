@@ -54,7 +54,8 @@ export async function middleware(request: NextRequest) {
       .eq("user_id", user.id)
       .single()
 
-    const isCoach = role?.role === "coach" || role?.role === "admin"
+    const effectiveRole = role?.role ?? user.app_metadata?.role
+    const isCoach = effectiveRole === "coach" || effectiveRole === "admin"
     if (!isCoach) {
       return NextResponse.redirect(new URL("/dashboard", request.url))
     }
