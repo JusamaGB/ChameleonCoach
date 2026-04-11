@@ -49,7 +49,7 @@ export function MigrationWidget() {
   const [error, setError] = useState("")
   const [workbooks, setWorkbooks] = useState<MigrationWorkbook[]>([])
   const [selectedClientId, setSelectedClientId] = useState("")
-  const [selectedWorkbookId, setSelectedWorkbookId] = useState("")
+  const [selectedWorkbookIds, setSelectedWorkbookIds] = useState<string[]>([])
   const [analyses, setAnalyses] = useState<WorkbookAnalysis[]>([])
   const [analysisMode, setAnalysisMode] = useState<"heuristic" | "hybrid">("heuristic")
   const [introDismissed, setIntroDismissed] = useState(false)
@@ -81,9 +81,9 @@ export function MigrationWidget() {
       })
   }, [bootstrap, sheetSearch, workbooks])
 
-  const selectedWorkbook = useMemo(
-    () => workbooks.find((workbook) => workbook.id === selectedWorkbookId) ?? null,
-    [selectedWorkbookId, workbooks]
+  const selectedWorkbooks = useMemo(
+    () => workbooks.filter((workbook) => selectedWorkbookIds.includes(workbook.id)),
+    [selectedWorkbookIds, workbooks]
   )
 
   async function loadBootstrap() {
@@ -130,7 +130,7 @@ export function MigrationWidget() {
   }
 
   async function analyzeSelectedWorkbooks() {
-    if (!selectedClientId || !selectedWorkbook) {
+    if (!selectedClientId || selectedWorkbooks.length === 0) {
       return
     }
 
@@ -143,7 +143,7 @@ export function MigrationWidget() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           clientId: selectedClientId,
-          workbooks: [selectedWorkbook],
+          workbooks: selectedWorkbooks,
         }),
       })
       const data = await res.json()
@@ -189,13 +189,27 @@ export function MigrationWidget() {
 
         return [data.workbook, ...current]
       })
-      setSelectedWorkbookId(data.workbook.id)
+      setSelectedWorkbookIds((current) =>
+        current.includes(data.workbook.id) ? current : [...current, data.workbook.id]
+      )
       setManualSource("")
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load that Google Sheet.")
     } finally {
       setAddingManualSource(false)
     }
+  }
+
+  function toggleWorkbookSelection(workbookId: string) {
+    setSelectedWorkbookIds((current) =>
+      current.includes(workbookId)
+        ? current.filter((id) => id !== workbookId)
+        : [...current, workbookId]
+    )
+  }
+
+  function removeWorkbookSelection(workbookId: string) {
+    setSelectedWorkbookIds((current) => current.filter((id) => id !== workbookId))
   }
 
   return (
@@ -299,7 +313,7 @@ export function MigrationWidget() {
                         <div>
                           <p className="text-sm font-semibold text-white">Source Google Sheets</p>
                           <p className="text-xs text-gf-muted">
-                            Load and browse your legacy spreadsheets, then inspect one source workbook at a time.
+                            Load and browse your legacy spreadsheets, then multi-select the sources you want to inspect.
                           </p>
                         </div>
                         <Button
@@ -335,12 +349,13 @@ export function MigrationWidget() {
 
                       <div className="max-h-72 space-y-2 overflow-y-auto pr-1">
                         {visibleWorkbooks.map((workbook) => {
-                          const selected = selectedWorkbookId === workbook.id
+                          const selected = selectedWorkbookIds.includes(workbook.id)
                           return (
                             <button
                               key={workbook.id}
                               type="button"
-                              onClick={() => setSelectedWorkbookId(workbook.id)}
+                              onClick={() => toggleWorkbookSelection(workbook.id)}
+                              onDoubleClick={() => removeWorkbookSelection(workbook.id)}
                               className={`block rounded-xl border px-3 py-3 text-sm transition-colors ${
                                 selected
                                   ? "border-gf-pink/40 bg-gf-pink/10"
@@ -398,20 +413,36 @@ export function MigrationWidget() {
                       )}
                     </div>
 
-                    {selectedWorkbook && (
+                    {selectedWorkbooks.length > 0 && (
                       <div className="rounded-xl border border-gf-pink/20 bg-gf-pink/5 p-3 text-sm text-gf-muted">
-                        <p className="text-white">Selected source</p>
-                        <p className="mt-1">{selectedWorkbook.name}</p>
+                        <p className="text-white">
+                          {selectedWorkbooks.length === 1 ? "Selected source" : `Selected sources (${selectedWorkbooks.length})`}
+                        </p>
+                        <div className="mt-2 flex flex-wrap gap-2">
+                          {selectedWorkbooks.map((workbook) => (
+                            <button
+                              key={workbook.id}
+                              type="button"
+                              onDoubleClick={() => removeWorkbookSelection(workbook.id)}
+                              className="rounded-full border border-gf-pink/25 bg-gf-pink/10 px-3 py-1 text-xs text-white transition-colors hover:border-gf-pink/50"
+                              title="Double-click to deselect"
+                            >
+                              {workbook.name}
+                            </button>
+                          ))}
+                        </div>
                       </div>
                     )}
 
                     <Button
                       type="button"
                       className="w-full"
-                      disabled={!selectedClientId || !selectedWorkbookId || analyzing}
+                      disabled={!selectedClientId || selectedWorkbookIds.length === 0 || analyzing}
                       onClick={() => void analyzeSelectedWorkbooks()}
                     >
-                      {analyzing ? "Analysing selected sheet..." : "Analyse selected sheet"}
+                      {analyzing
+                        ? `Analysing ${selectedWorkbookIds.length} selected ${selectedWorkbookIds.length === 1 ? "sheet" : "sheets"}...`
+                        : `Analyse ${selectedWorkbookIds.length || ""} selected ${selectedWorkbookIds.length === 1 ? "sheet" : "sheets"}`.trim()}
                     </Button>
                   </>
                 )}
