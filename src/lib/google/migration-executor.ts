@@ -488,6 +488,18 @@ export async function executeCoachWorkbookMigration({
 
   const targetClient = client as Client
   const tabs = await readCoachMigrationWorkbookTabs(coachId, workbook)
+  const emptyTabs = tabs.filter((tab) => tab.isEmpty)
+  const nonEmptyTabs = tabs.filter((tab) => !tab.isEmpty)
+
+  if (nonEmptyTabs.length === 0) {
+    const emptyNames = emptyTabs.map((tab) => tab.tabName)
+    throw new Error(
+      emptyNames.length > 0
+        ? `This workbook is empty. Empty tabs: ${emptyNames.join(", ")}.`
+        : "This workbook is empty. No rows are available to migrate."
+    )
+  }
+
   const steps: MigrationExecutionStep[] = []
   const summary: string[] = []
   const warnings: string[] = []
@@ -498,7 +510,7 @@ export async function executeCoachWorkbookMigration({
 
   await emitStep({
     id: "read-source",
-    label: `Read ${tabs.length} source tab${tabs.length === 1 ? "" : "s"} from ${workbook.name}`,
+    label: `Read ${nonEmptyTabs.length} source tab${nonEmptyTabs.length === 1 ? "" : "s"} from ${workbook.name}`,
   })
 
   await emitStep({
@@ -626,16 +638,11 @@ export async function executeCoachWorkbookMigration({
     tabs.filter((tab) => tab.classification === "nutrition").forEach((tab) => handledTabs.add(tab.tabName))
   }
 
-  for (const tab of tabs) {
-    const isEffectivelyEmpty =
-      tab.rows.length === 0
-      || tab.rows.every((row) => row.every((cell) => !String(cell ?? "").trim()))
+  if (emptyTabs.length > 0) {
+    warnings.push(`Skipped empty tab${emptyTabs.length === 1 ? "" : "s"}: ${emptyTabs.map((tab) => tab.tabName).join(", ")}.`)
+  }
 
-    if (isEffectivelyEmpty) {
-      handledTabs.add(tab.tabName)
-      continue
-    }
-
+  for (const tab of nonEmptyTabs) {
     if (!handledTabs.has(tab.tabName)) {
       warnings.push(`${tab.tabName} was inspected but not migrated yet.`)
     }

@@ -15,6 +15,7 @@ export type MigrationTabAnalysis = {
   tabName: string
   headers: string[]
   sampleRows: string[][]
+  isEmpty: boolean
   classification:
     | "profile"
     | "meal_plan"
@@ -466,10 +467,9 @@ async function overwriteDemoTab(
   })
 }
 
-async function syncDefaultDemoSheet(
+async function resetDefaultDemoSheet(
   sheets: ReturnType<typeof google.sheets>,
-  spreadsheetId: string,
-  values: Array<Array<string | number | boolean>>
+  spreadsheetId: string
 ) {
   const spreadsheet = await sheets.spreadsheets.get({
     spreadsheetId,
@@ -481,7 +481,10 @@ async function syncDefaultDemoSheet(
     return
   }
 
-  await overwriteDemoTab(sheets, spreadsheetId, "Sheet1", values)
+  await sheets.spreadsheets.values.clear({
+    spreadsheetId,
+    range: "Sheet1!A:ZZ",
+  })
 }
 
 type DemoWorkbookSeed = {
@@ -602,9 +605,7 @@ export async function createMockMigrationWorkbooks(coachId: string) {
       await overwriteDemoTab(sheets, workbook.id, tab.title, tab.rows)
     }
 
-    if (seed.tabs[0]?.rows) {
-      await syncDefaultDemoSheet(sheets, workbook.id, seed.tabs[0].rows)
-    }
+    await resetDefaultDemoSheet(sheets, workbook.id)
 
     await removeBlankDefaultDemoSheet(
       sheets,
@@ -668,6 +669,7 @@ function readUploadedWorkbook(
       defval: "",
     }) as string[][]
 
+    const hasAnyContent = rows.some((row) => row.some((cell) => normalizeCell(cell).length > 0))
     const headers = (rows[0] ?? []).map(normalizeCell).filter(Boolean)
     const sampleRows = rows.slice(1, 4).map((row) => row.map(normalizeCell))
     const classification = classifyTab(sheetName, headers)
@@ -677,10 +679,12 @@ function readUploadedWorkbook(
       headers,
       sampleRows,
       rows: rows.slice(1).map((row) => row.map(normalizeCell)),
+      isEmpty: !hasAnyContent,
       classification,
       suggestedDestination: destinationForClassification(classification),
       confidence: confidenceForClassification(classification, headers),
       notes: [
+        ...(!hasAnyContent ? ["This tab is empty. No rows are available to migrate from it."] : []),
         ...notesForClassification(classification, headers),
         mimeType === "text/csv" || mimeType === "application/csv"
           ? "Source file is CSV, so this import is based on a single flat sheet."
@@ -723,10 +727,6 @@ export async function readCoachMigrationWorkbookTabs(
   const tabs: MigrationWorkbookTab[] = []
 
   for (const tabName of tabTitles.slice(0, 20)) {
-    if (tabName === "Sheet1" && tabTitles.length > 1) {
-      continue
-    }
-
     const valuesResponse = await sheets.spreadsheets.values.get({
       spreadsheetId: workbook.id,
       range: `'${tabName}'!A1:ZZ1000`,
@@ -734,10 +734,6 @@ export async function readCoachMigrationWorkbookTabs(
 
     const values = valuesResponse?.data.values ?? []
     const hasAnyContent = values.some((row) => row.some((cell) => normalizeCell(cell).length > 0))
-
-    if (!hasAnyContent) {
-      continue
-    }
 
     const headers = (values[0] ?? []).map(normalizeCell).filter(Boolean)
     const sampleRows = values.slice(1, 4).map((row) => row.map(normalizeCell))
@@ -748,10 +744,14 @@ export async function readCoachMigrationWorkbookTabs(
       headers,
       sampleRows,
       rows: values.slice(1).map((row) => row.map(normalizeCell)),
+      isEmpty: !hasAnyContent,
       classification,
       suggestedDestination: destinationForClassification(classification),
       confidence: confidenceForClassification(classification, headers),
-      notes: notesForClassification(classification, headers),
+      notes: [
+        ...(!hasAnyContent ? ["This tab is empty. No rows are available to migrate from it."] : []),
+        ...notesForClassification(classification, headers),
+      ],
     })
   }
 

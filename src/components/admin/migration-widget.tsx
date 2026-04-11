@@ -29,6 +29,7 @@ type MigrationTabAnalysis = {
   tabName: string
   headers: string[]
   sampleRows: string[][]
+  isEmpty: boolean
   classification: string
   suggestedDestination: string
   confidence: "high" | "medium" | "low"
@@ -718,6 +719,8 @@ export function MigrationWidget() {
                         </div>
 
                         {analyses.map((analysis) => {
+                          const nonEmptyTabCount = analysis.tabs.filter((tab) => !tab.isEmpty).length
+                          const emptyTabCount = analysis.tabs.length - nonEmptyTabCount
                           const matchedClientId = clientMappings[analysis.workbook.id] ?? ""
                           const matchedClient = bootstrap.clients.find((client) => client.id === matchedClientId) ?? null
                           const progressState = workbookProgress[analysis.workbook.id]
@@ -728,7 +731,10 @@ export function MigrationWidget() {
                               <div className="flex items-start justify-between gap-3">
                                 <div>
                                   <p className="font-semibold text-white">{analysis.workbook.name}</p>
-                                  <p className="text-xs text-gf-muted">{analysis.tabs.length} tabs inspected</p>
+                                  <p className="text-xs text-gf-muted">
+                                    {nonEmptyTabCount} non-empty tab{nonEmptyTabCount === 1 ? "" : "s"} ready
+                                    {emptyTabCount > 0 ? `, ${emptyTabCount} empty` : ""}
+                                  </p>
                                   {analysis.suggestedClientName && (
                                     <p className="mt-2 text-sm text-gf-muted">
                                       Suggested client: <span className="text-white">{analysis.suggestedClientName}</span>
@@ -768,11 +774,14 @@ export function MigrationWidget() {
                                   <div key={tab.tabName} className="rounded-xl border border-gf-border bg-gf-surface/50 p-3">
                                     <div className="mb-2 flex items-center justify-between gap-3">
                                       <p className="font-medium text-white">{tab.tabName}</p>
-                                      <Badge variant={tab.confidence === "high" ? "success" : tab.confidence === "medium" ? "warning" : "default"}>
-                                        {tab.confidence}
+                                      <Badge variant={tab.isEmpty ? "default" : tab.confidence === "high" ? "success" : tab.confidence === "medium" ? "warning" : "default"}>
+                                        {tab.isEmpty ? "empty" : tab.confidence}
                                       </Badge>
                                     </div>
                                     <p className="text-sm text-gf-muted">{tab.suggestedDestination}</p>
+                                    {tab.notes[0] && (
+                                      <p className="mt-2 text-xs text-gf-muted">{tab.notes[0]}</p>
+                                    )}
                                   </div>
                                 ))}
                               </div>
@@ -901,13 +910,16 @@ function WorkbookChatView({
             <div key={tab.tabName} className="rounded-xl border border-gf-border bg-gf-black/20 p-3">
               <div className="flex items-center justify-between gap-3">
                 <p className="font-medium text-white">{tab.tabName}</p>
-                <Badge variant={tab.confidence === "high" ? "success" : tab.confidence === "medium" ? "warning" : "default"}>
-                  {tab.confidence}
+                <Badge variant={tab.isEmpty ? "default" : tab.confidence === "high" ? "success" : tab.confidence === "medium" ? "warning" : "default"}>
+                  {tab.isEmpty ? "empty" : tab.confidence}
                 </Badge>
               </div>
               <p className="mt-1 text-sm text-gf-muted">
                 Destination: <span className="text-white">{tab.suggestedDestination}</span>
               </p>
+              {tab.notes[0] && (
+                <p className="mt-2 text-xs text-gf-muted">{tab.notes[0]}</p>
+              )}
               {tab.headers.length > 0 && (
                 <p className="mt-2 text-xs text-gf-muted">
                   Headers: {tab.headers.join(", ")}
