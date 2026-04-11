@@ -13,8 +13,9 @@ export async function GET(request: NextRequest) {
 
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
+  const effectiveRole = user?.app_metadata?.role
 
-  if (!user || user.app_metadata?.role !== "coach") {
+  if (!user || (effectiveRole !== "coach" && effectiveRole !== "admin")) {
     return NextResponse.redirect(new URL("/login", request.url))
   }
 
