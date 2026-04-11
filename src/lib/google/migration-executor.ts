@@ -2,6 +2,7 @@ import type {
   Client,
   ClientNutritionCheckIn,
   ClientWellnessCheckIn,
+  ClientWellnessGoalAssignment,
   ClientWellnessHabitAssignment,
   MealPlanDay,
   ProfileData,
@@ -33,6 +34,7 @@ import {
   listClientWellnessHabitLogsForCoach,
   listClientWellnessSessionNotesForCoach,
 } from "@/lib/wellness"
+import { resolveActiveModules, type EnableableModule } from "@/lib/modules"
 
 type SupabaseLike = {
   from: (table: string) => any
@@ -282,6 +284,51 @@ function extractWellnessHabitAssignments(
   return assignments
 }
 
+function extractWellnessGoalAssignments(
+  tabs: MigrationWorkbookTab[],
+  coachId: string,
+  clientId: string
+) {
+  const assignments: Array<Record<string, unknown>> = []
+
+  for (const tab of tabs) {
+    const headerSet = new Set(tab.headers.map(normalizeHeader))
+    const looksLikeGoals =
+      tab.classification === "wellness"
+      && (
+        headerSet.has("goal")
+        || headerSet.has("goal_name")
+        || headerSet.has("target_metric")
+        || headerSet.has("milestone")
+      )
+
+    if (!looksLikeGoals) continue
+
+    for (const row of tab.rows) {
+      const record = buildRowObject(tab.headers, row)
+      const goalName = firstValue(record, ["goal", "goal_name", "name", "focus"])
+      if (!goalName) continue
+
+      assignments.push({
+        coach_id: coachId,
+        client_id: clientId,
+        goal_template_id: null,
+        goal_name_snapshot: goalName,
+        description_snapshot: firstValue(record, ["description", "notes", "summary"]) || null,
+        category_snapshot: firstValue(record, ["category"]) || "wellness",
+        target_metric: firstValue(record, ["target_metric", "metric"]) || null,
+        target_value: firstValue(record, ["target_value", "value", "target"]) || null,
+        milestone_label: firstValue(record, ["milestone", "milestone_label"]) || null,
+        coaching_notes: firstValue(record, ["coach_notes", "coach_note", "notes"]) || null,
+        assigned_start_date: null,
+        status: parseStatus(firstValue(record, ["status"])),
+      })
+    }
+  }
+
+  return assignments
+}
+
 function extractWellnessCheckIns(
   tabs: MigrationWorkbookTab[],
   coachId: string,
@@ -393,6 +440,44 @@ async function upsertWellnessAssignments(
   }
 }
 
+async function upsertWellnessGoals(
+  supabase: SupabaseLike,
+  coachId: string,
+  clientId: string,
+  assignments: Array<Record<string, unknown>>
+) {
+  const existing = await listClientWellnessGoalAssignmentsForCoach(supabase, coachId, clientId)
+  const byName = new Map(existing.map((item) => [item.goal_name_snapshot.toLowerCase(), item]))
+
+  for (const assignment of assignments) {
+    const goalName = String(assignment.goal_name_snapshot).toLowerCase()
+    const current = byName.get(goalName)
+    if (current) {
+      await supabase
+        .from("client_wellness_goal_assignments")
+        .update({
+          ...assignment,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", current.id)
+        .eq("coach_id", coachId)
+        .eq("client_id", clientId)
+    } else {
+      const { data } = await supabase
+        .from("client_wellness_goal_assignments")
+        .insert(assignment)
+        .select("id, goal_name_snapshot")
+        .single()
+      if (data?.goal_name_snapshot) {
+        byName.set(
+          String(data.goal_name_snapshot).toLowerCase(),
+          { ...data } as ClientWellnessGoalAssignment
+        )
+      }
+    }
+  }
+}
+
 async function upsertWellnessCheckIns(
   supabase: SupabaseLike,
   coachId: string,
@@ -456,6 +541,42 @@ async function upsertNutritionCheckIns(
         .insert(checkIn)
     }
   }
+}
+
+async function ensureCoachModulesForMigration(
+  supabase: SupabaseLike,
+  coachId: string,
+  requiredModules: EnableableModule[]
+) {
+  if (requiredModules.length === 0) return []
+
+  const { data: settings, error } = await supabase
+    .from("admin_settings")
+    .select("coach_type_preset, active_modules")
+    .eq("user_id", coachId)
+    .maybeSingle()
+
+  if (error) throw error
+
+  const resolved = resolveActiveModules(settings ?? {})
+  const nextModules = Array.from(new Set([...resolved.enableable_modules, ...requiredModules]))
+  const added = nextModules.filter((module) => !resolved.enableable_modules.includes(module))
+
+  if (added.length === 0) {
+    return added
+  }
+
+  const { error: updateError } = await supabase
+    .from("admin_settings")
+    .update({
+      active_modules: nextModules,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("user_id", coachId)
+
+  if (updateError) throw updateError
+
+  return added
 }
 
 export async function executeCoachWorkbookMigration({
@@ -548,9 +669,27 @@ export async function executeCoachWorkbookMigration({
     summary.push(`Progress tab updated with ${progressEntries.length} migrated entries.`)
   }
 
+  const wellnessGoals = extractWellnessGoalAssignments(tabs, coachId, clientId)
   const wellnessAssignments = extractWellnessHabitAssignments(tabs, coachId, clientId)
   const wellnessCheckIns = extractWellnessCheckIns(tabs, coachId, clientId)
-  if (wellnessAssignments.length > 0 || wellnessCheckIns.length > 0) {
+  if (wellnessGoals.length > 0 || wellnessAssignments.length > 0 || wellnessCheckIns.length > 0) {
+    const enabledModules = await ensureCoachModulesForMigration(supabase, coachId, ["wellness_core"])
+    if (enabledModules.length > 0) {
+      await emitStep({
+        id: "enable-wellness",
+        label: "Enabled the Wellness module for this workspace",
+      })
+      summary.push("Wellness module enabled so the migrated data is visible in coach and client views.")
+    }
+
+    if (wellnessGoals.length > 0) {
+      await upsertWellnessGoals(supabase, coachId, clientId, wellnessGoals)
+      await emitStep({
+        id: "wellness-goals",
+        label: `Migrated ${wellnessGoals.length} wellness goal${wellnessGoals.length === 1 ? "" : "s"}`,
+      })
+    }
+
     if (wellnessAssignments.length > 0) {
       await upsertWellnessAssignments(supabase, coachId, clientId, wellnessAssignments)
       await emitStep({
@@ -590,12 +729,21 @@ export async function executeCoachWorkbookMigration({
       label: "Synced the migrated wellness data into the client workbook tabs",
     })
     summary.push(
-      `Wellness data synced with ${wellnessAssignments.length} habit assignment${wellnessAssignments.length === 1 ? "" : "s"} and ${wellnessCheckIns.length} check-in${wellnessCheckIns.length === 1 ? "" : "s"}.`
+      `Wellness data synced with ${wellnessGoals.length} goal${wellnessGoals.length === 1 ? "" : "s"}, ${wellnessAssignments.length} habit assignment${wellnessAssignments.length === 1 ? "" : "s"}, and ${wellnessCheckIns.length} check-in${wellnessCheckIns.length === 1 ? "" : "s"}.`
     )
   }
 
   const nutritionCheckIns = extractNutritionCheckIns(tabs, coachId, clientId)
   if (nutritionCheckIns.length > 0) {
+    const enabledModules = await ensureCoachModulesForMigration(supabase, coachId, ["nutrition_core"])
+    if (enabledModules.length > 0) {
+      await emitStep({
+        id: "enable-nutrition",
+        label: "Enabled the Nutrition module for this workspace",
+      })
+      summary.push("Nutrition module enabled so the migrated data is visible in coach and client views.")
+    }
+
     await upsertNutritionCheckIns(supabase, coachId, clientId, nutritionCheckIns)
 
     const [habits, habitLogs, checkIns, logs] = await Promise.all([
@@ -631,7 +779,7 @@ export async function executeCoachWorkbookMigration({
   if (progressEntries.length > 0) {
     tabs.filter((tab) => tab.classification === "progress").forEach((tab) => handledTabs.add(tab.tabName))
   }
-  if (wellnessAssignments.length > 0 || wellnessCheckIns.length > 0) {
+  if (wellnessGoals.length > 0 || wellnessAssignments.length > 0 || wellnessCheckIns.length > 0) {
     tabs.filter((tab) => tab.classification === "wellness").forEach((tab) => handledTabs.add(tab.tabName))
   }
   if (nutritionCheckIns.length > 0) {

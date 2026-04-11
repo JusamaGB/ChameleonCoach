@@ -150,7 +150,10 @@ export function resolveActiveModules(input: {
   const preset = normalizeCoachTypePreset(input.coach_type_preset)
   const storedModules = normalizeActiveModules(input.active_modules)
   const isLegacyWorkspace = input.active_modules == null
-  const enableableModules: EnableableModule[] = isLegacyWorkspace ? ["pt_core"] : storedModules
+  const enableableModules: EnableableModule[] =
+    isLegacyWorkspace
+      ? (preset ? seedModulesForPreset(preset) : ["pt_core"])
+      : storedModules
   const activeModules: ModuleKey[] = ["shared_core", ...enableableModules]
 
   return {
