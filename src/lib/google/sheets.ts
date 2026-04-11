@@ -231,6 +231,22 @@ export async function addProgressEntry(
   })
 }
 
+export async function replaceProgressEntries(
+  sheetId: string,
+  entries: ProgressEntry[],
+  coachId: string
+): Promise<void> {
+  await overwriteTab(
+    sheetId,
+    "Progress",
+    [
+      ["Date", "Weight", "Measurements", "Notes"],
+      ...entries.map((entry) => [entry.date, entry.weight, entry.measurements, entry.notes]),
+    ],
+    coachId
+  )
+}
+
 export async function syncCoachPTLibrarySheets(
   sheetId: string,
   coachId: string,

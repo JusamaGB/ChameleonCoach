@@ -171,13 +171,11 @@ export function MigrationWidget() {
       return
     }
 
-    const steps = buildMigrationSteps(activeAnalysis, matchedClient.name)
-
     setWorkbookProgress((current) => ({
       ...current,
       [activeAnalysis.workbook.id]: {
         status: "in_progress",
-        steps,
+        steps: [],
         messages: [
           {
             id: `${activeAnalysis.workbook.id}-intro`,
@@ -189,68 +187,122 @@ export function MigrationWidget() {
       },
     }))
 
+    let cancelled = false
     const timeouts: ReturnType<typeof setTimeout>[] = []
 
-    steps.forEach((step, index) => {
-      const activateDelay = index * 850
-      const completeDelay = activateDelay + 550
+    void (async () => {
+      try {
+        const res = await fetch("/api/migration/run", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            workbook: activeAnalysis.workbook,
+            clientId: matchedClientId,
+          }),
+        })
 
-      timeouts.push(
-        setTimeout(() => {
-          setWorkbookProgress((current) => {
-            const existing = current[activeAnalysis.workbook.id]
-            if (!existing) {
-              return current
-            }
+        const data = await res.json()
+        if (!res.ok) {
+          throw new Error(data.error || "Migration failed.")
+        }
 
-            return {
-              ...current,
-              [activeAnalysis.workbook.id]: {
-                ...existing,
-                steps: existing.steps.map((item) =>
-                  item.id === step.id ? { ...item, status: "active" as const } : item
-                ),
-                messages: existing.messages,
-              },
-            }
-          })
-        }, activateDelay)
-      )
+        if (cancelled) {
+          return
+        }
 
-      timeouts.push(
-        setTimeout(() => {
-          setWorkbookProgress((current) => {
-            const existing = current[activeAnalysis.workbook.id]
-            if (!existing) {
-              return current
-            }
+        const completedSteps: MigrationStep[] = (data.steps ?? []).map((step: { id: string; label: string }) => ({
+          ...step,
+          status: "pending" as const,
+        }))
+        const summaryLines = [
+          ...((data.summary ?? []) as string[]),
+          ...((data.warnings ?? []) as string[]).map((warning) => `Warning: ${warning}`),
+        ]
 
-            const updatedSteps: MigrationStep[] = existing.steps.map((item) =>
-              item.id === step.id ? { ...item, status: "done" as const } : item
-            )
-            const isLast = index === steps.length - 1
+        setWorkbookProgress((current) => {
+          const existing = current[activeAnalysis.workbook.id]
+          if (!existing) {
+            return current
+          }
 
-            return {
-              ...current,
-              [activeAnalysis.workbook.id]: {
-                status: isLast ? "completed" : "in_progress",
-                steps: updatedSteps,
-                messages: isLast
-                  ? appendMessage(existing.messages, {
-                      id: `${activeAnalysis.workbook.id}-summary`,
-                      role: "assistant",
-                      content: buildSummaryMessage(activeAnalysis, matchedClient.name),
-                    })
-                  : existing.messages,
-                summary: isLast ? buildMigrationSummary(activeAnalysis, matchedClient.name) : existing.summary,
-              },
-            }
-          })
-        }, completeDelay)
-      )
-    })
+          return {
+            ...current,
+            [activeAnalysis.workbook.id]: {
+              ...existing,
+              steps: completedSteps,
+              summary: [],
+            },
+          }
+        })
+
+        completedSteps.forEach((step, index) => {
+          timeouts.push(
+            setTimeout(() => {
+              if (cancelled) {
+                return
+              }
+
+              setWorkbookProgress((current) => {
+                const existing = current[activeAnalysis.workbook.id]
+                if (!existing) {
+                  return current
+                }
+
+                const updatedSteps: MigrationStep[] = existing.steps.map((item) =>
+                  item.id === step.id ? { ...item, status: "done" as const } : item
+                )
+                const isLast = index === completedSteps.length - 1
+
+                return {
+                  ...current,
+                  [activeAnalysis.workbook.id]: {
+                    status: isLast ? "completed" : "in_progress",
+                    steps: updatedSteps,
+                    messages: isLast
+                      ? appendMessage(existing.messages, {
+                          id: `${activeAnalysis.workbook.id}-summary`,
+                          role: "assistant",
+                          content: summaryLines.length > 0
+                            ? summaryLines.join(" ")
+                            : `${matchedClient.name}'s workbook migration completed.`,
+                        })
+                      : existing.messages,
+                    summary: isLast ? summaryLines : existing.summary,
+                  },
+                }
+              })
+            }, index * 250)
+          )
+        })
+      } catch (err) {
+        if (cancelled) {
+          return
+        }
+
+        setWorkbookProgress((current) => {
+          const existing = current[activeAnalysis.workbook.id]
+          if (!existing) {
+            return current
+          }
+
+          return {
+            ...current,
+            [activeAnalysis.workbook.id]: {
+              ...existing,
+              status: "ready",
+              messages: appendMessage(existing.messages, {
+                id: `${activeAnalysis.workbook.id}-error`,
+                role: "assistant",
+                content: err instanceof Error ? err.message : "Migration failed.",
+              }),
+            },
+          }
+        })
+      }
+    })()
 
     return () => {
+      cancelled = true
       for (const timeout of timeouts) {
         clearTimeout(timeout)
       }

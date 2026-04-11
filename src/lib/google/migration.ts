@@ -28,6 +28,10 @@ export type MigrationTabAnalysis = {
   notes: string[]
 }
 
+export type MigrationWorkbookTab = MigrationTabAnalysis & {
+  rows: string[][]
+}
+
 export type WorkbookMigrationAnalysis = {
   workbook: MigrationWorkbook
   tabs: MigrationTabAnalysis[]
@@ -552,7 +556,7 @@ export async function resolveCoachMigrationWorkbook(
 function readUploadedWorkbook(
   buffer: Buffer,
   mimeType: string
-): MigrationTabAnalysis[] {
+): MigrationWorkbookTab[] {
   const workbook = XLSX.read(buffer, {
     type: "buffer",
     raw: false,
@@ -576,6 +580,7 @@ function readUploadedWorkbook(
       tabName: sheetName,
       headers,
       sampleRows,
+      rows: rows.slice(1).map((row) => row.map(normalizeCell)),
       classification,
       suggestedDestination: destinationForClassification(classification),
       confidence: confidenceForClassification(classification, headers),
@@ -589,10 +594,10 @@ function readUploadedWorkbook(
   })
 }
 
-export async function analyzeCoachMigrationWorkbook(
+export async function readCoachMigrationWorkbookTabs(
   coachId: string,
   workbook: MigrationWorkbook
-): Promise<WorkbookMigrationAnalysis> {
+): Promise<MigrationWorkbookTab[]> {
   if (workbook.mimeType !== "application/vnd.google-apps.spreadsheet") {
     const drive = await getDriveApi(coachId)
     const fileResponse = await drive.files.get(
@@ -606,12 +611,7 @@ export async function analyzeCoachMigrationWorkbook(
     )
 
     const buffer = Buffer.from(fileResponse.data as ArrayBuffer)
-
-  return {
-    workbook,
-    tabs: readUploadedWorkbook(buffer, workbook.mimeType),
-    suggestedClientName: inferClientNameFromWorkbookName(workbook.name),
-    }
+    return readUploadedWorkbook(buffer, workbook.mimeType)
   }
 
   const sheets = await getSheetsApi(coachId)
@@ -624,12 +624,12 @@ export async function analyzeCoachMigrationWorkbook(
     .map((sheet) => sheet.properties?.title)
     .filter((title): title is string => Boolean(title))
 
-  const tabs: MigrationTabAnalysis[] = []
+  const tabs: MigrationWorkbookTab[] = []
 
   for (const tabName of tabTitles.slice(0, 20)) {
     const valuesResponse = await sheets.spreadsheets.values.get({
       spreadsheetId: workbook.id,
-      range: `'${tabName}'!A1:Z8`,
+      range: `'${tabName}'!A1:ZZ1000`,
     }).catch(() => null)
 
     const values = valuesResponse?.data.values ?? []
@@ -641,6 +641,7 @@ export async function analyzeCoachMigrationWorkbook(
       tabName,
       headers,
       sampleRows,
+      rows: values.slice(1).map((row) => row.map(normalizeCell)),
       classification,
       suggestedDestination: destinationForClassification(classification),
       confidence: confidenceForClassification(classification, headers),
@@ -648,9 +649,18 @@ export async function analyzeCoachMigrationWorkbook(
     })
   }
 
+  return tabs
+}
+
+export async function analyzeCoachMigrationWorkbook(
+  coachId: string,
+  workbook: MigrationWorkbook
+): Promise<WorkbookMigrationAnalysis> {
+  const tabs = await readCoachMigrationWorkbookTabs(coachId, workbook)
+
   return {
     workbook,
-    tabs,
+    tabs: tabs.map(({ rows: _rows, ...tab }) => tab),
     suggestedClientName: inferClientNameFromWorkbookName(workbook.name),
   }
 }
