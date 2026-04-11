@@ -7,7 +7,18 @@ import type {
   WellnessGoalTemplate,
   WellnessHabitTemplate,
 } from "@/types"
+import { resolveActiveModules } from "@/lib/modules"
 import { syncClientWellnessSheets, syncCoachWellnessLibrarySheets } from "@/lib/google/sheets"
+
+export class WellnessAccessError extends Error {
+  status: number
+
+  constructor(message: string, status = 403) {
+    super(message)
+    this.name = "WellnessAccessError"
+    this.status = status
+  }
+}
 
 function cleanText(value: unknown) {
   return typeof value === "string" && value.trim().length > 0 ? value.trim() : null
@@ -51,6 +62,45 @@ function defaultWeekLabel(submittedAt: string) {
     month: "short",
     year: "numeric",
   })}`
+}
+
+async function assertCoachWellnessEnabled(
+  supabase: { from: (table: string) => any },
+  coachId: string
+) {
+  const { data: settings, error } = await supabase
+    .from("admin_settings")
+    .select("coach_type_preset, active_modules")
+    .eq("user_id", coachId)
+    .maybeSingle()
+
+  if (error) throw error
+
+  const modules = resolveActiveModules(settings ?? {})
+  if (!modules.has_module("wellness_core")) {
+    throw new WellnessAccessError("Wellness Core is not active for this workspace.")
+  }
+
+  return modules
+}
+
+async function getClientWellnessAccessForUser(
+  supabase: { from: (table: string) => any },
+  userId: string
+) {
+  const { data: client, error: clientError } = await supabase
+    .from("clients")
+    .select("id, coach_id, name, sheet_id")
+    .eq("user_id", userId)
+    .maybeSingle()
+
+  if (clientError || !client || !client.coach_id) {
+    throw clientError ?? new Error("Client workspace not found")
+  }
+
+  await assertCoachWellnessEnabled(supabase, client.coach_id)
+
+  return client
 }
 
 async function syncCoachWellnessWorkbook(
@@ -725,15 +775,7 @@ export async function getClientWellnessContextForUser(
   supabase: { from: (table: string) => any },
   userId: string
 ) {
-  const { data: client, error: clientError } = await supabase
-    .from("clients")
-    .select("id, coach_id, name, sheet_id")
-    .eq("user_id", userId)
-    .maybeSingle()
-
-  if (clientError || !client || !client.coach_id) {
-    throw clientError ?? new Error("Client workspace not found")
-  }
+  const client = await getClientWellnessAccessForUser(supabase, userId)
 
   const [goals, habits, habitLogs, checkIns, sessionNotes] = await Promise.all([
     listClientWellnessGoalAssignmentsForCoach(supabase, client.coach_id, client.id),
@@ -758,15 +800,7 @@ export async function createClientWellnessCheckInForUser(
   userId: string,
   payload: Partial<ClientWellnessCheckIn>
 ) {
-  const { data: client, error } = await supabase
-    .from("clients")
-    .select("id, coach_id")
-    .eq("user_id", userId)
-    .maybeSingle()
-
-  if (error || !client?.coach_id) {
-    throw error ?? new Error("Client workspace not found")
-  }
+  const client = await getClientWellnessAccessForUser(supabase, userId)
 
   return createClientWellnessCheckIn(supabase, client.coach_id, client.id, payload)
 }
@@ -776,15 +810,14 @@ export async function createClientWellnessHabitLogForUser(
   userId: string,
   payload: Partial<ClientWellnessHabitLog> & { assignment_id: string }
 ) {
-  const { data: client, error } = await supabase
-    .from("clients")
-    .select("id, coach_id")
-    .eq("user_id", userId)
-    .maybeSingle()
-
-  if (error || !client?.coach_id) {
-    throw error ?? new Error("Client workspace not found")
-  }
+  const client = await getClientWellnessAccessForUser(supabase, userId)
 
   return createClientWellnessHabitLog(supabase, client.coach_id, client.id, payload)
+}
+
+export async function assertCoachWellnessAccess(
+  supabase: { from: (table: string) => any },
+  coachId: string
+) {
+  await assertCoachWellnessEnabled(supabase, coachId)
 }

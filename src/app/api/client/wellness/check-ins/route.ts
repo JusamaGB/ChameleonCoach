@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server"
 import { createAdmin, createClient } from "@/lib/supabase/server"
-import { createClientWellnessCheckInForUser } from "@/lib/wellness"
+import { createClientWellnessCheckInForUser, WellnessAccessError } from "@/lib/wellness"
 
 export async function POST(request: NextRequest) {
   const supabase = await createClient()
@@ -28,9 +28,10 @@ export async function POST(request: NextRequest) {
     })
     return NextResponse.json({ ok: true, check_in: checkIn })
   } catch (error) {
+    const status = error instanceof WellnessAccessError ? error.status : 400
     return NextResponse.json(
       { error: error instanceof Error ? error.message : "Failed to save wellness check-in" },
-      { status: 400 }
+      { status }
     )
   }
 }

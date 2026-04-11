@@ -51,6 +51,21 @@ function defaultWeekLabel() {
   })}`
 }
 
+function formatDisplayDate(value: string | null | undefined) {
+  if (!value) return null
+  const parsed = new Date(value)
+  if (Number.isNaN(parsed.getTime())) return null
+  return parsed.toLocaleDateString("en-GB", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+  })
+}
+
+function isFilled(value: string | null | undefined) {
+  return Boolean(value && value.trim())
+}
+
 interface ClientDetailViewProps {
   client: Client
   profile: ProfileData | null
@@ -201,6 +216,28 @@ export function ClientDetailView({
   const activeProgramRecord = ptOverview?.assignment?.program_id
     ? ptPrograms.find((program) => program.id === ptOverview.assignment?.program_id)
     : null
+  const latestProgressEntry = [...progress]
+    .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())[0] ?? null
+  const upcomingAppointmentsCount = appointments.filter(
+    (appointment) => appointment.status === "pending" || appointment.status === "confirmed"
+  ).length
+  const completedAppointmentsCount = appointments.filter(
+    (appointment) => appointment.status === "confirmed"
+  ).length
+  const completedProfileFields = profile
+    ? [
+        profile.age,
+        profile.gender,
+        profile.height,
+        profile.current_weight,
+        profile.goal_weight,
+        profile.activity_level,
+        profile.fitness_goals,
+        profile.dietary_restrictions,
+        profile.health_conditions,
+        profile.notes,
+      ].filter((value) => isFilled(value)).length
+    : 0
   const workspaceSections = [
     { id: "overview", label: "Overview", enabled: canAccessFeature("client_overview", activeModules) },
     { id: "meal-plan", label: "Nutrition", enabled: canAccessFeature("client_meal_plan", activeModules) },
@@ -209,6 +246,10 @@ export function ClientDetailView({
     { id: "appointments", label: "Appointments", enabled: canAccessFeature("client_appointments", activeModules) },
     { id: "training", label: "Training", enabled: canAccessFeature("client_training", activeModules) },
   ].filter((section) => section.enabled)
+  const hasMealPlanSection = workspaceSections.some((section) => section.id === "meal-plan")
+  const hasProgressSection = workspaceSections.some((section) => section.id === "progress")
+  const hasAppointmentsSection = workspaceSections.some((section) => section.id === "appointments")
+  const hasTrainingSection = workspaceSections.some((section) => section.id === "training")
   async function handleDelete() {
     if (!confirm("Are you sure you want to remove this client? This cannot be undone.")) {
       return
@@ -974,89 +1015,204 @@ export function ClientDetailView({
               />
             ) : profile ? (
               <>
-                <div className="grid grid-cols-1 gap-4 border-b border-gf-border pb-4 sm:grid-cols-3">
-                  <div>
-                    <p className="text-xs text-gf-muted">Status</p>
-                    <p className="mt-0.5 text-sm text-white">
-                      {client.onboarding_completed ? "Active" : "Pending onboarding"}
-                    </p>
+                <div className="rounded-2xl border border-gf-border bg-gf-black/20 p-5">
+                  <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                    <div>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <Badge variant={client.onboarding_completed ? "success" : "warning"}>
+                          {client.onboarding_completed ? "Active client" : "Pending onboarding"}
+                        </Badge>
+                        <Badge variant={sheetUrl ? "success" : "default"}>
+                          {sheetUrl ? "Sheet connected" : "Sheet pending"}
+                        </Badge>
+                        <Badge variant={client.sheet_shared_at ? "success" : "default"}>
+                          {client.sheet_shared_at ? "Shared to client" : "Coach-only workbook"}
+                        </Badge>
+                      </div>
+                      <h3 className="mt-4 text-2xl font-semibold text-white">{profile.name || client.name}</h3>
+                      <p className="mt-1 text-sm text-gf-muted">
+                        Coach-side Chameleon sheet snapshot for day-to-day review and action.
+                      </p>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      {sheetUrl ? (
+                        <a
+                          href={sheetUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-1.5 rounded-lg bg-gf-pink px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-gf-pink-light"
+                        >
+                          <ExternalLink size={14} />
+                          Open workbook
+                        </a>
+                      ) : null}
+                      {folderUrl ? (
+                        <a
+                          href={folderUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-1.5 rounded-lg border border-gf-border px-3 py-2 text-sm text-gf-muted transition-colors hover:border-gf-pink/40 hover:text-white"
+                        >
+                          Open folder
+                        </a>
+                      ) : null}
+                    </div>
                   </div>
-                  <div>
-                    <p className="text-xs text-gf-muted">Linked Sheet</p>
-                    <p className="mt-0.5 text-sm text-white">
-                      {sheetUrl ? "Connected" : "Not connected"}
-                    </p>
-                  </div>
-                  <div>
-                    <p className="text-xs text-gf-muted">Client folder</p>
-                    <p className="mt-0.5 text-sm text-white">
-                      {folderUrl ? "Provisioned" : "Not provisioned"}
-                    </p>
-                  </div>
-                  <div>
-                    <p className="text-xs text-gf-muted">Workbook sharing</p>
-                    <p className="mt-0.5 text-sm text-white">
-                      {client.sheet_shared_at ? "Granted" : "Private"}
-                    </p>
-                  </div>
-                  <div>
-                    <p className="text-xs text-gf-muted">Client sections</p>
-                    <p className="mt-0.5 text-sm text-white">{workspaceSections.length}</p>
+
+                  <div className="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+                    <div className="rounded-xl border border-gf-border bg-gf-surface p-4">
+                      <p className="text-xs uppercase tracking-wide text-gf-muted">Sheet coverage</p>
+                      <p className="mt-2 text-2xl font-semibold text-white">{completedProfileFields}/10</p>
+                      <p className="mt-1 text-sm text-gf-muted">Structured profile fields filled from the Chameleon workbook.</p>
+                    </div>
+                    <div className="rounded-xl border border-gf-border bg-gf-surface p-4">
+                      <p className="text-xs uppercase tracking-wide text-gf-muted">Latest progress</p>
+                      <p className="mt-2 text-sm font-medium text-white">
+                        {latestProgressEntry?.weight || "No progress yet"}
+                      </p>
+                      <p className="mt-1 text-sm text-gf-muted">
+                        {latestProgressEntry
+                          ? `${formatDisplayDate(latestProgressEntry.date) || latestProgressEntry.date}${latestProgressEntry.measurements ? ` • ${latestProgressEntry.measurements}` : ""}`
+                          : "Progress updates will surface here once logged."}
+                      </p>
+                    </div>
+                    <div className="rounded-xl border border-gf-border bg-gf-surface p-4">
+                      <p className="text-xs uppercase tracking-wide text-gf-muted">Appointments in play</p>
+                      <p className="mt-2 text-2xl font-semibold text-white">{upcomingAppointmentsCount}</p>
+                      <p className="mt-1 text-sm text-gf-muted">
+                        {completedAppointmentsCount} confirmed session{completedAppointmentsCount === 1 ? "" : "s"} in this workspace.
+                      </p>
+                    </div>
+                    <div className="rounded-xl border border-gf-border bg-gf-surface p-4">
+                      <p className="text-xs uppercase tracking-wide text-gf-muted">Client sections</p>
+                      <p className="mt-2 text-2xl font-semibold text-white">{workspaceSections.length}</p>
+                      <p className="mt-1 text-sm text-gf-muted">Enabled coach-facing sections for this client.</p>
+                    </div>
                   </div>
                 </div>
-                {(folderUrl || client.sheet_shared_email) && (
-                  <div className="mt-4 flex flex-wrap gap-4 text-sm text-gf-muted">
-                    {folderUrl ? (
-                      <a
-                        href={folderUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-gf-pink hover:text-gf-pink-light transition-colors"
-                      >
-                        Open client folder
-                      </a>
-                    ) : null}
-                    {client.sheet_shared_email ? (
-                      <p>Shared workbook access: {client.sheet_shared_email}</p>
-                    ) : null}
-                  </div>
-                )}
-                <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  {[
-                    { label: "Age", value: profile.age },
-                    { label: "Gender", value: profile.gender },
-                    { label: "Height", value: profile.height },
-                    { label: "Current Weight", value: profile.current_weight },
-                    { label: "Goal Weight", value: profile.goal_weight },
-                    { label: "Activity Level", value: profile.activity_level },
-                  ].map(
-                    ({ label, value }) =>
-                      value && (
-                        <div key={label}>
+
+                <div className="mt-6 grid gap-6 lg:grid-cols-[1.1fr,0.9fr]">
+                  <div className="rounded-2xl border border-gf-border bg-gf-black/10 p-5">
+                    <div className="flex items-center justify-between gap-3">
+                      <div>
+                        <p className="text-xs uppercase tracking-wide text-gf-muted">At a glance</p>
+                        <p className="mt-1 text-lg font-semibold text-white">Core client details</p>
+                      </div>
+                      <Badge variant="pink">Profile tab</Badge>
+                    </div>
+                    <div className="mt-5 grid grid-cols-1 gap-4 sm:grid-cols-2">
+                      {[
+                        { label: "Email", value: profile.email || client.email },
+                        { label: "Age", value: profile.age },
+                        { label: "Gender", value: profile.gender },
+                        { label: "Height", value: profile.height },
+                        { label: "Current weight", value: profile.current_weight },
+                        { label: "Goal weight", value: profile.goal_weight },
+                        { label: "Activity level", value: profile.activity_level },
+                        { label: "Workbook access", value: client.sheet_shared_email || "Not shared yet" },
+                      ].map(({ label, value }) => (
+                        <div key={label} className="rounded-xl border border-gf-border bg-gf-surface/70 p-4">
                           <p className="text-xs text-gf-muted">{label}</p>
-                          <p className="text-sm text-white mt-0.5">{value}</p>
+                          <p className="mt-1 text-sm text-white">{value || "Not provided yet"}</p>
                         </div>
-                      )
-                  )}
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="rounded-2xl border border-gf-border bg-gf-black/10 p-5">
+                    <p className="text-xs uppercase tracking-wide text-gf-muted">Coach actions</p>
+                    <p className="mt-1 text-lg font-semibold text-white">Useful next moves</p>
+                    <div className="mt-5 space-y-3">
+                      {hasMealPlanSection ? (
+                        <a
+                          href="#meal-plan"
+                          className="flex items-center justify-between rounded-xl border border-gf-border bg-gf-surface/70 px-4 py-3 text-sm text-white transition-colors hover:border-gf-pink/40"
+                        >
+                          <span>Review nutrition setup</span>
+                          <span className="text-gf-muted">Meal plan, habits, check-ins</span>
+                        </a>
+                      ) : null}
+                      {hasProgressSection ? (
+                        <a
+                          href="#progress"
+                          className="flex items-center justify-between rounded-xl border border-gf-border bg-gf-surface/70 px-4 py-3 text-sm text-white transition-colors hover:border-gf-pink/40"
+                        >
+                          <span>Check progress history</span>
+                          <span className="text-gf-muted">{progress.length} entries</span>
+                        </a>
+                      ) : null}
+                      {hasAppointmentsSection ? (
+                        <a
+                          href="#appointments"
+                          className="flex items-center justify-between rounded-xl border border-gf-border bg-gf-surface/70 px-4 py-3 text-sm text-white transition-colors hover:border-gf-pink/40"
+                        >
+                          <span>Open appointment context</span>
+                          <span className="text-gf-muted">{appointments.length} total</span>
+                        </a>
+                      ) : null}
+                      {hasTrainingSection ? (
+                        <a
+                          href="#training"
+                          className="flex items-center justify-between rounded-xl border border-gf-border bg-gf-surface/70 px-4 py-3 text-sm text-white transition-colors hover:border-gf-pink/40"
+                        >
+                          <span>Open training assignment</span>
+                          <span className="text-gf-muted">
+                            {ptOverview?.assignment ? activeProgramRecord?.name || "Assigned program" : "Not assigned"}
+                          </span>
+                        </a>
+                      ) : null}
+                    </div>
+                  </div>
                 </div>
-                {profile.fitness_goals && (
-                  <div className="mt-4 pt-4 border-t border-gf-border">
-                    <p className="text-xs text-gf-muted">Fitness Goals</p>
-                    <p className="text-sm text-white mt-0.5">{profile.fitness_goals}</p>
+
+                <div className="mt-6 grid gap-6 lg:grid-cols-3">
+                  <div className="rounded-2xl border border-gf-border bg-gf-black/10 p-5 lg:col-span-2">
+                    <p className="text-xs uppercase tracking-wide text-gf-muted">Coaching context</p>
+                    <p className="mt-1 text-lg font-semibold text-white">Goals, restrictions, and health notes</p>
+                    <div className="mt-5 space-y-4">
+                      <div className="rounded-xl border border-gf-border bg-gf-surface/70 p-4">
+                        <p className="text-xs text-gf-muted">Fitness goals</p>
+                        <p className="mt-1 text-sm text-white">{profile.fitness_goals || "No goals recorded yet."}</p>
+                      </div>
+                      <div className="rounded-xl border border-gf-border bg-gf-surface/70 p-4">
+                        <p className="text-xs text-gf-muted">Dietary restrictions</p>
+                        <p className="mt-1 text-sm text-white">{profile.dietary_restrictions || "No dietary restrictions recorded."}</p>
+                      </div>
+                      <div className="rounded-xl border border-gf-border bg-gf-surface/70 p-4">
+                        <p className="text-xs text-gf-muted">Health conditions</p>
+                        <p className="mt-1 text-sm text-white">{profile.health_conditions || "No health conditions recorded."}</p>
+                      </div>
+                    </div>
                   </div>
-                )}
-                {profile.dietary_restrictions && (
-                  <div className="mt-3">
-                    <p className="text-xs text-gf-muted">Dietary Restrictions</p>
-                    <p className="text-sm text-white mt-0.5">{profile.dietary_restrictions}</p>
+
+                  <div className="rounded-2xl border border-gf-border bg-gf-black/10 p-5">
+                    <p className="text-xs uppercase tracking-wide text-gf-muted">Sheet metadata</p>
+                    <p className="mt-1 text-lg font-semibold text-white">Workspace state</p>
+                    <div className="mt-5 space-y-3 text-sm text-gf-muted">
+                      <div className="rounded-xl border border-gf-border bg-gf-surface/70 p-4">
+                        <p className="text-xs text-gf-muted">Provisioning</p>
+                        <p className="mt-1 text-sm text-white">
+                          {client.provisioning_status === "ready" ? "Workspace ready" : client.provisioning_status}
+                        </p>
+                      </div>
+                      <div className="rounded-xl border border-gf-border bg-gf-surface/70 p-4">
+                        <p className="text-xs text-gf-muted">Shared to</p>
+                        <p className="mt-1 text-sm text-white">{client.sheet_shared_email || "Client access not granted yet"}</p>
+                      </div>
+                      <div className="rounded-xl border border-gf-border bg-gf-surface/70 p-4">
+                        <p className="text-xs text-gf-muted">Shared on</p>
+                        <p className="mt-1 text-sm text-white">{formatDisplayDate(client.sheet_shared_at) || "Not shared yet"}</p>
+                      </div>
+                    </div>
                   </div>
-                )}
-                {profile.health_conditions && (
-                  <div className="mt-3">
-                    <p className="text-xs text-gf-muted">Health Conditions</p>
-                    <p className="text-sm text-white mt-0.5">{profile.health_conditions}</p>
+                </div>
+
+                {profile.notes ? (
+                  <div className="mt-6 rounded-2xl border border-gf-border bg-gf-black/10 p-5">
+                    <p className="text-xs uppercase tracking-wide text-gf-muted">Coach notes from sheet</p>
+                    <p className="mt-2 text-sm text-white">{profile.notes}</p>
                   </div>
-                )}
+                ) : null}
               </>
             ) : (
               <p className="text-sm text-gf-muted">No profile data available.</p>

@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server"
 import { createAdmin, createClient } from "@/lib/supabase/server"
-import { getClientWellnessContextForUser } from "@/lib/wellness"
+import { getClientWellnessContextForUser, WellnessAccessError } from "@/lib/wellness"
 
 export async function GET() {
   const supabase = await createClient()
@@ -17,9 +17,10 @@ export async function GET() {
     const data = await getClientWellnessContextForUser(admin, user.id)
     return NextResponse.json(data)
   } catch (error) {
+    const status = error instanceof WellnessAccessError ? error.status : 500
     return NextResponse.json(
       { error: error instanceof Error ? error.message : "Failed to load wellness workspace" },
-      { status: 500 }
+      { status }
     )
   }
 }

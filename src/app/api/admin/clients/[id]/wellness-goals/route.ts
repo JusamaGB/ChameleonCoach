@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server"
 import { verifyCoach, isCoachResult } from "@/lib/auth-helpers"
-import { assignWellnessGoalToClient } from "@/lib/wellness"
+import { assertCoachWellnessAccess, assignWellnessGoalToClient, WellnessAccessError } from "@/lib/wellness"
 
 export async function POST(
   request: NextRequest,
@@ -17,6 +17,7 @@ export async function POST(
   }
 
   try {
+    await assertCoachWellnessAccess(supabase, user.id)
     const assignment = await assignWellnessGoalToClient(
       supabase,
       user.id,
@@ -26,9 +27,10 @@ export async function POST(
     )
     return NextResponse.json({ assignment })
   } catch (error) {
+    const status = error instanceof WellnessAccessError ? error.status : 400
     return NextResponse.json(
       { error: error instanceof Error ? error.message : "Failed to assign goal" },
-      { status: 400 }
+      { status }
     )
   }
 }
