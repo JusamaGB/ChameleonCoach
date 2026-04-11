@@ -239,22 +239,35 @@ export function MigrationWidget() {
             </div>
 
             {!introDismissed && (
-              <div className="mb-4 rounded-xl border border-gf-border bg-gf-surface/80 p-4 text-sm text-gf-muted">
-                <p className="text-white">
-                  I can inspect your existing Google Sheets, classify each tab, and propose where it should land inside Chameleon.
-                </p>
-                <p className="mt-2">
-                  V1 is Google Sheets only. Pick one or more source workbooks first, then I&apos;ll analyse them and help you match each one to the right Chameleon client.
-                </p>
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="secondary"
-                  className="mt-3"
-                  onClick={() => setIntroDismissed(true)}
-                >
-                  Start migration setup
-                </Button>
+              <div className="space-y-4">
+                <div className="rounded-xl border border-gf-border bg-gf-surface/80 p-4 text-sm text-gf-muted">
+                  <p className="text-white">
+                    I can inspect your existing Google Sheets, classify each tab, and propose where it should land inside Chameleon.
+                  </p>
+                  <p className="mt-2">
+                    V1 is Google Sheets only. Pick one or more source workbooks first, then I&apos;ll analyse them and help you match each one to the right Chameleon client.
+                  </p>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="secondary"
+                    className="mt-3"
+                    onClick={() => setIntroDismissed(true)}
+                  >
+                    Start migration setup
+                  </Button>
+                </div>
+
+                {bootstrap && !loadingBootstrap && (
+                  <div className="grid grid-cols-2 gap-3">
+                    <StatusPill label="Google" value={bootstrap.google_connected ? "Connected" : "Not connected"} good={bootstrap.google_connected} />
+                    <StatusPill
+                      label="Workspace"
+                      value={bootstrap.workspace_status === "healthy" ? "Ready" : bootstrap.workspace_status}
+                      good={bootstrap.workspace_status === "healthy"}
+                    />
+                  </div>
+                )}
               </div>
             )}
 
@@ -267,15 +280,6 @@ export function MigrationWidget() {
 
             {bootstrap && introDismissed && (
               <div className="space-y-4">
-                <div className="grid grid-cols-2 gap-3">
-                  <StatusPill label="Google" value={bootstrap.google_connected ? "Connected" : "Not connected"} good={bootstrap.google_connected} />
-                  <StatusPill
-                    label="Workspace"
-                    value={bootstrap.workspace_status === "healthy" ? "Ready" : bootstrap.workspace_status}
-                    good={bootstrap.workspace_status === "healthy"}
-                  />
-                </div>
-
                 {!bootstrap.openai_configured && (
                   <div className="rounded-xl border border-yellow-500/25 bg-yellow-500/5 p-3 text-sm text-yellow-200">
                     `OPENAI_API_KEY` is not configured in this environment yet, so analysis is currently running in heuristic mode. The UI and sheet-inspection flow still work.
