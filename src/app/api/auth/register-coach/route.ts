@@ -7,6 +7,10 @@ function isMissingColumnError(error: { code?: string | null; message?: string | 
   return error?.code === "PGRST204"
 }
 
+function isLegacyRoleConstraintError(error: { code?: string | null; message?: string | null } | null) {
+  return error?.code === "23514" && error?.message?.includes("user_roles_role_check")
+}
+
 export async function POST(request: NextRequest) {
   const body = await request.json().catch(() => ({}))
   const { name, email, password, coach_type_preset } = body
@@ -55,12 +59,25 @@ export async function POST(request: NextRequest) {
 
   // Always create the coach role first.
   // Billing metadata is optional and should never block account creation.
-  const { error: roleError } = await supabase
+  let assignedRole: "coach" | "admin" = "coach"
+  let { error: roleError } = await supabase
     .from("user_roles")
     .insert({
       user_id: authData.user.id,
-      role: "coach",
+      role: assignedRole,
     })
+
+  if (isLegacyRoleConstraintError(roleError)) {
+    assignedRole = "admin"
+    const fallbackInsert = await supabase
+      .from("user_roles")
+      .insert({
+        user_id: authData.user.id,
+        role: assignedRole,
+      })
+
+    roleError = fallbackInsert.error
+  }
 
   if (roleError) {
     // Clean up auth user if role insert fails
@@ -83,10 +100,12 @@ export async function POST(request: NextRequest) {
         .eq("user_id", authData.user.id)
 
       if (billingError && !isMissingColumnError(billingError)) {
-        return NextResponse.json(
-          { error: `Failed to save billing state: ${billingError.message} (code: ${billingError.code})` },
-          { status: 500 }
-        )
+        if (!isLegacyRoleConstraintError(billingError)) {
+          return NextResponse.json(
+            { error: `Failed to save billing state: ${billingError.message} (code: ${billingError.code})` },
+            { status: 500 }
+          )
+        }
       }
     } catch {
       // Non-fatal — coach can still use the platform even if Stripe setup is unavailable.

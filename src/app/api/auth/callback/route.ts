@@ -6,6 +6,10 @@ function isMissingColumnError(error: { code?: string | null } | null) {
   return error?.code === "PGRST204"
 }
 
+function isLegacyRoleConstraintError(error: { code?: string | null; message?: string | null } | null) {
+  return error?.code === "23514" && error?.message?.includes("user_roles_role_check")
+}
+
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url)
   const code = searchParams.get("code")
@@ -44,18 +48,31 @@ export async function GET(request: NextRequest) {
       if (!role) {
         const metaRole = user.app_metadata?.role as string | undefined
         if (metaRole && ["coach", "admin", "client"].includes(metaRole)) {
-          const { error } = await supabase.from("user_roles").upsert(
+          let fallbackRole = metaRole
+          let { error } = await supabase.from("user_roles").upsert(
             {
               user_id: user.id,
-              role: metaRole,
+              role: fallbackRole,
             },
             { onConflict: "user_id", ignoreDuplicates: true }
           )
 
+          if (isLegacyRoleConstraintError(error) && metaRole === "coach") {
+            fallbackRole = "admin"
+            const fallback = await supabase.from("user_roles").upsert(
+              {
+                user_id: user.id,
+                role: fallbackRole,
+              },
+              { onConflict: "user_id", ignoreDuplicates: true }
+            )
+            error = fallback.error
+          }
+
           if (error && !isMissingColumnError(error)) {
             throw error
           }
-          role = { role: metaRole }
+          role = { role: fallbackRole }
         }
       }
 
