@@ -23,6 +23,8 @@ export default function PremiumPage() {
   const [loading, setLoading] = useState(false)
   const [saved, setSaved] = useState(false)
   const [error, setError] = useState("")
+  const [generatingMocks, setGeneratingMocks] = useState(false)
+  const [mockMessage, setMockMessage] = useState("")
 
   useEffect(() => {
     fetch("/api/admin/profile")
@@ -75,6 +77,34 @@ export default function PremiumPage() {
     }
   }
 
+  async function generateMockMigrationSheets() {
+    setGeneratingMocks(true)
+    setMockMessage("")
+    setError("")
+
+    try {
+      const res = await fetch("/api/migration/mock-data", {
+        method: "POST",
+      })
+      const data = await res.json()
+
+      if (!res.ok) {
+        throw new Error(data.error || "Failed to generate demo sheets.")
+      }
+
+      const count = Array.isArray(data.workbooks) ? data.workbooks.length : 0
+      setMockMessage(
+        count > 0
+          ? `Generated ${count} demo legacy workbooks in Google Drive. Open the migration widget and click Load Sheets.`
+          : "Demo workbooks are ready in Google Drive."
+      )
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to generate demo sheets.")
+    } finally {
+      setGeneratingMocks(false)
+    }
+  }
+
   return (
     <div className="max-w-lg mx-auto">
       <h1 className="text-2xl font-bold mb-2">Premium</h1>
@@ -85,6 +115,18 @@ export default function PremiumPage() {
         <p className="mt-2 text-sm text-gf-muted">
           The migration assistant now lives as a floating widget across the coach admin area. Use it to inspect legacy Google Sheets, select the Chameleon client they belong to, and review proposed tab mappings before we wire in the actual import step.
         </p>
+        <div className="mt-4 flex flex-wrap items-center gap-3">
+          <Button
+            type="button"
+            size="sm"
+            variant="secondary"
+            onClick={() => void generateMockMigrationSheets()}
+            disabled={generatingMocks}
+          >
+            {generatingMocks ? "Generating demo sheets..." : "Generate Demo Legacy Sheets"}
+          </Button>
+          {mockMessage && <p className="text-sm text-green-400">{mockMessage}</p>}
+        </div>
       </Card>
 
       <Card>
