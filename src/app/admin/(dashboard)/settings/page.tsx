@@ -426,7 +426,7 @@ export default function SettingsPage() {
               {marketingKeyConnected ? `Key connected${marketingKeyLast4 ? ` • ending ${marketingKeyLast4}` : ""}` : "Key missing"}
             </Badge>
             <Badge variant={marketingAutoscan === "on" ? "default" : "warning"}>
-              Autoscan {marketingAutoscan === "on" ? "live" : "paused"}
+              Lead hunting {marketingAutoscan === "on" ? "on" : "off"}
             </Badge>
           </div>
           <Input
@@ -476,7 +476,7 @@ export default function SettingsPage() {
           </div>
           <div className="grid gap-4 md:grid-cols-2">
             <Select
-              label="Autoscan"
+              label="Automatic Lead Hunting (Free)"
               value={marketingAutoscan}
               onChange={(e) => setMarketingAutoscan(e.target.value as "on" | "off")}
               options={[
@@ -493,6 +493,9 @@ export default function SettingsPage() {
               onChange={(e) => setMarketingMaxOutputTokens(e.target.value)}
             />
           </div>
+          <p className="text-xs text-gf-muted">
+            Scans Reddit automatically for new leads. This does not use OpenAI. AI cost only starts when summaries or drafts are generated.
+          </p>
           <TextArea
             label="Reddit Subreddits"
             value={marketingSubreddits}

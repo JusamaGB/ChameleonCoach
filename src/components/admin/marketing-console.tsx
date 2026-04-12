@@ -203,7 +203,7 @@ export function MarketingConsole({ initialSnapshot }: MarketingConsoleProps) {
             Runner {snapshot.runner.status}
           </Badge>
           <Badge variant={snapshot.settings.autoscan_enabled === false ? "warning" : "default"}>
-            Autoscan {snapshot.settings.autoscan_enabled === false ? "paused" : "live"}
+            Lead hunting {snapshot.settings.autoscan_enabled === false ? "off" : "on"}
           </Badge>
           <Badge variant={snapshot.settings.has_openai_api_key ? "success" : "warning"}>
             AI key {snapshot.settings.has_openai_api_key ? "connected" : "missing"}
@@ -705,12 +705,12 @@ export function MarketingConsole({ initialSnapshot }: MarketingConsoleProps) {
                     Process queue
                   </Button>
                   {snapshot.settings.autoscan_enabled === false ? (
-                    <Button size="sm" variant="secondary" onClick={() => runRunnerControl("resume_autoscan", "Autoscan resumed.")} disabled={isPending}>
-                      Resume autoscan
+                    <Button size="sm" variant="secondary" onClick={() => runRunnerControl("resume_autoscan", "Automatic lead hunting turned on.")} disabled={isPending}>
+                      Turn lead hunting on
                     </Button>
                   ) : (
-                    <Button size="sm" variant="ghost" onClick={() => runRunnerControl("pause_autoscan", "Autoscan paused.")} disabled={isPending}>
-                      Pause autoscan
+                    <Button size="sm" variant="ghost" onClick={() => runRunnerControl("pause_autoscan", "Automatic lead hunting turned off.")} disabled={isPending}>
+                      Turn lead hunting off
                     </Button>
                   )}
                 </div>
@@ -868,12 +868,12 @@ export function MarketingConsole({ initialSnapshot }: MarketingConsoleProps) {
                       Run queued work
                     </Button>
                     {snapshot.settings.autoscan_enabled === false ? (
-                      <Button size="sm" variant="secondary" onClick={() => runRunnerControl("resume_autoscan", "Dashboard resumed autoscan.")} disabled={isPending}>
-                        Resume autoscan
+                      <Button size="sm" variant="secondary" onClick={() => runRunnerControl("resume_autoscan", "Automatic lead hunting turned on.")} disabled={isPending}>
+                        Turn lead hunting on
                       </Button>
                     ) : (
-                      <Button size="sm" variant="ghost" onClick={() => runRunnerControl("pause_autoscan", "Dashboard paused autoscan.")} disabled={isPending}>
-                        Pause autoscan
+                      <Button size="sm" variant="ghost" onClick={() => runRunnerControl("pause_autoscan", "Automatic lead hunting turned off.")} disabled={isPending}>
+                        Turn lead hunting off
                       </Button>
                     )}
                   </div>
