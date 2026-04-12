@@ -3,7 +3,7 @@ import { withChameleonMemory } from "@/app/api/chameleon-memory/_utils"
 import { advanceCursor, audit } from "@/lib/chameleon-memory/service"
 
 export async function POST(request: NextRequest) {
-  return withChameleonMemory(request, async ({ supabase }) => {
+  return withChameleonMemory(request, async ({ supabase, ownerUserId }) => {
     const body = await request.json()
     const result = await advanceCursor(supabase, {
       agent: body.agent ?? "MARKETING",
@@ -11,6 +11,7 @@ export async function POST(request: NextRequest) {
     })
 
     await audit(supabase, {
+      owner_user_id: ownerUserId,
       op: "msg_cursor_advance",
       sector: "messages",
       agent: result.agent,

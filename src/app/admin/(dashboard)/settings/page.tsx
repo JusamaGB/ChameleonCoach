@@ -267,6 +267,21 @@ export default function SettingsPage() {
             <ArrowRight size={16} className="text-gf-muted" />
           </Link>
           <Link
+            href="/admin/marketing"
+            className="flex items-center justify-between rounded-xl border border-gf-border bg-gf-surface p-4 text-sm text-white transition-colors hover:border-gf-pink/40"
+          >
+            <div className="flex items-start gap-3">
+              <Layers3 size={18} className="mt-0.5 text-gf-pink" />
+              <div>
+                <p className="font-medium">Marketing</p>
+                <p className="mt-1 text-xs text-gf-muted">
+                  Manage Marketing AI BYOK, lead discovery, and outreach drafts from the marketing workspace.
+                </p>
+              </div>
+            </div>
+            <ArrowRight size={16} className="text-gf-muted" />
+          </Link>
+          <Link
             href="/admin/billing"
             className="flex items-center justify-between rounded-xl border border-gf-border bg-gf-surface p-4 text-sm text-white transition-colors hover:border-gf-pink/40"
           >

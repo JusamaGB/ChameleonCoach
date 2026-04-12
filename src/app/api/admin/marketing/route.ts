@@ -17,8 +17,9 @@ export async function GET() {
   const result = await verifyCoach()
   if (!isCoachResult(result)) return result
 
+  const { user } = result
   const admin = createAdmin()
-  const snapshot = await getMarketingSnapshot(admin)
+  const snapshot = await getMarketingSnapshot(admin, user.id)
   return NextResponse.json(snapshot)
 }
 

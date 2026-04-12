@@ -118,6 +118,18 @@ export interface AdminSettings {
   google_refresh_token: string | null
   google_access_token: string | null
   google_token_expiry: string | null
+  marketing_openai_api_key_ciphertext: string | null
+  marketing_openai_api_key_last4: string | null
+  marketing_openai_api_key_set_at: string | null
+  marketing_budget_mode: boolean
+  marketing_model_discovery: string | null
+  marketing_model_drafting: string | null
+  marketing_model_revision: string | null
+  marketing_max_draft_variants: number | null
+  marketing_max_output_tokens: number | null
+  marketing_autoscan_enabled: boolean
+  marketing_reddit_subreddits: string[] | null
+  marketing_reddit_search_terms: string[] | null
   display_name: string | null
   business_name: string | null
   brand_title: string | null

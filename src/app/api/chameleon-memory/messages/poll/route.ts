@@ -3,7 +3,7 @@ import { withChameleonMemory } from "@/app/api/chameleon-memory/_utils"
 import { audit, pollMessages } from "@/lib/chameleon-memory/service"
 
 export async function GET(request: NextRequest) {
-  return withChameleonMemory(request, async ({ supabase, agent }) => {
+  return withChameleonMemory(request, async ({ supabase, agent, ownerUserId }) => {
     const { searchParams } = new URL(request.url)
     const requestedAgent = (searchParams.get("agent") ?? agent).toUpperCase()
     const channel = searchParams.get("channel")
@@ -13,6 +13,7 @@ export async function GET(request: NextRequest) {
 
     const result = await pollMessages(supabase, {
       agent: requestedAgent,
+      ownerUserId,
       channel,
       since,
       useCursor,
@@ -20,6 +21,7 @@ export async function GET(request: NextRequest) {
     })
 
     await audit(supabase, {
+      owner_user_id: ownerUserId,
       op: "msg_poll",
       sector: "messages",
       agent: requestedAgent,

@@ -5,7 +5,7 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input, Select, TextArea } from "@/components/ui/input"
-import type { MarketingDraft, MarketingLead, MarketingSnapshot } from "@/lib/chameleon-marketing"
+import type { MarketingDraft, MarketingLead, MarketingSettings, MarketingSnapshot } from "@/lib/chameleon-marketing"
 
 type MarketingConsoleProps = {
   initialSnapshot: MarketingSnapshot
@@ -37,11 +37,15 @@ type TaskFormState = {
 
 type RunnerSettingsFormState = {
   budget_mode: "on" | "off"
+  autoscan_enabled: "on" | "off"
   discovery_model: string
   drafting_model: string
   revision_model: string
   max_draft_variants: string
   max_output_tokens: string
+  reddit_subreddits: string
+  reddit_search_terms: string
+  openai_api_key: string
 }
 
 const defaultLeadForm: LeadFormState = {
@@ -101,14 +105,18 @@ function trimPreview(value: string | null | undefined, max = 180) {
   return text.length > max ? `${text.slice(0, max).trim()}...` : text
 }
 
-function buildRunnerSettingsForm(snapshot: MarketingSnapshot): RunnerSettingsFormState {
+function buildRunnerSettingsForm(settings: MarketingSettings): RunnerSettingsFormState {
   return {
-    budget_mode: snapshot.runner.budget_mode === false ? "off" : "on",
-    discovery_model: snapshot.runner.model_preferences?.discovery || "gpt-5-nano",
-    drafting_model: snapshot.runner.model_preferences?.drafting || "gpt-5-mini",
-    revision_model: snapshot.runner.model_preferences?.revision || "gpt-5-mini",
-    max_draft_variants: String(snapshot.runner.output_limits?.max_draft_variants ?? 2),
-    max_output_tokens: String(snapshot.runner.output_limits?.max_output_tokens ?? 500),
+    budget_mode: settings.budget_mode ? "on" : "off",
+    autoscan_enabled: settings.autoscan_enabled ? "on" : "off",
+    discovery_model: settings.model_preferences.discovery || "gpt-5-nano",
+    drafting_model: settings.model_preferences.drafting || "gpt-5-mini",
+    revision_model: settings.model_preferences.revision || "gpt-5-mini",
+    max_draft_variants: String(settings.output_limits.max_draft_variants ?? 2),
+    max_output_tokens: String(settings.output_limits.max_output_tokens ?? 500),
+    reddit_subreddits: settings.reddit.subreddits.join(", "),
+    reddit_search_terms: settings.reddit.search_terms.join(", "),
+    openai_api_key: "",
   }
 }
 
@@ -121,7 +129,7 @@ export function MarketingConsole({ initialSnapshot }: MarketingConsoleProps) {
   const [draftEdits, setDraftEdits] = useState<Record<string, string>>({})
   const [draftNotes, setDraftNotes] = useState<Record<string, string>>({})
   const [message, setMessage] = useState<string>("")
-  const [runnerSettingsForm, setRunnerSettingsForm] = useState<RunnerSettingsFormState>(() => buildRunnerSettingsForm(initialSnapshot))
+  const [runnerSettingsForm, setRunnerSettingsForm] = useState<RunnerSettingsFormState>(() => buildRunnerSettingsForm(initialSnapshot.settings))
   const [isPending, startTransition] = useTransition()
 
   const leads = snapshot.leads
@@ -154,6 +162,10 @@ export function MarketingConsole({ initialSnapshot }: MarketingConsoleProps) {
       throw new Error(data.error || "Failed to refresh marketing snapshot")
     }
     setSnapshot(data)
+    setRunnerSettingsForm((current) => ({
+      ...buildRunnerSettingsForm(data.settings),
+      openai_api_key: current.openai_api_key,
+    }))
   }
 
   async function submitAction(body: Record<string, unknown>, successMessage: string) {
@@ -207,21 +219,42 @@ export function MarketingConsole({ initialSnapshot }: MarketingConsoleProps) {
 
   function saveRunnerSettings() {
     startTransition(() => {
-      void submitAction(
-        {
-          action: "runner_settings",
-          payload: {
-            budget_mode: runnerSettingsForm.budget_mode === "on",
-            discovery_model: runnerSettingsForm.discovery_model,
-            drafting_model: runnerSettingsForm.drafting_model,
-            revision_model: runnerSettingsForm.revision_model,
-            max_draft_variants: Number(runnerSettingsForm.max_draft_variants || 2),
-            max_output_tokens: Number(runnerSettingsForm.max_output_tokens || 500),
-          },
-        },
-        "Runner budget settings updated."
-      )
+      void saveMarketingSettings()
     })
+  }
+
+  async function saveMarketingSettings(removeKey = false) {
+    setMessage("")
+    const response = await fetch("/api/admin/marketing/settings", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        remove_openai_api_key: removeKey,
+        openai_api_key: removeKey ? "" : runnerSettingsForm.openai_api_key,
+        budget_mode: runnerSettingsForm.budget_mode === "on",
+        autoscan_enabled: runnerSettingsForm.autoscan_enabled === "on",
+        discovery_model: runnerSettingsForm.discovery_model,
+        drafting_model: runnerSettingsForm.drafting_model,
+        revision_model: runnerSettingsForm.revision_model,
+        max_draft_variants: Number(runnerSettingsForm.max_draft_variants || 2),
+        max_output_tokens: Number(runnerSettingsForm.max_output_tokens || 500),
+        reddit_subreddits: runnerSettingsForm.reddit_subreddits.split(",").map((item) => item.trim()).filter(Boolean),
+        reddit_search_terms: runnerSettingsForm.reddit_search_terms.split(",").map((item) => item.trim()).filter(Boolean),
+      }),
+    })
+    const data = await response.json()
+    if (!response.ok) {
+      throw new Error(data.error || "Failed to save marketing settings")
+    }
+    await refreshSnapshot()
+    setRunnerSettingsForm((current) => ({ ...current, openai_api_key: "" }))
+    setMessage(removeKey ? "Marketing AI key removed." : "Marketing AI settings updated.")
+    return data
+  }
+
+  async function copyDraft(text: string) {
+    await navigator.clipboard.writeText(text)
+    setMessage("Draft copied to clipboard.")
   }
 
   return (
@@ -237,8 +270,11 @@ export function MarketingConsole({ initialSnapshot }: MarketingConsoleProps) {
           <Badge variant={snapshot.runner.status === "running" ? "success" : "warning"}>
             Runner {snapshot.runner.status}
           </Badge>
-          <Badge variant={snapshot.runner.autoscan_enabled === false ? "warning" : "default"}>
-            Autoscan {snapshot.runner.autoscan_enabled === false ? "paused" : "live"}
+          <Badge variant={snapshot.settings.autoscan_enabled === false ? "warning" : "default"}>
+            Autoscan {snapshot.settings.autoscan_enabled === false ? "paused" : "live"}
+          </Badge>
+          <Badge variant={snapshot.settings.has_openai_api_key ? "success" : "warning"}>
+            AI key {snapshot.settings.has_openai_api_key ? "connected" : "missing"}
           </Badge>
           <Button variant="secondary" onClick={() => startTransition(() => { void refreshSnapshot() })} disabled={isPending}>
             Refresh
@@ -653,6 +689,9 @@ export function MarketingConsole({ initialSnapshot }: MarketingConsoleProps) {
                   onChange={(e) => setDraftNotes((current) => ({ ...current, [draft.key]: e.target.value }))}
                 />
                 <div className="mt-4 flex flex-wrap gap-2">
+                  <Button size="sm" variant="secondary" onClick={() => startTransition(() => {
+                    void copyDraft(draft.content)
+                  })}>Copy draft</Button>
                   {draft.status === "approved" ? (
                     <Button size="sm" variant="secondary" onClick={() => startTransition(() => {
                       void submitAction({ action: "draft_action", payload: { draft_key: draft.key, action: "mark_ready" } }, "Draft marked ready to send.")
@@ -707,13 +746,32 @@ export function MarketingConsole({ initialSnapshot }: MarketingConsoleProps) {
                 <p className="mt-1 text-white">{snapshot.runner.last_error || "None"}</p>
               </div>
               <div className="rounded-xl border border-gf-border bg-gf-black/20 p-4">
-                <p className="text-gf-muted">Budget controls</p>
-                <p className="mt-1 text-white">Default to cheap discovery and keep drafting capped unless you deliberately open it up.</p>
+                <p className="text-gf-muted">Marketing AI</p>
+                <p className="mt-1 text-white">Scripted Reddit discovery stays cheap. OpenAI spend starts only when summaries or drafts are generated with your connected key.</p>
+                <div className="mt-3 rounded-lg border border-gf-border bg-black/30 px-3 py-2 text-sm text-white">
+                  API key: {snapshot.settings.has_openai_api_key ? `Connected${snapshot.settings.openai_api_key_last4 ? ` • ending ${snapshot.settings.openai_api_key_last4}` : ""}` : "Not connected"}
+                </div>
                 <div className="mt-4 grid gap-3 md:grid-cols-2">
+                  <Input
+                    label="OpenAI API key"
+                    type="password"
+                    placeholder={snapshot.settings.has_openai_api_key ? "Replace existing key" : "sk-..."}
+                    value={runnerSettingsForm.openai_api_key}
+                    onChange={(e) => setRunnerSettingsForm((current) => ({ ...current, openai_api_key: e.target.value }))}
+                  />
                   <Select
                     label="Budget mode"
                     value={runnerSettingsForm.budget_mode}
                     onChange={(e) => setRunnerSettingsForm((current) => ({ ...current, budget_mode: e.target.value as "on" | "off" }))}
+                    options={[
+                      { value: "on", label: "On" },
+                      { value: "off", label: "Off" },
+                    ]}
+                  />
+                  <Select
+                    label="Autoscan"
+                    value={runnerSettingsForm.autoscan_enabled}
+                    onChange={(e) => setRunnerSettingsForm((current) => ({ ...current, autoscan_enabled: e.target.value as "on" | "off" }))}
                     options={[
                       { value: "on", label: "On" },
                       { value: "off", label: "Off" },
@@ -750,15 +808,32 @@ export function MarketingConsole({ initialSnapshot }: MarketingConsoleProps) {
                     value={runnerSettingsForm.max_output_tokens}
                     onChange={(e) => setRunnerSettingsForm((current) => ({ ...current, max_output_tokens: e.target.value }))}
                   />
+                  <TextArea
+                    label="Reddit subreddits"
+                    value={runnerSettingsForm.reddit_subreddits}
+                    onChange={(e) => setRunnerSettingsForm((current) => ({ ...current, reddit_subreddits: e.target.value }))}
+                  />
+                  <TextArea
+                    label="Reddit search terms"
+                    value={runnerSettingsForm.reddit_search_terms}
+                    onChange={(e) => setRunnerSettingsForm((current) => ({ ...current, reddit_search_terms: e.target.value }))}
+                  />
                 </div>
                 <div className="mt-4 flex flex-wrap gap-2">
                   <Button size="sm" onClick={saveRunnerSettings} disabled={isPending}>
-                    Save budget settings
+                    Save marketing AI settings
                   </Button>
+                  {snapshot.settings.has_openai_api_key ? (
+                    <Button size="sm" variant="ghost" onClick={() => startTransition(() => {
+                      void saveMarketingSettings(true)
+                    })} disabled={isPending}>
+                      Remove API key
+                    </Button>
+                  ) : null}
                   <Button
                     size="sm"
                     variant="ghost"
-                    onClick={() => setRunnerSettingsForm(buildRunnerSettingsForm(snapshot))}
+                    onClick={() => setRunnerSettingsForm(buildRunnerSettingsForm(snapshot.settings))}
                     disabled={isPending}
                   >
                     Load current settings
@@ -769,11 +844,15 @@ export function MarketingConsole({ initialSnapshot }: MarketingConsoleProps) {
                     onClick={() =>
                       setRunnerSettingsForm({
                         budget_mode: "on",
+                        autoscan_enabled: "on",
                         discovery_model: "gpt-5-nano",
                         drafting_model: "gpt-5-mini",
                         revision_model: "gpt-5-mini",
                         max_draft_variants: "2",
                         max_output_tokens: "500",
+                        reddit_subreddits: snapshot.settings.reddit.subreddits.join(", "),
+                        reddit_search_terms: snapshot.settings.reddit.search_terms.join(", "),
+                        openai_api_key: "",
                       })
                     }
                     disabled={isPending}

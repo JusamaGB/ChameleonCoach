@@ -108,7 +108,8 @@ Expected payload:
 - `CHAMELEON_MCP_API_KEY`
 - `CHAMELEON_MEMORY_BASE_URL`
 - `CHAMELEON_AGENT_ID`
-- `OPENAI_API_KEY` for AI drafting
+- coach-level BYOK OpenAI key stored in `admin_settings`
+- `MARKETING_SECRET_ENCRYPTION_KEY` for BYOK encryption at rest
 
 Optional Reddit config:
 
@@ -130,6 +131,7 @@ Recommended low-cost default:
 - revision on `gpt-5-mini`
 - max 2 variants
 - max 500 output tokens
+- marketing generation now uses the owning coach's BYOK OpenAI key; scripted discovery still runs without OpenAI
 
 ## Lifecycle rules
 

@@ -3,7 +3,7 @@ import { withChameleonMemory } from "@/app/api/chameleon-memory/_utils"
 import { recentMessages } from "@/lib/chameleon-memory/service"
 
 export async function GET(request: NextRequest) {
-  return withChameleonMemory(request, async ({ supabase }) => {
+  return withChameleonMemory(request, async ({ supabase, ownerUserId }) => {
     const { searchParams } = new URL(request.url)
     const count = Number(searchParams.get("count") ?? "50")
     const tag = searchParams.get("tag")
@@ -11,7 +11,8 @@ export async function GET(request: NextRequest) {
     const result = await recentMessages(
       supabase,
       Number.isFinite(count) ? Math.min(Math.max(count, 1), 500) : 50,
-      tag
+      tag,
+      ownerUserId
     )
 
     return NextResponse.json(result)

@@ -13,7 +13,6 @@ const promptsDir = path.join(rootDir, "prompts", "chameleon-marketing");
 const baseUrl = (process.env.CHAMELEON_MEMORY_BASE_URL || "http://127.0.0.1:3000").replace(/\/+$/, "");
 const apiKey = process.env.CHAMELEON_MCP_API_KEY || "";
 const agentId = (process.env.CHAMELEON_AGENT_ID || "MARKETING").toUpperCase();
-const openAiApiKey = process.env.OPENAI_API_KEY || "";
 const defaultBudgetMode = (process.env.CHAMELEON_BUDGET_MODE || "true").toLowerCase() !== "false";
 const discoveryModelDefault =
   process.env.CHAMELEON_OPENAI_MODEL_DISCOVERY || process.env.CHAMELEON_OPENAI_MODEL || "gpt-5-nano";
@@ -216,7 +215,7 @@ async function runOnce() {
     }
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown task failure";
-    await failTask(task.key, message);
+    await failTask(task.key, message, task.data.owner_user_id || null);
   await patchRunnerState({
     status: "error",
     current_task_key: null,
@@ -256,9 +255,11 @@ async function acknowledgeRunnerControls() {
 }
 
 async function processRedditScan(task) {
+  const ownerUserId = task.data.owner_user_id || null;
+  const runnerSettings = await getRunnerSettings(ownerUserId);
   const taskPayload = asRecord(task.data.task_payload);
-  const subreddits = normalizeStringList(taskPayload.subreddits, defaultSubreddits);
-  const searchTerms = normalizeStringList(taskPayload.search_terms, defaultSearchTerms);
+  const subreddits = normalizeStringList(taskPayload.subreddits, runnerSettings.reddit.subreddits);
+  const searchTerms = normalizeStringList(taskPayload.search_terms, runnerSettings.reddit.search_terms);
   const maxResultsPerSearch = Number(taskPayload.max_results_per_search || 12);
   const minScore = Number(taskPayload.min_score || 6);
 
@@ -268,10 +269,10 @@ async function processRedditScan(task) {
     maxResultsPerSearch,
   });
 
-  const leads = await loadSectorEntries("leads");
-  const conversations = await loadSectorEntries("conversations");
-  const tasks = await loadTaskEntries();
-  const drafts = await loadDraftEntries();
+  const leads = await loadSectorEntries("leads", ownerUserId);
+  const conversations = await loadSectorEntries("conversations", ownerUserId);
+  const tasks = await loadTaskEntries(ownerUserId);
+  const drafts = await loadDraftEntries(ownerUserId);
 
   let savedCount = 0;
   let queuedCount = 0;
@@ -314,10 +315,10 @@ async function processRedditScan(task) {
     };
 
     if (existingLead) {
-      await memoryUpdate("leads", leadKey, leadPayload);
+      await memoryUpdate("leads", leadKey, leadPayload, ownerUserId);
       refreshedCount += 1;
     } else {
-      await memoryWrite("leads", leadKey, leadPayload);
+      await memoryWrite("leads", leadKey, leadPayload, ownerUserId);
       leads.push({ key: leadKey, data: leadPayload, created_at: leadPayload.created_at, updated_at: leadPayload.updated_at });
       savedCount += 1;
     }
@@ -339,7 +340,7 @@ async function processRedditScan(task) {
         created_at: nowIso(),
         updated_at: nowIso(),
       };
-      await memoryWrite("conversations", conversationKey, conversationPayload);
+      await memoryWrite("conversations", conversationKey, conversationPayload, ownerUserId);
       conversations.push({ key: conversationKey, data: conversationPayload, created_at: conversationPayload.created_at, updated_at: conversationPayload.updated_at });
     }
 
@@ -361,6 +362,7 @@ async function processRedditScan(task) {
 
     if (!hasPendingSummaryTask) {
       const summaryTaskKey = await createTask({
+        owner_user_id: ownerUserId,
         lead_key: leadKey,
         task_type: "lead_summary",
         status: "queued",
@@ -377,13 +379,14 @@ async function processRedditScan(task) {
         task_payload: {
           conversation_key: conversationKey,
         },
-      });
+      }, ownerUserId);
       tasks.push({ key: summaryTaskKey, data: { lead_key: leadKey, task_type: "lead_summary", status: "queued" } });
       queuedCount += 1;
     }
 
     if (!hasPendingOutreachTask && !hasOpenOutreachDraft) {
       const outreachTaskKey = await createTask({
+        owner_user_id: ownerUserId,
         lead_key: leadKey,
         task_type: "draft_reddit_outreach",
         status: "queued",
@@ -405,7 +408,7 @@ async function processRedditScan(task) {
           conversation_key: conversationKey,
           source_post_id: candidate.id,
         },
-      });
+      }, ownerUserId);
       tasks.push({ key: outreachTaskKey, data: { lead_key: leadKey, task_type: "draft_reddit_outreach", status: "queued" } });
       queuedCount += 1;
     }
@@ -419,24 +422,25 @@ async function processRedditScan(task) {
       leads_refreshed: refreshedCount,
       follow_on_tasks: queuedCount,
     },
-  });
+  }, ownerUserId);
 
   await addRunnerAction(`Reddit scan finished: ${savedCount} new leads, ${queuedCount} tasks queued.`);
   await emitRunnerLog("GENERAL", `Reddit scan finished. New leads: ${savedCount}. Refreshed leads: ${refreshedCount}. Follow-on tasks queued: ${queuedCount}.`, "normal", task.key).catch(() => {});
 }
 
 async function processLeadSummary(task) {
-  const runnerSettings = await getRunnerSettings();
+  const ownerUserId = task.data.owner_user_id || null;
+  const runnerSettings = await getRunnerSettings(ownerUserId);
   if (!task.data.lead_key) {
     throw new Error("Lead summary task is missing lead_key");
   }
 
-  const lead = await memoryRead("leads", task.data.lead_key);
+  const lead = await memoryRead("leads", task.data.lead_key, false, ownerUserId);
   if (!lead) {
     throw new Error(`Lead '${task.data.lead_key}' not found`);
   }
 
-  const conversations = (await loadSectorEntries("conversations"))
+  const conversations = (await loadSectorEntries("conversations", ownerUserId))
     .filter((entry) => entry.data.lead_key === task.data.lead_key)
     .sort((a, b) => String(b.updated_at || "").localeCompare(String(a.updated_at || "")))
     .slice(0, 3);
@@ -444,6 +448,7 @@ async function processLeadSummary(task) {
   const output = await generateStructuredOutput({
     taskType: task.data.task_type,
     runnerSettings,
+    openAiApiKey: runnerSettings.openai_api_key,
     recipe: "lead-summary.md",
     context: {
       task,
@@ -462,38 +467,40 @@ async function processLeadSummary(task) {
     recommended_next_action: output.recommended_next_action || "Review manually",
     created_at: nowIso(),
     updated_at: nowIso(),
-  });
+  }, ownerUserId);
 
   await memoryUpdate("leads", task.data.lead_key, {
     ai_summary: output.summary,
     fit_score: output.fit_score ?? lead.data.fit_score ?? 0,
     updated_at: nowIso(),
-  });
+  }, ownerUserId);
 
   await completeTask(task.key, "completed", {
     result_summary: output.summary,
     completed_at: nowIso(),
-  });
+  }, ownerUserId);
 
   await addRunnerAction(`Lead summary written for ${task.data.lead_key}.`);
 }
 
 async function processDraftTask(task) {
-  const runnerSettings = await getRunnerSettings();
-  const lead = task.data.lead_key ? await memoryRead("leads", task.data.lead_key) : null;
+  const ownerUserId = task.data.owner_user_id || null;
+  const runnerSettings = await getRunnerSettings(ownerUserId);
+  const lead = task.data.lead_key ? await memoryRead("leads", task.data.lead_key, false, ownerUserId) : null;
   const conversations = task.data.lead_key
-    ? (await loadSectorEntries("conversations"))
+    ? (await loadSectorEntries("conversations", ownerUserId))
         .filter((entry) => entry.data.lead_key === task.data.lead_key)
         .sort((a, b) => String(b.updated_at || "").localeCompare(String(a.updated_at || "")))
     : [];
   const sourceDraftKey = task.data.source_draft_key || task.data.task_payload?.source_draft_key || null;
-  const sourceDraft = sourceDraftKey ? await memoryRead("content", sourceDraftKey) : null;
-  const strategyEntry = task.data.lead_key ? await memoryRead("strategy", `lead_summary_${task.data.lead_key}`, true) : null;
+  const sourceDraft = sourceDraftKey ? await memoryRead("content", sourceDraftKey, false, ownerUserId) : null;
+  const strategyEntry = task.data.lead_key ? await memoryRead("strategy", `lead_summary_${task.data.lead_key}`, true, ownerUserId) : null;
 
   const recipe = resolveDraftRecipe(task.data.task_type);
   const output = await generateStructuredOutput({
     taskType: task.data.task_type,
     runnerSettings,
+    openAiApiKey: runnerSettings.openai_api_key,
     recipe,
     context: {
       task,
@@ -518,6 +525,7 @@ async function processDraftTask(task) {
     draftKeys.push(draftKey);
     const variantLabel = typeof variant.label === "string" && variant.label.trim() ? variant.label.trim() : String.fromCharCode(65 + index);
     await memoryWrite("content", draftKey, {
+      owner_user_id: ownerUserId,
       task_key: task.key,
       lead_key: task.data.lead_key || null,
       channel: task.data.channel || "reddit_dm",
@@ -531,14 +539,14 @@ async function processDraftTask(task) {
       source_draft_key: sourceDraftKey,
       created_at: nowIso(),
       updated_at: nowIso(),
-    });
+    }, ownerUserId);
   }
 
   if (task.data.lead_key) {
     await memoryUpdate("leads", task.data.lead_key, {
       stage: task.data.task_type === "draft_follow_up" ? "conversation" : lead?.data?.stage || "new",
       updated_at: nowIso(),
-    }).catch(() => {});
+    }, ownerUserId).catch(() => {});
   }
 
   const conversationKey = task.data.task_payload?.conversation_key;
@@ -548,13 +556,13 @@ async function processDraftTask(task) {
       latest_task_key: task.key,
       latest_draft_keys: draftKeys,
       updated_at: nowIso(),
-    }).catch(() => {});
+    }, ownerUserId).catch(() => {});
   }
 
   await completeTask(task.key, "drafted", {
     draft_keys: draftKeys,
     result_summary: `Generated ${draftKeys.length} draft variant(s).`,
-  });
+  }, ownerUserId);
 
   await addRunnerAction(`Drafted ${draftKeys.length} variant(s) for task ${task.key}.`);
   await emitRunnerLog("GENERAL", `Drafts generated for ${task.key}: ${draftKeys.join(", ")}`, "normal", task.key).catch(() => {});
@@ -562,11 +570,12 @@ async function processDraftTask(task) {
 
 async function syncSentDraftFollowUps() {
   const drafts = await loadDraftEntries();
-  const followUps = await loadSectorEntries("follow_ups");
-  const tasks = await loadTaskEntries();
-  const conversations = await loadSectorEntries("conversations");
 
   for (const draft of drafts.filter((entry) => entry.data.status === "sent")) {
+    const ownerUserId = draft.owner_user_id || draft.data.owner_user_id || null;
+    const followUps = await loadSectorEntries("follow_ups", ownerUserId);
+    const tasks = await loadTaskEntries(ownerUserId);
+    const conversations = await loadSectorEntries("conversations", ownerUserId);
     if (!draft.data.lead_key) {
       continue;
     }
@@ -577,13 +586,14 @@ async function syncSentDraftFollowUps() {
 
     if (!existingFollowUp) {
       await memoryWrite("follow_ups", followUpKey, {
+        owner_user_id: ownerUserId,
         lead_key: draft.data.lead_key,
         source_draft_key: draft.key,
         status: "scheduled",
         due_at: dueAt,
         created_at: nowIso(),
         updated_at: nowIso(),
-      });
+      }, ownerUserId);
       await addRunnerAction(`Scheduled follow-up for ${draft.data.lead_key} from ${draft.key}.`);
     }
 
@@ -597,6 +607,7 @@ async function syncSentDraftFollowUps() {
     if (dueNow && !hasQueuedFollowUp) {
       const relatedConversation = conversations.find((entry) => entry.data.lead_key === draft.data.lead_key);
       const followUpTaskKey = await createTask({
+        owner_user_id: ownerUserId,
         lead_key: draft.data.lead_key,
         task_type: "draft_follow_up",
         status: "queued",
@@ -618,81 +629,89 @@ async function syncSentDraftFollowUps() {
           source_draft_key: draft.key,
           follow_up_key: followUpKey,
         },
-      });
+      }, ownerUserId);
       tasks.push({ key: followUpTaskKey, data: { lead_key: draft.data.lead_key, task_type: "draft_follow_up", status: "queued" } });
       await memoryUpdate("follow_ups", followUpKey, {
         status: "queued",
         queued_task_at: nowIso(),
         updated_at: nowIso(),
-      }).catch(() => {});
+      }, ownerUserId).catch(() => {});
       await addRunnerAction(`Queued follow-up task for ${draft.data.lead_key}.`);
     }
   }
 }
 
 async function ensureAutoScanTask() {
-  const runner = await memoryRead("state", RUNNER_KEY, true);
-  const autoscanEnabled = runner?.data?.autoscan_enabled ?? autoScanEnabled;
+  const { coaches } = await listMarketingCoaches();
 
-  if (!autoscanEnabled) {
-    return;
+  for (const coach of coaches.filter((entry) => entry.autoscan_enabled !== false)) {
+    const ownerUserId = coach.user_id;
+    const settings = await getRunnerSettings(ownerUserId);
+    if (!settings.autoscan_enabled) {
+      continue;
+    }
+
+    const autoScanStateKey = `runner_autoscan_${ownerUserId}`;
+    const autoScanState = await memoryRead("state", autoScanStateKey, true, ownerUserId);
+    const lastAutoScanAt = autoScanState?.data?.last_auto_scan_at || null;
+    const due =
+      !lastAutoScanAt ||
+      Date.now() - new Date(lastAutoScanAt).getTime() >= autoScanEveryMinutes * 60 * 1000;
+
+    if (!due) {
+      continue;
+    }
+
+    const tasks = await loadTaskEntries(ownerUserId);
+    const hasOpenScanTask = tasks.some(
+      (entry) =>
+        entry.data.task_type === "scan_reddit_leads" &&
+        ["queued", "claimed", "revision_requested"].includes(entry.data.status)
+    );
+
+    if (hasOpenScanTask) {
+      continue;
+    }
+
+    await createTask({
+      owner_user_id: ownerUserId,
+      lead_key: null,
+      task_type: "scan_reddit_leads",
+      status: "queued",
+      priority: "normal",
+      channel: "reddit_search",
+      objective: "Scan Reddit for coaches using Google Sheets or spreadsheets to manage client operations.",
+      campaign_profile: "reddit_google_sheets",
+      required_output_format: "Create qualified leads, conversation records, and outreach tasks for the best matches.",
+      constraints: [
+        "Focus on coaches, personal trainers, online coaches, and fitness operators.",
+        "Prioritize Google Sheets, spreadsheet, onboarding, check-ins, admin, and billing signals.",
+        "Do not create duplicate leads for the same Reddit handle.",
+      ],
+      banned_claims: [
+        "No revenue promises.",
+        "No medical or health promises.",
+      ],
+      task_payload: {
+        subreddits: settings.reddit.subreddits,
+        search_terms: settings.reddit.search_terms,
+        source: "runner_autoscan",
+      },
+    }, ownerUserId);
+
+    await memoryWrite("state", autoScanStateKey, {
+      owner_user_id: ownerUserId,
+      last_auto_scan_at: nowIso(),
+      updated_at: nowIso(),
+    }, ownerUserId);
+    await addRunnerAction(`Queued automatic Reddit scan task for ${ownerUserId}.`);
   }
-
-  const lastAutoScanAt = runner?.data?.last_auto_scan_at || null;
-  const due =
-    !lastAutoScanAt ||
-    Date.now() - new Date(lastAutoScanAt).getTime() >= autoScanEveryMinutes * 60 * 1000;
-
-  if (!due) {
-    return;
-  }
-
-  const tasks = await loadTaskEntries();
-  const hasOpenScanTask = tasks.some(
-    (entry) =>
-      entry.data.task_type === "scan_reddit_leads" &&
-      ["queued", "claimed", "revision_requested"].includes(entry.data.status)
-  );
-
-  if (hasOpenScanTask) {
-    return;
-  }
-
-  await createTask({
-    lead_key: null,
-    task_type: "scan_reddit_leads",
-    status: "queued",
-    priority: "normal",
-    channel: "reddit_search",
-    objective: "Scan Reddit for coaches using Google Sheets or spreadsheets to manage client operations.",
-    campaign_profile: "reddit_google_sheets",
-    required_output_format: "Create qualified leads, conversation records, and outreach tasks for the best matches.",
-    constraints: [
-      "Focus on coaches, personal trainers, online coaches, and fitness operators.",
-      "Prioritize Google Sheets, spreadsheet, onboarding, check-ins, admin, and billing signals.",
-      "Do not create duplicate leads for the same Reddit handle.",
-    ],
-    banned_claims: [
-      "No revenue promises.",
-      "No medical or health promises.",
-    ],
-    task_payload: {
-      subreddits: defaultSubreddits,
-      search_terms: defaultSearchTerms,
-      source: "runner_autoscan",
-    },
-  });
-
-  await patchRunnerState({
-    last_auto_scan_at: nowIso(),
-  });
-  await addRunnerAction("Queued automatic Reddit scan task.");
 }
 
 async function claimNextTask() {
   const tasks = await loadTaskEntries();
   const claimable = tasks
-    .filter((entry) => ["queued", "revision_requested"].includes(entry.data.status))
+    .filter((entry) => entry.owner_user_id && ["queued", "revision_requested"].includes(entry.data.status))
     .sort((a, b) => {
       const priorityDelta = (priorityRank[a.data.priority] ?? 1) - (priorityRank[b.data.priority] ?? 1);
       if (priorityDelta !== 0) return priorityDelta;
@@ -704,45 +723,47 @@ async function claimNextTask() {
     return null;
   }
 
+  const ownerUserId = nextTask.owner_user_id || nextTask.data.owner_user_id || null;
   await memoryUpdate("state", nextTask.key, {
     status: "claimed",
     claimed_at: nowIso(),
     claimed_by: agentId,
     updated_at: nowIso(),
     error_message: null,
-  });
+  }, ownerUserId);
 
-  return await memoryRead("state", nextTask.key);
+  return await memoryRead("state", nextTask.key, false, ownerUserId);
 }
 
-async function completeTask(taskKey, status, patch = {}) {
+async function completeTask(taskKey, status, patch = {}, ownerUserId = null) {
   await memoryUpdate("state", taskKey, {
     status,
     completed_at: nowIso(),
     updated_at: nowIso(),
     error_message: null,
     ...patch,
-  });
+  }, ownerUserId);
 }
 
-async function failTask(taskKey, errorMessage) {
+async function failTask(taskKey, errorMessage, ownerUserId = null) {
   await memoryUpdate("state", taskKey, {
     status: "failed",
     completed_at: nowIso(),
     updated_at: nowIso(),
     error_message: errorMessage,
-  });
+  }, ownerUserId);
 }
 
-async function createTask(taskPayload) {
+async function createTask(taskPayload, ownerUserId = null) {
   const key = makeKey("task_");
   await memoryWrite("state", key, {
-    owner_user_id: `runner:${agentId}`,
+    owner_user_id: ownerUserId,
     created_at: nowIso(),
     updated_at: nowIso(),
     ...taskPayload,
-  });
+  }, ownerUserId);
   await sendBoardMessage({
+    owner_user_id: ownerUserId,
     tag: "TASK_QUEUED",
     content: taskPayload.lead_key
       ? `Runner queued ${taskPayload.task_type} for ${taskPayload.lead_key}`
@@ -885,12 +906,12 @@ function buildLeadNote(candidate, scored) {
     .join("\n");
 }
 
-async function generateStructuredOutput({ taskType, runnerSettings, recipe, context, fallback }) {
+async function generateStructuredOutput({ taskType, runnerSettings, openAiApiKey, recipe, context, fallback }) {
   const stableRules = await loadStableRules();
   const recipePrompt = await readPrompt(recipe);
 
   if (!openAiApiKey) {
-    return fallback();
+    throw new Error("Coach OpenAI API key is missing for this generation task");
   }
 
   try {
@@ -952,21 +973,48 @@ function selectModelForTask(taskType, runnerSettings) {
   return runnerSettings?.model_preferences?.drafting || draftingModelDefault;
 }
 
-async function getRunnerSettings() {
-  const runner = await memoryRead("state", RUNNER_KEY, true);
-  const data = runner?.data || {};
+async function getRunnerSettings(ownerUserId = null) {
+  if (!ownerUserId) {
+    return {
+      budget_mode: defaultBudgetMode,
+      model_preferences: {
+        discovery: discoveryModelDefault,
+        drafting: draftingModelDefault,
+        revision: revisionModelDefault,
+      },
+      output_limits: {
+        max_draft_variants: clampNumber(maxDraftVariantsDefault, 1, 3, maxDraftVariantsDefault),
+        max_output_tokens: clampNumber(maxOutputTokensDefault, 150, 1200, maxOutputTokensDefault),
+      },
+      reddit: {
+        subreddits: defaultSubreddits,
+        search_terms: defaultSearchTerms,
+      },
+      autoscan_enabled: autoScanEnabled,
+      openai_api_key: null,
+    };
+  }
+
+  const payload = await getCoachMarketingSettings(ownerUserId);
+  const settings = payload?.settings || {};
 
   return {
-    budget_mode: data.budget_mode ?? defaultBudgetMode,
+    budget_mode: settings.budget_mode ?? defaultBudgetMode,
     model_preferences: {
-      discovery: data.model_preferences?.discovery || discoveryModelDefault,
-      drafting: data.model_preferences?.drafting || draftingModelDefault,
-      revision: data.model_preferences?.revision || revisionModelDefault,
+      discovery: settings?.model_preferences?.discovery || discoveryModelDefault,
+      drafting: settings?.model_preferences?.drafting || draftingModelDefault,
+      revision: settings?.model_preferences?.revision || revisionModelDefault,
     },
     output_limits: {
-      max_draft_variants: clampNumber(data.output_limits?.max_draft_variants, 1, 3, maxDraftVariantsDefault),
-      max_output_tokens: clampNumber(data.output_limits?.max_output_tokens, 150, 1200, maxOutputTokensDefault),
+      max_draft_variants: clampNumber(settings?.output_limits?.max_draft_variants, 1, 3, maxDraftVariantsDefault),
+      max_output_tokens: clampNumber(settings?.output_limits?.max_output_tokens, 150, 1200, maxOutputTokensDefault),
     },
+    reddit: {
+      subreddits: normalizeStringList(settings?.reddit?.subreddits, defaultSubreddits),
+      search_terms: normalizeStringList(settings?.reddit?.search_terms, defaultSearchTerms),
+    },
+    autoscan_enabled: settings?.autoscan_enabled ?? autoScanEnabled,
+    openai_api_key: payload?.openai_api_key || null,
   };
 }
 
@@ -1093,23 +1141,23 @@ async function readPrompt(fileName) {
   return readFile(path.join(promptsDir, fileName), "utf8");
 }
 
-async function loadSectorEntries(sector) {
-  const listed = await memoryList(sector);
+async function loadSectorEntries(sector, ownerUserId = null) {
+  const listed = await memoryList(sector, ownerUserId);
   const keys = Array.isArray(listed?.keys) ? listed.keys : [];
   if (!Array.isArray(listed?.keys)) {
     await addRunnerAction(`Sector list for ${sector} returned no keys array; treating as empty.`);
   }
-  const items = await Promise.all(keys.map((entry) => memoryRead(sector, entry.key, true)));
+  const items = await Promise.all(keys.map((entry) => memoryRead(sector, entry.key, true, ownerUserId)));
   return items.filter(Boolean);
 }
 
-async function loadTaskEntries() {
-  const entries = await loadSectorEntries("state");
+async function loadTaskEntries(ownerUserId = null) {
+  const entries = await loadSectorEntries("state", ownerUserId);
   return entries.filter((entry) => entry.key.startsWith("task_"));
 }
 
-async function loadDraftEntries() {
-  const entries = await loadSectorEntries("content");
+async function loadDraftEntries(ownerUserId = null) {
+  const entries = await loadSectorEntries("content", ownerUserId);
   return entries.filter((entry) => entry.key.startsWith("draft_"));
 }
 
@@ -1152,7 +1200,7 @@ async function runStartupDiagnostics() {
   return {
     config_loaded: true,
     api_key_present: Boolean(apiKey),
-    openai_key_present: Boolean(openAiApiKey),
+    openai_key_present: false,
     memory_base_url: baseUrl,
     memory_api_reachable: memoryCheck.reachable,
     last_reachability_check_at: checkedAt,
@@ -1202,13 +1250,13 @@ function appendAction(existing, message) {
   return [...existing, `${new Date().toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })} ${message}`].slice(-MAX_RECENT_ACTIONS);
 }
 
-async function memoryList(sector) {
-  return apiRequest("GET", `/api/chameleon-memory/memory/${encodeURIComponent(sector)}`);
+async function memoryList(sector, ownerUserId = null) {
+  return apiRequest("GET", `/api/chameleon-memory/memory/${encodeURIComponent(sector)}`, undefined, ownerUserId);
 }
 
-async function memoryRead(sector, key, allowMissing = false) {
+async function memoryRead(sector, key, allowMissing = false, ownerUserId = null) {
   try {
-    return await apiRequest("GET", `/api/chameleon-memory/memory/${encodeURIComponent(sector)}/${encodeURIComponent(key)}`);
+    return await apiRequest("GET", `/api/chameleon-memory/memory/${encodeURIComponent(sector)}/${encodeURIComponent(key)}`, undefined, ownerUserId);
   } catch (error) {
     if (allowMissing && /HTTP 404|No entry/i.test(String(error))) {
       return null;
@@ -1217,16 +1265,17 @@ async function memoryRead(sector, key, allowMissing = false) {
   }
 }
 
-async function memoryWrite(sector, key, data) {
-  return apiRequest("PUT", `/api/chameleon-memory/memory/${encodeURIComponent(sector)}/${encodeURIComponent(key)}`, { data });
+async function memoryWrite(sector, key, data, ownerUserId = null) {
+  return apiRequest("PUT", `/api/chameleon-memory/memory/${encodeURIComponent(sector)}/${encodeURIComponent(key)}`, { data, owner_user_id: ownerUserId }, ownerUserId);
 }
 
-async function memoryUpdate(sector, key, patch) {
-  return apiRequest("PATCH", `/api/chameleon-memory/memory/${encodeURIComponent(sector)}/${encodeURIComponent(key)}`, { patch });
+async function memoryUpdate(sector, key, patch, ownerUserId = null) {
+  return apiRequest("PATCH", `/api/chameleon-memory/memory/${encodeURIComponent(sector)}/${encodeURIComponent(key)}`, { patch, owner_user_id: ownerUserId }, ownerUserId);
 }
 
-async function sendBoardMessage({ tag, content, type = "broadcast", recipients, priority = "normal", ref_id }) {
+async function sendBoardMessage({ owner_user_id = null, tag, content, type = "broadcast", recipients, priority = "normal", ref_id }) {
   return apiRequest("POST", "/api/chameleon-memory/messages/send", {
+    owner_user_id,
     sender: agentId,
     tag,
     content,
@@ -1234,7 +1283,7 @@ async function sendBoardMessage({ tag, content, type = "broadcast", recipients, 
     recipients,
     priority,
     ref_id,
-  });
+  }, owner_user_id);
 }
 
 async function emitRunnerLog(tag, content, priority = "normal", ref_id) {
@@ -1246,13 +1295,14 @@ async function emitRunnerLog(tag, content, priority = "normal", ref_id) {
   });
 }
 
-async function apiRequest(method, requestPath, body) {
+async function apiRequest(method, requestPath, body, ownerUserId = null) {
   const response = await fetch(`${baseUrl}${requestPath}`, {
     method,
     headers: {
       "content-type": "application/json",
       "x-chameleon-api-key": apiKey,
       "x-agent": agentId,
+      ...(ownerUserId ? { "x-owner-user-id": ownerUserId } : {}),
     },
     body: body ? JSON.stringify(body) : undefined,
   });
@@ -1263,6 +1313,14 @@ async function apiRequest(method, requestPath, body) {
   }
 
   return payload;
+}
+
+async function listMarketingCoaches() {
+  return apiRequest("GET", "/api/chameleon-memory/marketing/coaches");
+}
+
+async function getCoachMarketingSettings(ownerUserId) {
+  return apiRequest("GET", `/api/chameleon-memory/marketing/settings/${encodeURIComponent(ownerUserId)}`);
 }
 
 function parseLooseJson(rawText) {

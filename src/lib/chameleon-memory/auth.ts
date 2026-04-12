@@ -15,6 +15,16 @@ export function getRequestAgent(request: NextRequest) {
   ).trim()
 }
 
+export function getRequestOwnerUserId(request: NextRequest) {
+  const value =
+    request.headers.get("x-owner-user-id") ||
+    request.headers.get("x-chameleon-owner-user-id") ||
+    new URL(request.url).searchParams.get("owner_user_id") ||
+    ""
+
+  return value.trim() || null
+}
+
 export function assertChameleonApiKey(request: NextRequest) {
   const expected = process.env.CHAMELEON_MCP_API_KEY
   if (!expected) {

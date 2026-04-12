@@ -20,6 +20,7 @@ type JsonValue =
 type MemoryRow = {
   sector: string
   key: string
+  owner_user_id: string | null
   data: JsonValue
   search_text: string
   created_at: string
@@ -28,6 +29,7 @@ type MemoryRow = {
 
 type MessageRow = {
   id: string
+  owner_user_id: string | null
   sender: string
   msg_type: string
   tag: string
@@ -40,6 +42,7 @@ type MessageRow = {
 }
 
 export type MessageSendInput = {
+  owner_user_id?: string | null
   sender: string
   tag?: string
   type?: string
@@ -67,6 +70,7 @@ function formatMemoryRow(row: MemoryRow) {
   return {
     sector: row.sector,
     key: row.key,
+    owner_user_id: row.owner_user_id,
     data: row.data,
     created_at: row.created_at,
     updated_at: row.updated_at,
@@ -76,6 +80,7 @@ function formatMemoryRow(row: MemoryRow) {
 function formatMessageRow(row: MessageRow) {
   return {
     key: row.id,
+    owner_user_id: row.owner_user_id,
     created_at: row.created_at,
     data: {
       sender: row.sender,
@@ -94,6 +99,7 @@ function formatMessageRow(row: MessageRow) {
 export async function audit(
   supabase: SupabaseClient,
   {
+    owner_user_id,
     op,
     sector,
     key,
@@ -101,6 +107,7 @@ export async function audit(
     summary,
     meta,
   }: {
+    owner_user_id?: string | null
     op: string
     sector?: string | null
     key?: string | null
@@ -110,6 +117,7 @@ export async function audit(
   }
 ) {
   const { error } = await supabase.from("chameleon_audit").insert({
+    owner_user_id: owner_user_id ?? null,
     op,
     sector: sector ?? null,
     key: key ?? null,
@@ -138,12 +146,22 @@ export async function listSectors(supabase: SupabaseClient) {
   }
 }
 
-export async function listEntries(supabase: SupabaseClient, sector: ChameleonMemorySector) {
+export async function listEntries(
+  supabase: SupabaseClient,
+  sector: ChameleonMemorySector,
+  ownerUserId?: string | null
+) {
   if (sector === "messages") {
-    const { data, error } = await supabase
+    let query = supabase
       .from("chameleon_messages")
       .select("id, created_at")
       .order("created_at", { ascending: false })
+
+    if (ownerUserId) {
+      query = query.eq("owner_user_id", ownerUserId)
+    }
+
+    const { data, error } = await query
 
     if (error) {
       throw new Error(error.message)
@@ -157,10 +175,16 @@ export async function listEntries(supabase: SupabaseClient, sector: ChameleonMem
   }
 
   if (sector === "inbox") {
-    const { data, error } = await supabase
+    let query = supabase
       .from("chameleon_inbox")
       .select("id, created_at")
       .order("created_at", { ascending: false })
+
+    if (ownerUserId) {
+      query = query.eq("owner_user_id", ownerUserId)
+    }
+
+    const { data, error } = await query
 
     if (error) {
       throw new Error(error.message)
@@ -173,11 +197,17 @@ export async function listEntries(supabase: SupabaseClient, sector: ChameleonMem
     }
   }
 
-  const { data, error } = await supabase
+  let query = supabase
     .from("chameleon_memory_entries")
     .select("key, updated_at")
     .eq("sector", sector)
     .order("updated_at", { ascending: false })
+
+  if (ownerUserId) {
+    query = query.eq("owner_user_id", ownerUserId)
+  }
+
+  const { data, error } = await query
 
   if (error) {
     throw new Error(error.message)
@@ -193,14 +223,20 @@ export async function listEntries(supabase: SupabaseClient, sector: ChameleonMem
 export async function readEntry(
   supabase: SupabaseClient,
   sector: ChameleonMemorySector,
-  key: string
+  key: string,
+  ownerUserId?: string | null
 ) {
   if (sector === "messages") {
-    const { data, error } = await supabase
+    let query = supabase
       .from("chameleon_messages")
       .select("*")
       .eq("id", key)
-      .maybeSingle<MessageRow>()
+
+    if (ownerUserId) {
+      query = query.eq("owner_user_id", ownerUserId)
+    }
+
+    const { data, error } = await query.maybeSingle<MessageRow>()
 
     if (error) {
       throw new Error(error.message)
@@ -210,11 +246,16 @@ export async function readEntry(
   }
 
   if (sector === "inbox") {
-    const { data, error } = await supabase
+    let query = supabase
       .from("chameleon_inbox")
       .select("*")
       .eq("id", key)
-      .maybeSingle()
+
+    if (ownerUserId) {
+      query = query.eq("owner_user_id", ownerUserId)
+    }
+
+    const { data, error } = await query.maybeSingle()
 
     if (error) {
       throw new Error(error.message)
@@ -240,12 +281,17 @@ export async function readEntry(
       : null
   }
 
-  const { data, error } = await supabase
+  let query = supabase
     .from("chameleon_memory_entries")
     .select("*")
     .eq("sector", sector)
     .eq("key", key)
-    .maybeSingle<MemoryRow>()
+
+  if (ownerUserId !== undefined) {
+    query = query.eq("owner_user_id", ownerUserId)
+  }
+
+  const { data, error } = await query.maybeSingle<MemoryRow>()
 
   if (error) {
     throw new Error(error.message)
@@ -258,7 +304,8 @@ export async function writeEntry(
   supabase: SupabaseClient,
   sector: ChameleonMemorySector,
   key: string,
-  data: JsonValue
+  data: JsonValue,
+  ownerUserId?: string | null
 ) {
   if (sector === "messages" || sector === "inbox") {
     throw new Error(`Writes to '${sector}' must use dedicated endpoints`)
@@ -268,6 +315,7 @@ export async function writeEntry(
   const payload = {
     sector,
     key,
+    owner_user_id: ownerUserId ?? null,
     data,
     search_text: buildSearchText(sector, key, data),
     updated_at: timestamp,
@@ -291,13 +339,14 @@ export async function updateEntry(
   supabase: SupabaseClient,
   sector: ChameleonMemorySector,
   key: string,
-  patch: Record<string, JsonValue>
+  patch: Record<string, JsonValue>,
+  ownerUserId?: string | null
 ) {
   if (sector === "messages" || sector === "inbox") {
     throw new Error(`Updates to '${sector}' must use dedicated endpoints`)
   }
 
-  const existing = await readEntry(supabase, sector, key)
+  const existing = await readEntry(supabase, sector, key, ownerUserId)
   if (!existing) {
     return null
   }
@@ -307,7 +356,7 @@ export async function updateEntry(
     ...patch,
   }
 
-  const result = await writeEntry(supabase, sector, key, merged)
+  const result = await writeEntry(supabase, sector, key, merged, ownerUserId)
 
   return {
     ...result,
@@ -318,13 +367,20 @@ export async function updateEntry(
 export async function deleteEntry(
   supabase: SupabaseClient,
   sector: ChameleonMemorySector,
-  key: string
+  key: string,
+  ownerUserId?: string | null
 ) {
   if (sector === "messages") {
-    const { error, count } = await supabase
+    let query = supabase
       .from("chameleon_messages")
       .delete({ count: "exact" })
       .eq("id", key)
+
+    if (ownerUserId) {
+      query = query.eq("owner_user_id", ownerUserId)
+    }
+
+    const { error, count } = await query
 
     if (error) {
       throw new Error(error.message)
@@ -334,10 +390,16 @@ export async function deleteEntry(
   }
 
   if (sector === "inbox") {
-    const { error, count } = await supabase
+    let query = supabase
       .from("chameleon_inbox")
       .delete({ count: "exact" })
       .eq("id", key)
+
+    if (ownerUserId) {
+      query = query.eq("owner_user_id", ownerUserId)
+    }
+
+    const { error, count } = await query
 
     if (error) {
       throw new Error(error.message)
@@ -346,11 +408,17 @@ export async function deleteEntry(
     return Boolean(count)
   }
 
-  const { error, count } = await supabase
+  let query = supabase
     .from("chameleon_memory_entries")
     .delete({ count: "exact" })
     .eq("sector", sector)
     .eq("key", key)
+
+  if (ownerUserId !== undefined) {
+    query = query.eq("owner_user_id", ownerUserId)
+  }
+
+  const { error, count } = await query
 
   if (error) {
     throw new Error(error.message)
@@ -362,15 +430,22 @@ export async function deleteEntry(
 export async function searchEntries(
   supabase: SupabaseClient,
   sector: ChameleonMemorySector,
-  query: string
+  query: string,
+  ownerUserId?: string | null
 ) {
   if (sector === "messages") {
-    const { data, error } = await supabase
+    let messageQuery = supabase
       .from("chameleon_messages")
       .select("*")
       .or(`content.ilike.%${query}%,tag.ilike.%${query}%,sender.ilike.%${query}%`)
       .order("created_at", { ascending: false })
       .limit(50)
+
+    if (ownerUserId) {
+      messageQuery = messageQuery.eq("owner_user_id", ownerUserId)
+    }
+
+    const { data, error } = await messageQuery
 
     if (error) {
       throw new Error(error.message)
@@ -384,13 +459,19 @@ export async function searchEntries(
     }
   }
 
-  const { data, error } = await supabase
+  let entryQuery = supabase
     .from("chameleon_memory_entries")
     .select("*")
     .eq("sector", sector)
     .ilike("search_text", `%${query.toLowerCase()}%`)
     .order("updated_at", { ascending: false })
     .limit(50)
+
+  if (ownerUserId) {
+    entryQuery = entryQuery.eq("owner_user_id", ownerUserId)
+  }
+
+  const { data, error } = await entryQuery
 
   if (error) {
     throw new Error(error.message)
@@ -407,12 +488,14 @@ export async function searchEntries(
 export async function listAudit(
   supabase: SupabaseClient,
   {
+    ownerUserId,
     limit,
     sector,
     op,
     agent,
     since,
   }: {
+    ownerUserId?: string | null
     limit: number
     sector?: string | null
     op?: string | null
@@ -428,6 +511,9 @@ export async function listAudit(
 
   if (sector) {
     query = query.eq("sector", sector)
+  }
+  if (ownerUserId) {
+    query = query.eq("owner_user_id", ownerUserId)
   }
   if (op) {
     query = query.eq("op", op)
@@ -459,6 +545,7 @@ export async function sendMessage(supabase: SupabaseClient, input: MessageSendIn
 
   const { error } = await supabase.from("chameleon_messages").insert({
     id,
+    owner_user_id: input.owner_user_id ?? null,
     sender: input.sender,
     msg_type: input.type ?? "broadcast",
     tag,
@@ -481,7 +568,12 @@ export async function sendMessage(supabase: SupabaseClient, input: MessageSendIn
   }
 }
 
-export async function recentMessages(supabase: SupabaseClient, count: number, tag?: string | null) {
+export async function recentMessages(
+  supabase: SupabaseClient,
+  count: number,
+  tag?: string | null,
+  ownerUserId?: string | null
+) {
   let query = supabase
     .from("chameleon_messages")
     .select("*")
@@ -490,6 +582,9 @@ export async function recentMessages(supabase: SupabaseClient, count: number, ta
 
   if (tag) {
     query = query.eq("tag", tag)
+  }
+  if (ownerUserId) {
+    query = query.eq("owner_user_id", ownerUserId)
   }
 
   const { data, error } = await query
@@ -508,12 +603,14 @@ export async function pollMessages(
   supabase: SupabaseClient,
   {
     agent,
+    ownerUserId,
     channel,
     since,
     useCursor,
     limit,
   }: {
     agent: string
+    ownerUserId?: string | null
     channel?: string | null
     since?: string | null
     useCursor?: boolean
@@ -544,6 +641,9 @@ export async function pollMessages(
 
   if (channel) {
     query = query.eq("channel", channel)
+  }
+  if (ownerUserId) {
+    query = query.eq("owner_user_id", ownerUserId)
   }
 
   if (cursorTs) {

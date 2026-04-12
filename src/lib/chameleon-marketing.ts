@@ -33,6 +33,7 @@ export type MarketingLead = {
 
 export type MarketingTask = {
   key: string
+  owner_user_id: string
   task_type: string
   status: string
   priority: string
@@ -54,6 +55,7 @@ export type MarketingTask = {
 
 export type MarketingDraft = {
   key: string
+  owner_user_id: string
   task_key: string | null
   lead_key: string | null
   channel: string
@@ -111,11 +113,33 @@ export type MarketingRunnerState = {
   }
 }
 
+export type MarketingSettings = {
+  has_openai_api_key: boolean
+  openai_api_key_last4: string | null
+  openai_api_key_set_at: string | null
+  budget_mode: boolean
+  autoscan_enabled: boolean
+  model_preferences: {
+    discovery: string
+    drafting: string
+    revision: string
+  }
+  output_limits: {
+    max_draft_variants: number
+    max_output_tokens: number
+  }
+  reddit: {
+    subreddits: string[]
+    search_terms: string[]
+  }
+}
+
 export type MarketingSnapshot = {
   leads: MarketingLead[]
   tasks: MarketingTask[]
   drafts: MarketingDraft[]
   runner: MarketingRunnerState
+  settings: MarketingSettings
   overview: {
     new_leads: number
     drafts_awaiting_review: number
@@ -130,6 +154,28 @@ export type MarketingSnapshot = {
 const TASK_PREFIX = "task_"
 const DRAFT_PREFIX = "draft_"
 const RUNNER_KEY = "runner_marketing"
+
+const DEFAULT_DISCOVERY_MODEL = "gpt-5-nano"
+const DEFAULT_DRAFTING_MODEL = "gpt-5-mini"
+const DEFAULT_REVISION_MODEL = "gpt-5-mini"
+const DEFAULT_MAX_DRAFT_VARIANTS = 2
+const DEFAULT_MAX_OUTPUT_TOKENS = 500
+const DEFAULT_REDDIT_SUBREDDITS = [
+  "smallbusiness",
+  "entrepreneur",
+  "personaltraining",
+  "fitnessbusiness",
+  "marketing",
+  "sales",
+  "onlinecoaching",
+]
+const DEFAULT_REDDIT_SEARCH_TERMS = [
+  "google sheets coach",
+  "google sheets fitness coach",
+  "spreadsheet personal trainer",
+  "spreadsheet coaching business",
+  "client onboarding spreadsheet coach",
+]
 
 export const MARKETING_TASK_TYPES = [
   "scan_reddit_leads",
@@ -149,7 +195,25 @@ function makeKey(prefix: string) {
   return `${prefix}${Date.now()}_${Math.random().toString(16).slice(2, 8)}`
 }
 
-function asLead(key: string, data: Record<string, any>): MarketingLead {
+function clampNumber(value: unknown, min: number, max: number, fallback: number) {
+  const numeric = Number(value)
+  if (!Number.isFinite(numeric)) {
+    return fallback
+  }
+
+  return Math.max(min, Math.min(max, numeric))
+}
+
+function normalizeStringArray(value: unknown, fallback: string[]) {
+  if (!Array.isArray(value)) {
+    return fallback
+  }
+
+  const normalized = value.map((item) => String(item ?? "").trim()).filter(Boolean)
+  return normalized.length > 0 ? normalized : fallback
+}
+
+function asLead(key: string, data: Record<string, any>, ownerUserId: string | null): MarketingLead {
   return {
     key,
     full_name: data.full_name ?? "",
@@ -162,7 +226,7 @@ function asLead(key: string, data: Record<string, any>): MarketingLead {
     last_contacted_at: data.last_contacted_at ?? null,
     next_follow_up_at: data.next_follow_up_at ?? null,
     status: data.status ?? "active",
-    owner_user_id: data.owner_user_id ?? "",
+    owner_user_id: ownerUserId ?? data.owner_user_id ?? "",
     fit_score: typeof data.fit_score === "number" ? data.fit_score : null,
     ai_summary: data.ai_summary ?? "",
     discovery_reason: data.discovery_reason ?? "",
@@ -176,9 +240,10 @@ function asLead(key: string, data: Record<string, any>): MarketingLead {
   }
 }
 
-function asTask(key: string, data: Record<string, any>): MarketingTask {
+function asTask(key: string, data: Record<string, any>, ownerUserId: string | null): MarketingTask {
   return {
     key,
+    owner_user_id: ownerUserId ?? data.owner_user_id ?? "",
     task_type: data.task_type ?? "draft_dm_reply",
     status: data.status ?? "queued",
     priority: data.priority ?? "normal",
@@ -202,9 +267,10 @@ function asTask(key: string, data: Record<string, any>): MarketingTask {
   }
 }
 
-function asDraft(key: string, data: Record<string, any>): MarketingDraft {
+function asDraft(key: string, data: Record<string, any>, ownerUserId: string | null): MarketingDraft {
   return {
     key,
+    owner_user_id: ownerUserId ?? data.owner_user_id ?? "",
     task_key: data.task_key ?? null,
     lead_key: data.lead_key ?? null,
     channel: data.channel ?? "dm",
@@ -225,7 +291,16 @@ function asDraft(key: string, data: Record<string, any>): MarketingDraft {
   }
 }
 
-function normalizeRunner(data: Record<string, any> | null, pendingQueueCount: number): MarketingRunnerState {
+function normalizeRunner(
+  data: Record<string, any> | null,
+  pendingQueueCount: number,
+  settings: MarketingSettings
+): MarketingRunnerState {
+  const diagnostics =
+    data?.diagnostics && typeof data.diagnostics === "object" && !Array.isArray(data.diagnostics)
+      ? data.diagnostics
+      : undefined
+
   return {
     key: RUNNER_KEY,
     agent: data?.agent ?? "MARKETING",
@@ -235,77 +310,172 @@ function normalizeRunner(data: Record<string, any> | null, pendingQueueCount: nu
     last_error: data?.last_error ?? null,
     pending_queue_count: pendingQueueCount,
     recent_actions: Array.isArray(data?.recent_actions) ? data.recent_actions : [],
-    autoscan_enabled: data?.autoscan_enabled ?? true,
+    autoscan_enabled: settings.autoscan_enabled,
     control_requested_at: data?.control_requested_at ?? null,
     last_control_action: data?.last_control_action ?? null,
     last_control_acknowledged_at: data?.last_control_acknowledged_at ?? null,
     last_startup_attempt_at: data?.last_startup_attempt_at ?? null,
     last_startup_status: data?.last_startup_status ?? null,
     last_startup_message: data?.last_startup_message ?? null,
-    budget_mode: data?.budget_mode ?? true,
-    model_preferences:
-      data?.model_preferences && typeof data.model_preferences === "object" && !Array.isArray(data.model_preferences)
-        ? data.model_preferences
-        : {
-            discovery: "gpt-5-nano",
-            drafting: "gpt-5-mini",
-            revision: "gpt-5-mini",
-          },
-    output_limits:
-      data?.output_limits && typeof data.output_limits === "object" && !Array.isArray(data.output_limits)
-        ? data.output_limits
-        : {
-            max_draft_variants: 2,
-            max_output_tokens: 500,
-          },
-    diagnostics:
-      data?.diagnostics && typeof data.diagnostics === "object" && !Array.isArray(data.diagnostics)
-        ? data.diagnostics
-        : undefined,
+    budget_mode: settings.budget_mode,
+    model_preferences: settings.model_preferences,
+    output_limits: settings.output_limits,
+    diagnostics: diagnostics
+      ? {
+          ...diagnostics,
+          openai_key_present: settings.has_openai_api_key,
+        }
+      : {
+          openai_key_present: settings.has_openai_api_key,
+        },
   }
 }
 
-export async function getMarketingSnapshot(supabase: SupabaseClient): Promise<MarketingSnapshot> {
-  const [leadKeys, stateKeys, contentKeys, runnerRaw, activity, messages] = await Promise.all([
-    listEntries(supabase, "leads"),
-    listEntries(supabase, "state"),
-    listEntries(supabase, "content"),
+function parseSettingsRow(data: Record<string, any> | null | undefined): MarketingSettings {
+  return {
+    has_openai_api_key: Boolean(data?.marketing_openai_api_key_ciphertext),
+    openai_api_key_last4: data?.marketing_openai_api_key_last4 ?? null,
+    openai_api_key_set_at: data?.marketing_openai_api_key_set_at ?? null,
+    budget_mode: data?.marketing_budget_mode ?? true,
+    autoscan_enabled: data?.marketing_autoscan_enabled ?? true,
+    model_preferences: {
+      discovery: data?.marketing_model_discovery?.trim() || DEFAULT_DISCOVERY_MODEL,
+      drafting: data?.marketing_model_drafting?.trim() || DEFAULT_DRAFTING_MODEL,
+      revision: data?.marketing_model_revision?.trim() || DEFAULT_REVISION_MODEL,
+    },
+    output_limits: {
+      max_draft_variants: clampNumber(data?.marketing_max_draft_variants, 1, 3, DEFAULT_MAX_DRAFT_VARIANTS),
+      max_output_tokens: clampNumber(data?.marketing_max_output_tokens, 150, 1200, DEFAULT_MAX_OUTPUT_TOKENS),
+    },
+    reddit: {
+      subreddits: normalizeStringArray(data?.marketing_reddit_subreddits, DEFAULT_REDDIT_SUBREDDITS),
+      search_terms: normalizeStringArray(data?.marketing_reddit_search_terms, DEFAULT_REDDIT_SEARCH_TERMS),
+    },
+  }
+}
+
+async function getCoachSettingsRow(supabase: SupabaseClient, userId: string) {
+  const { data, error } = await supabase
+    .from("admin_settings")
+    .select(`
+      marketing_openai_api_key_ciphertext,
+      marketing_openai_api_key_last4,
+      marketing_openai_api_key_set_at,
+      marketing_budget_mode,
+      marketing_model_discovery,
+      marketing_model_drafting,
+      marketing_model_revision,
+      marketing_max_draft_variants,
+      marketing_max_output_tokens,
+      marketing_autoscan_enabled,
+      marketing_reddit_subreddits,
+      marketing_reddit_search_terms
+    `)
+    .eq("user_id", userId)
+    .maybeSingle()
+
+  if (error) {
+    throw new Error(error.message)
+  }
+
+  return data
+}
+
+export async function getCoachMarketingSettings(supabase: SupabaseClient, userId: string) {
+  return parseSettingsRow(await getCoachSettingsRow(supabase, userId))
+}
+
+export async function updateCoachMarketingSettings(
+  supabase: SupabaseClient,
+  userId: string,
+  input: {
+    budget_mode?: boolean
+    autoscan_enabled?: boolean
+    discovery_model?: string
+    drafting_model?: string
+    revision_model?: string
+    max_draft_variants?: number
+    max_output_tokens?: number
+    reddit_subreddits?: string[]
+    reddit_search_terms?: string[]
+  }
+) {
+  const existing = parseSettingsRow(await getCoachSettingsRow(supabase, userId))
+  const budgetMode = typeof input.budget_mode === "boolean" ? input.budget_mode : existing.budget_mode
+
+  const patch = {
+    user_id: userId,
+    marketing_budget_mode: budgetMode,
+    marketing_autoscan_enabled:
+      typeof input.autoscan_enabled === "boolean" ? input.autoscan_enabled : existing.autoscan_enabled,
+    marketing_model_discovery: input.discovery_model?.trim() || existing.model_preferences.discovery,
+    marketing_model_drafting: input.drafting_model?.trim() || existing.model_preferences.drafting,
+    marketing_model_revision: input.revision_model?.trim() || existing.model_preferences.revision,
+    marketing_max_draft_variants: budgetMode
+      ? clampNumber(input.max_draft_variants ?? existing.output_limits.max_draft_variants, 1, 2, DEFAULT_MAX_DRAFT_VARIANTS)
+      : clampNumber(input.max_draft_variants ?? existing.output_limits.max_draft_variants, 1, 3, DEFAULT_MAX_DRAFT_VARIANTS),
+    marketing_max_output_tokens: budgetMode
+      ? clampNumber(input.max_output_tokens ?? existing.output_limits.max_output_tokens, 150, 500, DEFAULT_MAX_OUTPUT_TOKENS)
+      : clampNumber(input.max_output_tokens ?? existing.output_limits.max_output_tokens, 150, 1200, DEFAULT_MAX_OUTPUT_TOKENS),
+    marketing_reddit_subreddits: normalizeStringArray(input.reddit_subreddits, existing.reddit.subreddits),
+    marketing_reddit_search_terms: normalizeStringArray(input.reddit_search_terms, existing.reddit.search_terms),
+    updated_at: nowIso(),
+  }
+
+  const { error } = await supabase.from("admin_settings").upsert(patch, { onConflict: "user_id" })
+  if (error) {
+    throw new Error(error.message)
+  }
+
+  return getCoachMarketingSettings(supabase, userId)
+}
+
+export async function getMarketingSnapshot(supabase: SupabaseClient, userId: string): Promise<MarketingSnapshot> {
+  const settingsPromise = getCoachMarketingSettings(supabase, userId)
+  const [leadKeys, stateKeys, contentKeys, runnerRaw, activity, messages, settings] = await Promise.all([
+    listEntries(supabase, "leads", userId),
+    listEntries(supabase, "state", userId),
+    listEntries(supabase, "content", userId),
     readEntry(supabase, "state", RUNNER_KEY),
-    listAudit(supabase, { limit: 30 }),
-    recentMessages(supabase, 12),
+    listAudit(supabase, { limit: 30, ownerUserId: userId }),
+    recentMessages(supabase, 12, undefined, userId),
+    settingsPromise,
   ])
 
   const [leadEntries, stateEntries, contentEntries] = await Promise.all([
-    Promise.all(leadKeys.keys.map((item) => readEntry(supabase, "leads", item.key))),
-    Promise.all(stateKeys.keys.map((item) => readEntry(supabase, "state", item.key))),
-    Promise.all(contentKeys.keys.map((item) => readEntry(supabase, "content", item.key))),
+    Promise.all(leadKeys.keys.map((item) => readEntry(supabase, "leads", item.key, userId))),
+    Promise.all(stateKeys.keys.map((item) => readEntry(supabase, "state", item.key, userId))),
+    Promise.all(contentKeys.keys.map((item) => readEntry(supabase, "content", item.key, userId))),
   ])
 
   const leads = leadEntries
     .filter(Boolean)
-    .map((entry) => asLead(entry!.key, entry!.data as Record<string, any>))
+    .map((entry) => asLead(entry!.key, entry!.data as Record<string, any>, (entry as any).owner_user_id ?? userId))
     .sort((a, b) => (b.updated_at ?? "").localeCompare(a.updated_at ?? ""))
 
   const tasks = stateEntries
     .filter((entry): entry is NonNullable<typeof entry> => Boolean(entry))
     .filter((entry) => entry.key.startsWith(TASK_PREFIX))
-    .map((entry) => asTask(entry.key, entry.data as Record<string, any>))
+    .map((entry) => asTask(entry.key, entry.data as Record<string, any>, (entry as any).owner_user_id ?? userId))
     .sort((a, b) => (b.updated_at ?? "").localeCompare(a.updated_at ?? ""))
 
   const drafts = contentEntries
     .filter((entry): entry is NonNullable<typeof entry> => Boolean(entry))
     .filter((entry) => entry.key.startsWith(DRAFT_PREFIX))
-    .map((entry) => asDraft(entry.key, entry.data as Record<string, any>))
+    .map((entry) => asDraft(entry.key, entry.data as Record<string, any>, (entry as any).owner_user_id ?? userId))
     .sort((a, b) => (b.updated_at ?? "").localeCompare(a.updated_at ?? ""))
 
   const pendingTasks = tasks.filter((task) => ["queued", "claimed", "revision_requested"].includes(task.status))
-  const followUpsDue = leads.filter((lead) => lead.next_follow_up_at && lead.next_follow_up_at <= nowIso() && lead.status !== "archived")
+  const followUpsDue = leads.filter(
+    (lead) => lead.next_follow_up_at && lead.next_follow_up_at <= nowIso() && lead.status !== "archived"
+  )
 
   return {
     leads,
     tasks,
     drafts,
-    runner: normalizeRunner((runnerRaw?.data as Record<string, any> | null) ?? null, pendingTasks.length),
+    runner: normalizeRunner((runnerRaw?.data as Record<string, any> | null) ?? null, pendingTasks.length, settings),
+    settings,
     overview: {
       new_leads: leads.filter((lead) => lead.stage === "new").length,
       drafts_awaiting_review: drafts.filter((draft) => ["drafted", "needs_review", "revision_requested"].includes(draft.status)).length,
@@ -351,8 +521,9 @@ export async function createMarketingLead(
     updated_at: timestamp,
   }
 
-  await writeEntry(supabase, "leads", key, payload)
+  await writeEntry(supabase, "leads", key, payload, userId)
   await audit(supabase, {
+    owner_user_id: userId,
     op: "marketing_lead_create",
     sector: "leads",
     key,
@@ -370,16 +541,24 @@ export async function updateMarketingLead(
   leadKey: string,
   patch: Partial<MarketingLead>
 ) {
-  const result = await updateEntry(supabase, "leads", leadKey, {
-    ...patch,
-    updated_at: nowIso(),
-  })
+  const result = await updateEntry(
+    supabase,
+    "leads",
+    leadKey,
+    {
+      ...patch,
+      owner_user_id: userId,
+      updated_at: nowIso(),
+    },
+    userId
+  )
 
   if (!result) {
     throw new Error("Lead not found")
   }
 
   await audit(supabase, {
+    owner_user_id: userId,
     op: "marketing_lead_update",
     sector: "leads",
     key: leadKey,
@@ -416,7 +595,7 @@ export async function createMarketingTask(
       throw new Error("Lead is required for this task")
     }
 
-    lead = await readEntry(supabase, "leads", leadKey)
+    lead = await readEntry(supabase, "leads", leadKey, userId)
     if (!lead) {
       throw new Error("Lead not found")
     }
@@ -442,8 +621,9 @@ export async function createMarketingTask(
     updated_at: timestamp,
   }
 
-  await writeEntry(supabase, "state", key, payload)
+  await writeEntry(supabase, "state", key, payload, userId)
   await sendMessage(supabase, {
+    owner_user_id: userId,
     sender: "SYSTEM",
     tag: "TASK_QUEUED",
     content: leadKey
@@ -453,6 +633,7 @@ export async function createMarketingTask(
     priority: "normal",
   })
   await audit(supabase, {
+    owner_user_id: userId,
     op: "marketing_task_create",
     sector: "state",
     key,
@@ -492,19 +673,19 @@ export async function updateDraftWorkflow(
     outcome_note?: string
   }
 ) {
-  const draft = await readEntry(supabase, "content", input.draft_key)
+  const draft = await readEntry(supabase, "content", input.draft_key, userId)
   if (!draft) {
     throw new Error("Draft not found")
   }
 
-  const current = asDraft(draft.key, draft.data as Record<string, any>)
+  const current = asDraft(draft.key, draft.data as Record<string, any>, (draft as any).owner_user_id ?? userId)
   const timestamp = nowIso()
   let nextStatus = current.status
-  const patch: Record<string, any> = { updated_at: timestamp }
+  const patch: Record<string, any> = { owner_user_id: userId, updated_at: timestamp }
 
   switch (input.action) {
     case "approve":
-      nextStatus = current.status === "approved" ? "approved" : "approved"
+      nextStatus = "approved"
       if (current.status !== "approved") {
         assertDraftStatusTransition(current.status, nextStatus)
       }
@@ -525,24 +706,31 @@ export async function updateDraftWorkflow(
       patch.revision_count = (current.revision_count ?? 0) + 1
       if (current.task_key) {
         const revisionTaskKey = makeKey(TASK_PREFIX)
-        await writeEntry(supabase, "state", revisionTaskKey, {
-          owner_user_id: userId,
-          lead_key: current.lead_key,
-          task_type: "revise_marketing_copy",
-          status: "queued",
-          priority: "high",
-          channel: current.channel,
-          objective: current.objective,
-          campaign_profile: current.campaign_profile,
-          required_output_format: "revised single best version plus rationale",
-          constraints: [],
-          banned_claims: [],
-          source_draft_key: current.key,
-          requested_revision_note: patch.reviewer_note,
-          created_at: timestamp,
-          updated_at: timestamp,
-        })
+        await writeEntry(
+          supabase,
+          "state",
+          revisionTaskKey,
+          {
+            owner_user_id: userId,
+            lead_key: current.lead_key,
+            task_type: "revise_marketing_copy",
+            status: "queued",
+            priority: "high",
+            channel: current.channel,
+            objective: current.objective,
+            campaign_profile: current.campaign_profile,
+            required_output_format: "revised single best version plus rationale",
+            constraints: [],
+            banned_claims: [],
+            source_draft_key: current.key,
+            requested_revision_note: patch.reviewer_note,
+            created_at: timestamp,
+            updated_at: timestamp,
+          },
+          userId
+        )
         await audit(supabase, {
+          owner_user_id: userId,
           op: "marketing_revision_task_create",
           sector: "state",
           key: revisionTaskKey,
@@ -575,19 +763,27 @@ export async function updateDraftWorkflow(
       break
   }
 
-  const updated = await updateEntry(supabase, "content", current.key, patch)
+  const updated = await updateEntry(supabase, "content", current.key, patch, userId)
   if (!updated) {
     throw new Error("Draft not found after update")
   }
 
   if (input.action === "mark_sent" && current.lead_key) {
-    await updateEntry(supabase, "leads", current.lead_key, {
-      last_contacted_at: timestamp,
-      updated_at: timestamp,
-    })
+    await updateEntry(
+      supabase,
+      "leads",
+      current.lead_key,
+      {
+        owner_user_id: userId,
+        last_contacted_at: timestamp,
+        updated_at: timestamp,
+      },
+      userId
+    )
   }
 
   await audit(supabase, {
+    owner_user_id: userId,
     op: "marketing_draft_transition",
     sector: "content",
     key: current.key,
@@ -610,25 +806,23 @@ export async function controlMarketingRunner(
   const existingRunner = await readEntry(supabase, "state", RUNNER_KEY)
   const currentData = (existingRunner?.data as Record<string, any> | null) ?? {}
 
+  if (input.action === "pause_autoscan" || input.action === "resume_autoscan") {
+    await updateCoachMarketingSettings(supabase, userId, {
+      autoscan_enabled: input.action === "resume_autoscan",
+    })
+  }
+
   const patch: Record<string, any> = {
     control_requested_at: timestamp,
     last_control_action: input.action,
     updated_at: timestamp,
   }
 
-  switch (input.action) {
-    case "pause_autoscan":
-      patch.autoscan_enabled = false
-      break
-    case "resume_autoscan":
-      patch.autoscan_enabled = true
-      break
-    case "process_queue":
-      patch.run_requested_at = timestamp
-      break
-    case "trigger_scan":
-      patch.manual_scan_requested_at = timestamp
-      break
+  if (input.action === "process_queue") {
+    patch.run_requested_at = timestamp
+  }
+  if (input.action === "trigger_scan") {
+    patch.manual_scan_requested_at = timestamp
   }
 
   if (existingRunner) {
@@ -642,17 +836,6 @@ export async function controlMarketingRunner(
       last_error: null,
       pending_queue_count: 0,
       recent_actions: [],
-      autoscan_enabled: input.action === "pause_autoscan" ? false : true,
-      budget_mode: true,
-      model_preferences: {
-        discovery: "gpt-5-nano",
-        drafting: "gpt-5-mini",
-        revision: "gpt-5-mini",
-      },
-      output_limits: {
-        max_draft_variants: 2,
-        max_output_tokens: 500,
-      },
       created_at: timestamp,
       ...patch,
     })
@@ -683,6 +866,7 @@ export async function controlMarketingRunner(
   }
 
   await sendMessage(supabase, {
+    owner_user_id: userId,
     sender: "DASHBOARD",
     tag: "DIRECTIVE",
     type: "targeted",
@@ -693,6 +877,7 @@ export async function controlMarketingRunner(
   })
 
   await audit(supabase, {
+    owner_user_id: userId,
     op: "marketing_runner_control",
     sector: "state",
     key: RUNNER_KEY,
@@ -716,100 +901,47 @@ export async function updateMarketingRunnerSettings(
   userId: string,
   input: {
     budget_mode?: boolean
+    autoscan_enabled?: boolean
     discovery_model?: string
     drafting_model?: string
     revision_model?: string
     max_draft_variants?: number
     max_output_tokens?: number
+    reddit_subreddits?: string[]
+    reddit_search_terms?: string[]
   }
 ) {
-  const timestamp = nowIso()
-  const existingRunner = await readEntry(supabase, "state", RUNNER_KEY)
-  const currentData = (existingRunner?.data as Record<string, any> | null) ?? {}
-  const budgetMode = typeof input.budget_mode === "boolean" ? input.budget_mode : currentData.budget_mode ?? true
-
-  const patch: Record<string, any> = {
-    updated_at: timestamp,
-  }
-
-  if (typeof input.budget_mode === "boolean") {
-    patch.budget_mode = input.budget_mode
-  }
-
-  const currentModels =
-    currentData.model_preferences && typeof currentData.model_preferences === "object" && !Array.isArray(currentData.model_preferences)
-      ? currentData.model_preferences
-      : {}
-  patch.model_preferences = {
-    discovery: input.discovery_model?.trim() || currentModels.discovery || "gpt-5-nano",
-    drafting: input.drafting_model?.trim() || currentModels.drafting || "gpt-5-mini",
-    revision: input.revision_model?.trim() || currentModels.revision || "gpt-5-mini",
-  }
-
-  const currentLimits =
-    currentData.output_limits && typeof currentData.output_limits === "object" && !Array.isArray(currentData.output_limits)
-      ? currentData.output_limits
-      : {}
-  patch.output_limits = {
-    max_draft_variants: Math.max(1, Math.min(3, Number(input.max_draft_variants ?? currentLimits.max_draft_variants ?? 2))),
-    max_output_tokens: Math.max(150, Math.min(1200, Number(input.max_output_tokens ?? currentLimits.max_output_tokens ?? 500))),
-  }
-
-  if (budgetMode) {
-    patch.model_preferences = {
-      discovery: input.discovery_model?.trim() || "gpt-5-nano",
-      drafting: input.drafting_model?.trim() || "gpt-5-mini",
-      revision: input.revision_model?.trim() || "gpt-5-mini",
-    }
-    patch.output_limits = {
-      max_draft_variants: Math.max(1, Math.min(2, Number(input.max_draft_variants ?? 2))),
-      max_output_tokens: Math.max(150, Math.min(500, Number(input.max_output_tokens ?? 500))),
-    }
-  }
-
-  if (existingRunner) {
-    await updateEntry(supabase, "state", RUNNER_KEY, patch)
-  } else {
-    await writeEntry(supabase, "state", RUNNER_KEY, {
-      agent: "MARKETING",
-      status: "offline",
-      current_task_key: null,
-      heartbeat_at: null,
-      last_error: null,
-      pending_queue_count: 0,
-      recent_actions: [],
-      autoscan_enabled: true,
-      created_at: timestamp,
-      ...patch,
-    })
-  }
+  const settings = await updateCoachMarketingSettings(supabase, userId, input)
 
   await sendMessage(supabase, {
+    owner_user_id: userId,
     sender: "DASHBOARD",
     tag: "RUNNER_SETTINGS",
     type: "targeted",
     recipients: ["MARKETING"],
     priority: "normal",
-    content: `Runner settings updated. Budget mode: ${patch.budget_mode === false ? "off" : "on"}. Discovery model: ${patch.model_preferences.discovery}. Drafting model: ${patch.model_preferences.drafting}. Revision model: ${patch.model_preferences.revision}. Variant cap: ${patch.output_limits.max_draft_variants}. Output cap: ${patch.output_limits.max_output_tokens}.`,
+    content: `Runner settings updated. Budget mode: ${settings.budget_mode ? "on" : "off"}. Discovery model: ${settings.model_preferences.discovery}. Drafting model: ${settings.model_preferences.drafting}. Revision model: ${settings.model_preferences.revision}. Variant cap: ${settings.output_limits.max_draft_variants}. Output cap: ${settings.output_limits.max_output_tokens}.`,
     ref_id: RUNNER_KEY,
   })
 
   await audit(supabase, {
+    owner_user_id: userId,
     op: "marketing_runner_settings_update",
     sector: "state",
     key: RUNNER_KEY,
     agent: userId,
     summary: "Updated marketing runner budget settings",
     meta: {
-      budget_mode: patch.budget_mode,
-      model_preferences: patch.model_preferences,
-      output_limits: patch.output_limits,
+      budget_mode: settings.budget_mode,
+      model_preferences: settings.model_preferences,
+      output_limits: settings.output_limits,
+      autoscan_enabled: settings.autoscan_enabled,
     },
   })
 
   return {
     ok: true,
     runner_key: RUNNER_KEY,
-    settings: patch,
+    settings,
   }
 }

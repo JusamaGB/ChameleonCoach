@@ -7,11 +7,12 @@ type Params = { params: Promise<{ sector: string; query: string }> }
 export async function GET(request: NextRequest, { params }: Params) {
   const { sector, query } = await params
 
-  return withChameleonMemory(request, async ({ supabase, agent }) => {
+  return withChameleonMemory(request, async ({ supabase, agent, ownerUserId }) => {
     assertSector(sector)
     const decodedQuery = decodeURIComponent(query)
-    const result = await searchEntries(supabase, sector, decodedQuery)
+    const result = await searchEntries(supabase, sector, decodedQuery, ownerUserId)
     await audit(supabase, {
+      owner_user_id: ownerUserId,
       op: "search",
       sector,
       agent,

@@ -9,8 +9,9 @@ export default async function MarketingPage() {
   const result = await verifyCoach()
   if (!isCoachResult(result)) return result
 
+  const { user } = result
   const admin = createAdmin()
-  const snapshot = await getMarketingSnapshot(admin)
+  const snapshot = await getMarketingSnapshot(admin, user.id)
 
   return (
     <div className="max-w-7xl mx-auto">
