@@ -80,6 +80,12 @@ function draftNeedsReview(draft: MarketingDraft) {
   return ["drafted", "needs_review", "revision_requested"].includes(draft.status)
 }
 
+function boolLabel(value: boolean | null | undefined) {
+  if (value === true) return "Yes"
+  if (value === false) return "No"
+  return "Unknown"
+}
+
 export function MarketingConsole({ initialSnapshot }: MarketingConsoleProps) {
   const [snapshot, setSnapshot] = useState(initialSnapshot)
   const [activeTab, setActiveTab] = useState<"operations" | "mcp">("operations")
@@ -206,6 +212,14 @@ export function MarketingConsole({ initialSnapshot }: MarketingConsoleProps) {
       {message ? (
         <Card className="p-4">
           <p className="text-sm text-green-400">{message}</p>
+        </Card>
+      ) : null}
+
+      {snapshot.runner.status === "offline" && queuedTasks.length > 0 ? (
+        <Card className="border border-amber-500/30 bg-amber-500/5 p-4">
+          <p className="text-sm text-amber-200">
+            Work is queued, but the local runner is offline. Start it on your machine with <code>npm run runner:marketing</code> to process the queue.
+          </p>
         </Card>
       ) : null}
 
@@ -676,12 +690,63 @@ export function MarketingConsole({ initialSnapshot }: MarketingConsoleProps) {
               </CardHeader>
               <div className="space-y-4">
                 <div className="rounded-xl border border-gf-border bg-gf-black/20 p-4">
+                  <p className="text-sm text-gf-muted">Runner console</p>
+                  <p className="mt-1 text-white">
+                    {snapshot.runner.status === "offline"
+                      ? "The dashboard can queue and direct work, but the local worker is not currently running."
+                      : snapshot.runner.status === "blocked"
+                        ? "The local worker started but failed startup diagnostics."
+                        : "The local worker is connected and reporting into MCP."}
+                  </p>
+                </div>
+                <div className="rounded-xl border border-gf-border bg-gf-black/20 p-4">
                   <p className="text-sm text-gf-muted">Current task</p>
                   <p className="mt-1 text-white">{snapshot.runner.current_task_key || "No active task"}</p>
                 </div>
                 <div className="rounded-xl border border-gf-border bg-gf-black/20 p-4">
                   <p className="text-sm text-gf-muted">Last heartbeat</p>
                   <p className="mt-1 text-white">{formatDate(snapshot.runner.heartbeat_at)}</p>
+                </div>
+                <div className="rounded-xl border border-gf-border bg-gf-black/20 p-4">
+                  <p className="text-sm text-gf-muted">Last startup attempt</p>
+                  <p className="mt-1 text-white">{formatDate(snapshot.runner.last_startup_attempt_at)}</p>
+                  <p className="mt-2 text-sm text-gf-muted">Startup status</p>
+                  <p className="mt-1 text-white">{snapshot.runner.last_startup_status || "Unknown"}</p>
+                  <p className="mt-2 text-sm text-gf-muted">Startup message</p>
+                  <p className="mt-1 text-white">{snapshot.runner.last_startup_message || "No startup message recorded yet."}</p>
+                </div>
+                <div className="rounded-xl border border-gf-border bg-gf-black/20 p-4">
+                  <p className="text-sm text-gf-muted">Startup diagnostics</p>
+                  <div className="mt-3 space-y-2 text-sm">
+                    <div className="flex items-center justify-between gap-3">
+                      <span className="text-gf-muted">Config loaded</span>
+                      <span>{boolLabel(snapshot.runner.diagnostics?.config_loaded)}</span>
+                    </div>
+                    <div className="flex items-center justify-between gap-3">
+                      <span className="text-gf-muted">API key present</span>
+                      <span>{boolLabel(snapshot.runner.diagnostics?.api_key_present)}</span>
+                    </div>
+                    <div className="flex items-center justify-between gap-3">
+                      <span className="text-gf-muted">OpenAI key present</span>
+                      <span>{boolLabel(snapshot.runner.diagnostics?.openai_key_present)}</span>
+                    </div>
+                    <div className="flex items-center justify-between gap-3">
+                      <span className="text-gf-muted">Memory API reachable</span>
+                      <span>{boolLabel(snapshot.runner.diagnostics?.memory_api_reachable)}</span>
+                    </div>
+                    <div>
+                      <p className="text-gf-muted">Memory base URL</p>
+                      <p className="mt-1 text-white break-all">{snapshot.runner.diagnostics?.memory_base_url || "Not reported"}</p>
+                    </div>
+                    <div>
+                      <p className="text-gf-muted">Reachability checked</p>
+                      <p className="mt-1 text-white">{formatDate(snapshot.runner.diagnostics?.last_reachability_check_at)}</p>
+                    </div>
+                    <div>
+                      <p className="text-gf-muted">Diagnostics summary</p>
+                      <p className="mt-1 text-white">{snapshot.runner.diagnostics?.startup_message || "No diagnostics summary yet."}</p>
+                    </div>
+                  </div>
                 </div>
                 <div className="rounded-xl border border-gf-border bg-gf-black/20 p-4">
                   <p className="text-sm text-gf-muted">Last dashboard control</p>
@@ -707,6 +772,11 @@ export function MarketingConsole({ initialSnapshot }: MarketingConsoleProps) {
                       </Button>
                     )}
                   </div>
+                </div>
+                <div className="rounded-xl border border-gf-border bg-gf-black/20 p-4">
+                  <p className="text-sm text-gf-muted">Start this locally</p>
+                  <p className="mt-1 text-white">Open a terminal in this project and run the worker in a visible window so you can watch startup and task output live:</p>
+                  <code className="mt-3 block rounded-lg bg-black/40 px-3 py-2 text-xs text-white">npm run runner:marketing</code>
                 </div>
               </div>
             </Card>

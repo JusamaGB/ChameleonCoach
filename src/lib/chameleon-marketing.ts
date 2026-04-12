@@ -77,6 +77,20 @@ export type MarketingRunnerState = {
   autoscan_enabled?: boolean
   control_requested_at?: string | null
   last_control_action?: string | null
+  last_control_acknowledged_at?: string | null
+  last_startup_attempt_at?: string | null
+  last_startup_status?: string | null
+  last_startup_message?: string | null
+  diagnostics?: {
+    config_loaded?: boolean
+    api_key_present?: boolean
+    openai_key_present?: boolean
+    memory_base_url?: string
+    memory_api_reachable?: boolean
+    last_reachability_check_at?: string | null
+    startup_ready?: boolean
+    startup_message?: string | null
+  }
 }
 
 export type MarketingSnapshot = {
@@ -198,6 +212,14 @@ function normalizeRunner(data: Record<string, any> | null, pendingQueueCount: nu
     autoscan_enabled: data?.autoscan_enabled ?? true,
     control_requested_at: data?.control_requested_at ?? null,
     last_control_action: data?.last_control_action ?? null,
+    last_control_acknowledged_at: data?.last_control_acknowledged_at ?? null,
+    last_startup_attempt_at: data?.last_startup_attempt_at ?? null,
+    last_startup_status: data?.last_startup_status ?? null,
+    last_startup_message: data?.last_startup_message ?? null,
+    diagnostics:
+      data?.diagnostics && typeof data.diagnostics === "object" && !Array.isArray(data.diagnostics)
+        ? data.diagnostics
+        : undefined,
   }
 }
 

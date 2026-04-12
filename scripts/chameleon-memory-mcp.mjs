@@ -1,6 +1,10 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
+import { existsSync, readFileSync } from "node:fs";
+import path from "node:path";
 import { z } from "zod";
+
+loadLocalEnv();
 
 const baseUrl = (process.env.CHAMELEON_MEMORY_BASE_URL || "http://127.0.0.1:3000").replace(/\/+$/, "");
 const apiKey = process.env.CHAMELEON_MCP_API_KEY || "";
@@ -9,6 +13,34 @@ const agentId = process.env.CHAMELEON_AGENT_ID || "MARKETING";
 if (!apiKey) {
   console.error("CHAMELEON_MCP_API_KEY is required");
   process.exit(1);
+}
+
+function loadLocalEnv() {
+  const envPath = path.resolve(process.cwd(), ".env.local");
+  if (!existsSync(envPath)) {
+    return;
+  }
+
+  const lines = readFileSync(envPath, "utf8").split(/\r?\n/);
+  for (const rawLine of lines) {
+    const line = rawLine.trim();
+    if (!line || line.startsWith("#")) continue;
+    const equalsIndex = line.indexOf("=");
+    if (equalsIndex <= 0) continue;
+
+    const key = line.slice(0, equalsIndex).trim();
+    if (!key || process.env[key]) continue;
+
+    let value = line.slice(equalsIndex + 1).trim();
+    if (
+      (value.startsWith('"') && value.endsWith('"')) ||
+      (value.startsWith("'") && value.endsWith("'"))
+    ) {
+      value = value.slice(1, -1);
+    }
+
+    process.env[key] = value;
+  }
 }
 
 function buildHeaders() {

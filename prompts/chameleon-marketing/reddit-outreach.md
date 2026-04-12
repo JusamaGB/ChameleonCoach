@@ -13,6 +13,7 @@ Return JSON with this shape:
 
 Requirements:
 - Write 2 or 3 variants.
+- Base the drafts on the supplied MCP-derived context, not unstated assumptions.
 - Sound like a real founder/operator, not a sales script.
 - Reference the lead's workflow pain in a natural way.
 - Keep each draft concise enough for Reddit DM or private follow-up.

@@ -1,6 +1,9 @@
 import { readFile } from "node:fs/promises";
+import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+
+loadLocalEnv();
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -34,6 +37,34 @@ if (!apiKey) {
   process.exit(1);
 }
 
+function loadLocalEnv() {
+  const envPath = path.resolve(process.cwd(), ".env.local");
+  if (!existsSync(envPath)) {
+    return;
+  }
+
+  const lines = readFileSync(envPath, "utf8").split(/\r?\n/);
+  for (const rawLine of lines) {
+    const line = rawLine.trim();
+    if (!line || line.startsWith("#")) continue;
+    const equalsIndex = line.indexOf("=");
+    if (equalsIndex <= 0) continue;
+
+    const key = line.slice(0, equalsIndex).trim();
+    if (!key || process.env[key]) continue;
+
+    let value = line.slice(equalsIndex + 1).trim();
+    if (
+      (value.startsWith('"') && value.endsWith('"')) ||
+      (value.startsWith("'") && value.endsWith("'"))
+    ) {
+      value = value.slice(1, -1);
+    }
+
+    process.env[key] = value;
+  }
+}
+
 let stableRulesCache = null;
 let shuttingDown = false;
 
@@ -63,22 +94,52 @@ main().catch(async (error) => {
     status: "error",
     current_task_key: null,
     last_error: error instanceof Error ? error.message : "Unknown runner error",
+    last_startup_status: "failed",
+    last_startup_message: error instanceof Error ? error.message : "Unknown runner error",
     recent_actions: appendAction([], "Runner crashed during startup."),
   }).catch(() => {});
   process.exit(1);
 });
 
 async function main() {
+  const startupAttemptAt = nowIso();
+  const startupDiagnostics = await runStartupDiagnostics();
+
   await patchRunnerState({
     agent: agentId,
-    status: "starting",
+    status: startupDiagnostics.startup_ready ? "starting" : "blocked",
     current_task_key: null,
-    last_error: null,
+    last_error: startupDiagnostics.startup_ready ? null : startupDiagnostics.startup_message,
+    last_startup_attempt_at: startupAttemptAt,
+    last_startup_status: startupDiagnostics.startup_ready ? "ok" : "blocked",
+    last_startup_message: startupDiagnostics.startup_message,
+    diagnostics: startupDiagnostics,
     recent_actions: appendAction([], "Runner booted."),
   });
 
+  await emitRunnerLog(
+    startupDiagnostics.startup_ready ? "GENERAL" : "HUMAN_NEEDED",
+    startupDiagnostics.startup_ready
+      ? `Runner startup checks passed. Memory API reachable at ${startupDiagnostics.memory_base_url}.`
+      : `Runner startup checks failed: ${startupDiagnostics.startup_message}`,
+    startupDiagnostics.startup_ready ? "normal" : "high"
+  ).catch(() => {});
+
   while (!shuttingDown) {
     try {
+      const cycleDiagnostics = await runStartupDiagnostics();
+      await patchRunnerState({
+        diagnostics: cycleDiagnostics,
+        last_startup_status: cycleDiagnostics.startup_ready ? "ok" : "blocked",
+        last_startup_message: cycleDiagnostics.startup_message,
+      });
+
+      if (!cycleDiagnostics.startup_ready) {
+        await addRunnerAction(`Startup diagnostics blocked execution: ${cycleDiagnostics.startup_message}`);
+        await sleep(runnerIntervalMs);
+        continue;
+      }
+
       await runOnce();
     } catch (error) {
       const message = error instanceof Error ? error.message : "Unknown runner error";
@@ -89,11 +150,7 @@ async function main() {
         last_error: message,
       });
       await addRunnerAction(`Runner error: ${message}`);
-      await sendBoardMessage({
-        tag: "HUMAN_NEEDED",
-        priority: "high",
-        content: `Marketing runner error: ${message}`,
-      }).catch(() => {});
+      await emitRunnerLog("HUMAN_NEEDED", `Marketing runner error: ${message}`, "high").catch(() => {});
     }
 
     await sleep(runnerIntervalMs);
@@ -144,20 +201,15 @@ async function runOnce() {
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown task failure";
     await failTask(task.key, message);
-    await patchRunnerState({
-      status: "error",
-      current_task_key: null,
-      last_error: message,
-    });
-    await addRunnerAction(`Task ${task.key} failed: ${message}`);
-    await sendBoardMessage({
-      tag: "HUMAN_NEEDED",
-      priority: "high",
-      content: `Task ${task.key} failed: ${message}`,
-      ref_id: task.key,
-    }).catch(() => {});
-    return;
-  }
+  await patchRunnerState({
+    status: "error",
+    current_task_key: null,
+    last_error: message,
+  });
+  await addRunnerAction(`Task ${task.key} failed: ${message}`);
+  await emitRunnerLog("HUMAN_NEEDED", `Task ${task.key} failed: ${message}`, "high", task.key).catch(() => {});
+  return;
+}
 
   await patchRunnerState({
     status: "idle",
@@ -184,6 +236,7 @@ async function acknowledgeRunnerControls() {
     last_control_acknowledged_at: controlRequestedAt,
   });
   await addRunnerAction(`Dashboard control received: ${action}.`);
+  await emitRunnerLog("DIRECTIVE", `Dashboard control acknowledged: ${action}.`, "normal", RUNNER_KEY).catch(() => {});
 }
 
 async function processRedditScan(task) {
@@ -353,11 +406,7 @@ async function processRedditScan(task) {
   });
 
   await addRunnerAction(`Reddit scan finished: ${savedCount} new leads, ${queuedCount} tasks queued.`);
-  await sendBoardMessage({
-    tag: "GENERAL",
-    content: `Reddit scan finished. New leads: ${savedCount}. Refreshed leads: ${refreshedCount}. Follow-on tasks queued: ${queuedCount}.`,
-    ref_id: task.key,
-  }).catch(() => {});
+  await emitRunnerLog("GENERAL", `Reddit scan finished. New leads: ${savedCount}. Refreshed leads: ${refreshedCount}. Follow-on tasks queued: ${queuedCount}.`, "normal", task.key).catch(() => {});
 }
 
 async function processLeadSummary(task) {
@@ -484,11 +533,7 @@ async function processDraftTask(task) {
   });
 
   await addRunnerAction(`Drafted ${draftKeys.length} variant(s) for task ${task.key}.`);
-  await sendBoardMessage({
-    tag: "GENERAL",
-    content: `Drafts generated for ${task.key}: ${draftKeys.join(", ")}`,
-    ref_id: task.key,
-  }).catch(() => {});
+  await emitRunnerLog("GENERAL", `Drafts generated for ${task.key}: ${draftKeys.join(", ")}`, "normal", task.key).catch(() => {});
 }
 
 async function syncSentDraftFollowUps() {
@@ -1025,6 +1070,55 @@ async function patchRunnerState(patch) {
   }
 }
 
+async function runStartupDiagnostics() {
+  const checkedAt = nowIso();
+  const memoryCheck = await checkMemoryApiReachable();
+  const startupReady = Boolean(apiKey) && memoryCheck.reachable;
+
+  return {
+    config_loaded: true,
+    api_key_present: Boolean(apiKey),
+    openai_key_present: Boolean(openAiApiKey),
+    memory_base_url: baseUrl,
+    memory_api_reachable: memoryCheck.reachable,
+    last_reachability_check_at: checkedAt,
+    startup_ready: startupReady,
+    startup_message: startupReady
+      ? "Ready to process queued work."
+      : !apiKey
+        ? "Missing CHAMELEON_MCP_API_KEY."
+        : memoryCheck.message,
+  };
+}
+
+async function checkMemoryApiReachable() {
+  try {
+    const response = await fetch(`${baseUrl}/api/chameleon-memory/health`, {
+      headers: {
+        "x-chameleon-api-key": apiKey,
+        "x-agent": agentId,
+      },
+    });
+
+    if (!response.ok) {
+      return {
+        reachable: false,
+        message: `Memory API returned HTTP ${response.status}.`,
+      };
+    }
+
+    return {
+      reachable: true,
+      message: "Memory API reachable.",
+    };
+  } catch (error) {
+    return {
+      reachable: false,
+      message: error instanceof Error ? `Memory API unreachable: ${error.message}` : "Memory API unreachable.",
+    };
+  }
+}
+
 async function getPendingQueueCount() {
   const tasks = await loadTaskEntries();
   return tasks.filter((entry) => ["queued", "claimed", "revision_requested"].includes(entry.data.status)).length;
@@ -1064,6 +1158,15 @@ async function sendBoardMessage({ tag, content, type = "broadcast", recipients, 
     content,
     type,
     recipients,
+    priority,
+    ref_id,
+  });
+}
+
+async function emitRunnerLog(tag, content, priority = "normal", ref_id) {
+  return sendBoardMessage({
+    tag,
+    content,
     priority,
     ref_id,
   });
