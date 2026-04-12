@@ -116,7 +116,20 @@ Optional Reddit config:
 - `CHAMELEON_REDDIT_AUTOSCAN_MINUTES`
 - `CHAMELEON_REDDIT_SUBREDDITS`
 - `CHAMELEON_REDDIT_SEARCH_TERMS`
-- `CHAMELEON_OPENAI_MODEL`
+- `CHAMELEON_BUDGET_MODE`
+- `CHAMELEON_OPENAI_MODEL_DISCOVERY`
+- `CHAMELEON_OPENAI_MODEL_DRAFTING`
+- `CHAMELEON_OPENAI_MODEL_REVISION`
+- `CHAMELEON_MAX_DRAFT_VARIANTS`
+- `CHAMELEON_MAX_OUTPUT_TOKENS`
+
+Recommended low-cost default:
+
+- discovery and lead summary on `gpt-5-nano`
+- outreach and follow-up drafting on `gpt-5-mini`
+- revision on `gpt-5-mini`
+- max 2 variants
+- max 500 output tokens
 
 ## Lifecycle rules
 

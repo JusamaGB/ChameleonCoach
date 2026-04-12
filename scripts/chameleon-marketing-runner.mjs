@@ -14,7 +14,15 @@ const baseUrl = (process.env.CHAMELEON_MEMORY_BASE_URL || "http://127.0.0.1:3000
 const apiKey = process.env.CHAMELEON_MCP_API_KEY || "";
 const agentId = (process.env.CHAMELEON_AGENT_ID || "MARKETING").toUpperCase();
 const openAiApiKey = process.env.OPENAI_API_KEY || "";
-const openAiModel = process.env.CHAMELEON_OPENAI_MODEL || "gpt-4.1-mini";
+const defaultBudgetMode = (process.env.CHAMELEON_BUDGET_MODE || "true").toLowerCase() !== "false";
+const discoveryModelDefault =
+  process.env.CHAMELEON_OPENAI_MODEL_DISCOVERY || process.env.CHAMELEON_OPENAI_MODEL || "gpt-5-nano";
+const draftingModelDefault =
+  process.env.CHAMELEON_OPENAI_MODEL_DRAFTING || process.env.CHAMELEON_OPENAI_MODEL || "gpt-5-mini";
+const revisionModelDefault =
+  process.env.CHAMELEON_OPENAI_MODEL_REVISION || process.env.CHAMELEON_OPENAI_MODEL || "gpt-5-mini";
+const maxDraftVariantsDefault = Number(process.env.CHAMELEON_MAX_DRAFT_VARIANTS || 2);
+const maxOutputTokensDefault = Number(process.env.CHAMELEON_MAX_OUTPUT_TOKENS || 500);
 const runnerIntervalMs = Number(process.env.CHAMELEON_RUNNER_INTERVAL_MS || 45000);
 const autoScanEnabled = (process.env.CHAMELEON_REDDIT_AUTOSCAN || "true").toLowerCase() !== "false";
 const autoScanEveryMinutes = Number(process.env.CHAMELEON_REDDIT_AUTOSCAN_MINUTES || 45);
@@ -104,6 +112,7 @@ main().catch(async (error) => {
 async function main() {
   const startupAttemptAt = nowIso();
   const startupDiagnostics = await runStartupDiagnostics();
+  const runnerSettings = await getRunnerSettings();
 
   await patchRunnerState({
     agent: agentId,
@@ -113,6 +122,9 @@ async function main() {
     last_startup_attempt_at: startupAttemptAt,
     last_startup_status: startupDiagnostics.startup_ready ? "ok" : "blocked",
     last_startup_message: startupDiagnostics.startup_message,
+    budget_mode: runnerSettings.budget_mode,
+    model_preferences: runnerSettings.model_preferences,
+    output_limits: runnerSettings.output_limits,
     diagnostics: startupDiagnostics,
     recent_actions: appendAction([], "Runner booted."),
   });
@@ -128,10 +140,14 @@ async function main() {
   while (!shuttingDown) {
     try {
       const cycleDiagnostics = await runStartupDiagnostics();
+      const currentRunnerSettings = await getRunnerSettings();
       await patchRunnerState({
         diagnostics: cycleDiagnostics,
         last_startup_status: cycleDiagnostics.startup_ready ? "ok" : "blocked",
         last_startup_message: cycleDiagnostics.startup_message,
+        budget_mode: currentRunnerSettings.budget_mode,
+        model_preferences: currentRunnerSettings.model_preferences,
+        output_limits: currentRunnerSettings.output_limits,
       });
 
       if (!cycleDiagnostics.startup_ready) {
@@ -410,6 +426,7 @@ async function processRedditScan(task) {
 }
 
 async function processLeadSummary(task) {
+  const runnerSettings = await getRunnerSettings();
   if (!task.data.lead_key) {
     throw new Error("Lead summary task is missing lead_key");
   }
@@ -425,6 +442,8 @@ async function processLeadSummary(task) {
     .slice(0, 3);
 
   const output = await generateStructuredOutput({
+    taskType: task.data.task_type,
+    runnerSettings,
     recipe: "lead-summary.md",
     context: {
       task,
@@ -460,6 +479,7 @@ async function processLeadSummary(task) {
 }
 
 async function processDraftTask(task) {
+  const runnerSettings = await getRunnerSettings();
   const lead = task.data.lead_key ? await memoryRead("leads", task.data.lead_key) : null;
   const conversations = task.data.lead_key
     ? (await loadSectorEntries("conversations"))
@@ -472,6 +492,8 @@ async function processDraftTask(task) {
 
   const recipe = resolveDraftRecipe(task.data.task_type);
   const output = await generateStructuredOutput({
+    taskType: task.data.task_type,
+    runnerSettings,
     recipe,
     context: {
       task,
@@ -483,7 +505,9 @@ async function processDraftTask(task) {
     fallback: () => buildFallbackDraftOutput(task, lead?.data || null, conversations.map((entry) => entry.data), sourceDraft?.data || null),
   });
 
-  const variants = Array.isArray(output.variants) ? output.variants.slice(0, 3) : [];
+  const variants = Array.isArray(output.variants)
+    ? output.variants.slice(0, clampNumber(runnerSettings.output_limits.max_draft_variants, 1, 3, 2))
+    : [];
   if (variants.length === 0) {
     throw new Error("Draft task did not return any variants");
   }
@@ -861,7 +885,7 @@ function buildLeadNote(candidate, scored) {
     .join("\n");
 }
 
-async function generateStructuredOutput({ recipe, context, fallback }) {
+async function generateStructuredOutput({ taskType, runnerSettings, recipe, context, fallback }) {
   const stableRules = await loadStableRules();
   const recipePrompt = await readPrompt(recipe);
 
@@ -870,6 +894,13 @@ async function generateStructuredOutput({ recipe, context, fallback }) {
   }
 
   try {
+    const model = selectModelForTask(taskType, runnerSettings);
+    const maxOutputTokens = clampNumber(
+      runnerSettings?.output_limits?.max_output_tokens,
+      150,
+      1200,
+      maxOutputTokensDefault
+    );
     const response = await fetch("https://api.openai.com/v1/responses", {
       method: "POST",
       headers: {
@@ -877,7 +908,8 @@ async function generateStructuredOutput({ recipe, context, fallback }) {
         authorization: `Bearer ${openAiApiKey}`,
       },
       body: JSON.stringify({
-        model: openAiModel,
+        model,
+        max_output_tokens: maxOutputTokens,
         input: [
           {
             role: "system",
@@ -906,6 +938,44 @@ async function generateStructuredOutput({ recipe, context, fallback }) {
     await addRunnerAction(`AI generation fell back to template output: ${error instanceof Error ? error.message : "unknown error"}`);
     return fallback();
   }
+}
+
+function selectModelForTask(taskType, runnerSettings) {
+  if (taskType === "scan_reddit_leads" || taskType === "lead_summary") {
+    return runnerSettings?.model_preferences?.discovery || discoveryModelDefault;
+  }
+
+  if (taskType === "revise_marketing_copy") {
+    return runnerSettings?.model_preferences?.revision || revisionModelDefault;
+  }
+
+  return runnerSettings?.model_preferences?.drafting || draftingModelDefault;
+}
+
+async function getRunnerSettings() {
+  const runner = await memoryRead("state", RUNNER_KEY, true);
+  const data = runner?.data || {};
+
+  return {
+    budget_mode: data.budget_mode ?? defaultBudgetMode,
+    model_preferences: {
+      discovery: data.model_preferences?.discovery || discoveryModelDefault,
+      drafting: data.model_preferences?.drafting || draftingModelDefault,
+      revision: data.model_preferences?.revision || revisionModelDefault,
+    },
+    output_limits: {
+      max_draft_variants: clampNumber(data.output_limits?.max_draft_variants, 1, 3, maxDraftVariantsDefault),
+      max_output_tokens: clampNumber(data.output_limits?.max_output_tokens, 150, 1200, maxOutputTokensDefault),
+    },
+  };
+}
+
+function clampNumber(value, min, max, fallback) {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) {
+    return fallback;
+  }
+  return Math.max(min, Math.min(max, numeric));
 }
 
 function buildFallbackLeadSummary(lead, conversations) {

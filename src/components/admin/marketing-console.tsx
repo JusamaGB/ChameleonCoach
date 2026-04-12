@@ -35,6 +35,15 @@ type TaskFormState = {
   priority: string
 }
 
+type RunnerSettingsFormState = {
+  budget_mode: "on" | "off"
+  discovery_model: string
+  drafting_model: string
+  revision_model: string
+  max_draft_variants: string
+  max_output_tokens: string
+}
+
 const defaultLeadForm: LeadFormState = {
   full_name: "",
   platform: "reddit",
@@ -92,6 +101,17 @@ function trimPreview(value: string | null | undefined, max = 180) {
   return text.length > max ? `${text.slice(0, max).trim()}...` : text
 }
 
+function buildRunnerSettingsForm(snapshot: MarketingSnapshot): RunnerSettingsFormState {
+  return {
+    budget_mode: snapshot.runner.budget_mode === false ? "off" : "on",
+    discovery_model: snapshot.runner.model_preferences?.discovery || "gpt-5-nano",
+    drafting_model: snapshot.runner.model_preferences?.drafting || "gpt-5-mini",
+    revision_model: snapshot.runner.model_preferences?.revision || "gpt-5-mini",
+    max_draft_variants: String(snapshot.runner.output_limits?.max_draft_variants ?? 2),
+    max_output_tokens: String(snapshot.runner.output_limits?.max_output_tokens ?? 500),
+  }
+}
+
 export function MarketingConsole({ initialSnapshot }: MarketingConsoleProps) {
   const [snapshot, setSnapshot] = useState(initialSnapshot)
   const [activeTab, setActiveTab] = useState<"operations" | "mcp">("operations")
@@ -101,6 +121,7 @@ export function MarketingConsole({ initialSnapshot }: MarketingConsoleProps) {
   const [draftEdits, setDraftEdits] = useState<Record<string, string>>({})
   const [draftNotes, setDraftNotes] = useState<Record<string, string>>({})
   const [message, setMessage] = useState<string>("")
+  const [runnerSettingsForm, setRunnerSettingsForm] = useState<RunnerSettingsFormState>(() => buildRunnerSettingsForm(initialSnapshot))
   const [isPending, startTransition] = useTransition()
 
   const leads = snapshot.leads
@@ -180,6 +201,25 @@ export function MarketingConsole({ initialSnapshot }: MarketingConsoleProps) {
           payload: { action },
         },
         successMessage
+      )
+    })
+  }
+
+  function saveRunnerSettings() {
+    startTransition(() => {
+      void submitAction(
+        {
+          action: "runner_settings",
+          payload: {
+            budget_mode: runnerSettingsForm.budget_mode === "on",
+            discovery_model: runnerSettingsForm.discovery_model,
+            drafting_model: runnerSettingsForm.drafting_model,
+            revision_model: runnerSettingsForm.revision_model,
+            max_draft_variants: Number(runnerSettingsForm.max_draft_variants || 2),
+            max_output_tokens: Number(runnerSettingsForm.max_output_tokens || 500),
+          },
+        },
+        "Runner budget settings updated."
       )
     })
   }
@@ -666,6 +706,82 @@ export function MarketingConsole({ initialSnapshot }: MarketingConsoleProps) {
                 <p className="text-gf-muted">Last error</p>
                 <p className="mt-1 text-white">{snapshot.runner.last_error || "None"}</p>
               </div>
+              <div className="rounded-xl border border-gf-border bg-gf-black/20 p-4">
+                <p className="text-gf-muted">Budget controls</p>
+                <p className="mt-1 text-white">Default to cheap discovery and keep drafting capped unless you deliberately open it up.</p>
+                <div className="mt-4 grid gap-3 md:grid-cols-2">
+                  <Select
+                    label="Budget mode"
+                    value={runnerSettingsForm.budget_mode}
+                    onChange={(e) => setRunnerSettingsForm((current) => ({ ...current, budget_mode: e.target.value as "on" | "off" }))}
+                    options={[
+                      { value: "on", label: "On" },
+                      { value: "off", label: "Off" },
+                    ]}
+                  />
+                  <Input
+                    label="Max draft variants"
+                    type="number"
+                    min="1"
+                    max="3"
+                    value={runnerSettingsForm.max_draft_variants}
+                    onChange={(e) => setRunnerSettingsForm((current) => ({ ...current, max_draft_variants: e.target.value }))}
+                  />
+                  <Input
+                    label="Discovery model"
+                    value={runnerSettingsForm.discovery_model}
+                    onChange={(e) => setRunnerSettingsForm((current) => ({ ...current, discovery_model: e.target.value }))}
+                  />
+                  <Input
+                    label="Drafting model"
+                    value={runnerSettingsForm.drafting_model}
+                    onChange={(e) => setRunnerSettingsForm((current) => ({ ...current, drafting_model: e.target.value }))}
+                  />
+                  <Input
+                    label="Revision model"
+                    value={runnerSettingsForm.revision_model}
+                    onChange={(e) => setRunnerSettingsForm((current) => ({ ...current, revision_model: e.target.value }))}
+                  />
+                  <Input
+                    label="Max output tokens"
+                    type="number"
+                    min="150"
+                    max="1200"
+                    value={runnerSettingsForm.max_output_tokens}
+                    onChange={(e) => setRunnerSettingsForm((current) => ({ ...current, max_output_tokens: e.target.value }))}
+                  />
+                </div>
+                <div className="mt-4 flex flex-wrap gap-2">
+                  <Button size="sm" onClick={saveRunnerSettings} disabled={isPending}>
+                    Save budget settings
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => setRunnerSettingsForm(buildRunnerSettingsForm(snapshot))}
+                    disabled={isPending}
+                  >
+                    Load current settings
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    onClick={() =>
+                      setRunnerSettingsForm({
+                        budget_mode: "on",
+                        discovery_model: "gpt-5-nano",
+                        drafting_model: "gpt-5-mini",
+                        revision_model: "gpt-5-mini",
+                        max_draft_variants: "2",
+                        max_output_tokens: "500",
+                      })
+                    }
+                    disabled={isPending}
+                  >
+                    Reset to safe defaults
+                  </Button>
+                </div>
+              </div>
               <div>
                 <p className="text-gf-muted">Recent actions</p>
                 {snapshot.runner.recent_actions.length === 0 ? (
@@ -801,8 +917,24 @@ export function MarketingConsole({ initialSnapshot }: MarketingConsoleProps) {
                       <span>{boolLabel(snapshot.runner.diagnostics?.openai_key_present)}</span>
                     </div>
                     <div className="flex items-center justify-between gap-3">
+                      <span className="text-gf-muted">Budget mode</span>
+                      <span>{snapshot.runner.budget_mode === false ? "Off" : "On"}</span>
+                    </div>
+                    <div className="flex items-center justify-between gap-3">
                       <span className="text-gf-muted">Memory API reachable</span>
                       <span>{boolLabel(snapshot.runner.diagnostics?.memory_api_reachable)}</span>
+                    </div>
+                    <div>
+                      <p className="text-gf-muted">Model routing</p>
+                      <p className="mt-1 text-white">
+                        Discovery: {snapshot.runner.model_preferences?.discovery || "gpt-5-nano"} | Drafting: {snapshot.runner.model_preferences?.drafting || "gpt-5-mini"} | Revision: {snapshot.runner.model_preferences?.revision || "gpt-5-mini"}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-gf-muted">Output limits</p>
+                      <p className="mt-1 text-white">
+                        {snapshot.runner.output_limits?.max_draft_variants ?? 2} variants max | {snapshot.runner.output_limits?.max_output_tokens ?? 500} output tokens max
+                      </p>
                     </div>
                     <div>
                       <p className="text-gf-muted">Memory base URL</p>

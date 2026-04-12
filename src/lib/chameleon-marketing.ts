@@ -89,6 +89,16 @@ export type MarketingRunnerState = {
   last_startup_attempt_at?: string | null
   last_startup_status?: string | null
   last_startup_message?: string | null
+  budget_mode?: boolean
+  model_preferences?: {
+    discovery?: string
+    drafting?: string
+    revision?: string
+  }
+  output_limits?: {
+    max_draft_variants?: number
+    max_output_tokens?: number
+  }
   diagnostics?: {
     config_loaded?: boolean
     api_key_present?: boolean
@@ -232,6 +242,22 @@ function normalizeRunner(data: Record<string, any> | null, pendingQueueCount: nu
     last_startup_attempt_at: data?.last_startup_attempt_at ?? null,
     last_startup_status: data?.last_startup_status ?? null,
     last_startup_message: data?.last_startup_message ?? null,
+    budget_mode: data?.budget_mode ?? true,
+    model_preferences:
+      data?.model_preferences && typeof data.model_preferences === "object" && !Array.isArray(data.model_preferences)
+        ? data.model_preferences
+        : {
+            discovery: "gpt-5-nano",
+            drafting: "gpt-5-mini",
+            revision: "gpt-5-mini",
+          },
+    output_limits:
+      data?.output_limits && typeof data.output_limits === "object" && !Array.isArray(data.output_limits)
+        ? data.output_limits
+        : {
+            max_draft_variants: 2,
+            max_output_tokens: 500,
+          },
     diagnostics:
       data?.diagnostics && typeof data.diagnostics === "object" && !Array.isArray(data.diagnostics)
         ? data.diagnostics
@@ -617,6 +643,16 @@ export async function controlMarketingRunner(
       pending_queue_count: 0,
       recent_actions: [],
       autoscan_enabled: input.action === "pause_autoscan" ? false : true,
+      budget_mode: true,
+      model_preferences: {
+        discovery: "gpt-5-nano",
+        drafting: "gpt-5-mini",
+        revision: "gpt-5-mini",
+      },
+      output_limits: {
+        max_draft_variants: 2,
+        max_output_tokens: 500,
+      },
       created_at: timestamp,
       ...patch,
     })
@@ -672,5 +708,108 @@ export async function controlMarketingRunner(
     ok: true,
     action: input.action,
     runner_key: RUNNER_KEY,
+  }
+}
+
+export async function updateMarketingRunnerSettings(
+  supabase: SupabaseClient,
+  userId: string,
+  input: {
+    budget_mode?: boolean
+    discovery_model?: string
+    drafting_model?: string
+    revision_model?: string
+    max_draft_variants?: number
+    max_output_tokens?: number
+  }
+) {
+  const timestamp = nowIso()
+  const existingRunner = await readEntry(supabase, "state", RUNNER_KEY)
+  const currentData = (existingRunner?.data as Record<string, any> | null) ?? {}
+  const budgetMode = typeof input.budget_mode === "boolean" ? input.budget_mode : currentData.budget_mode ?? true
+
+  const patch: Record<string, any> = {
+    updated_at: timestamp,
+  }
+
+  if (typeof input.budget_mode === "boolean") {
+    patch.budget_mode = input.budget_mode
+  }
+
+  const currentModels =
+    currentData.model_preferences && typeof currentData.model_preferences === "object" && !Array.isArray(currentData.model_preferences)
+      ? currentData.model_preferences
+      : {}
+  patch.model_preferences = {
+    discovery: input.discovery_model?.trim() || currentModels.discovery || "gpt-5-nano",
+    drafting: input.drafting_model?.trim() || currentModels.drafting || "gpt-5-mini",
+    revision: input.revision_model?.trim() || currentModels.revision || "gpt-5-mini",
+  }
+
+  const currentLimits =
+    currentData.output_limits && typeof currentData.output_limits === "object" && !Array.isArray(currentData.output_limits)
+      ? currentData.output_limits
+      : {}
+  patch.output_limits = {
+    max_draft_variants: Math.max(1, Math.min(3, Number(input.max_draft_variants ?? currentLimits.max_draft_variants ?? 2))),
+    max_output_tokens: Math.max(150, Math.min(1200, Number(input.max_output_tokens ?? currentLimits.max_output_tokens ?? 500))),
+  }
+
+  if (budgetMode) {
+    patch.model_preferences = {
+      discovery: input.discovery_model?.trim() || "gpt-5-nano",
+      drafting: input.drafting_model?.trim() || "gpt-5-mini",
+      revision: input.revision_model?.trim() || "gpt-5-mini",
+    }
+    patch.output_limits = {
+      max_draft_variants: Math.max(1, Math.min(2, Number(input.max_draft_variants ?? 2))),
+      max_output_tokens: Math.max(150, Math.min(500, Number(input.max_output_tokens ?? 500))),
+    }
+  }
+
+  if (existingRunner) {
+    await updateEntry(supabase, "state", RUNNER_KEY, patch)
+  } else {
+    await writeEntry(supabase, "state", RUNNER_KEY, {
+      agent: "MARKETING",
+      status: "offline",
+      current_task_key: null,
+      heartbeat_at: null,
+      last_error: null,
+      pending_queue_count: 0,
+      recent_actions: [],
+      autoscan_enabled: true,
+      created_at: timestamp,
+      ...patch,
+    })
+  }
+
+  await sendMessage(supabase, {
+    sender: "DASHBOARD",
+    tag: "RUNNER_SETTINGS",
+    type: "targeted",
+    recipients: ["MARKETING"],
+    priority: "normal",
+    content: `Runner settings updated. Budget mode: ${patch.budget_mode === false ? "off" : "on"}. Discovery model: ${patch.model_preferences.discovery}. Drafting model: ${patch.model_preferences.drafting}. Revision model: ${patch.model_preferences.revision}. Variant cap: ${patch.output_limits.max_draft_variants}. Output cap: ${patch.output_limits.max_output_tokens}.`,
+    ref_id: RUNNER_KEY,
+  })
+
+  await audit(supabase, {
+    op: "marketing_runner_settings_update",
+    sector: "state",
+    key: RUNNER_KEY,
+    agent: userId,
+    summary: "Updated marketing runner budget settings",
+    meta: {
+      budget_mode: patch.budget_mode,
+      model_preferences: patch.model_preferences,
+      output_limits: patch.output_limits,
+    },
+  })
+
+  return {
+    ok: true,
+    runner_key: RUNNER_KEY,
+    settings: patch,
   }
 }

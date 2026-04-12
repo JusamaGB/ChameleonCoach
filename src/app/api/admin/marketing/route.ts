@@ -8,6 +8,7 @@ import {
   getMarketingSnapshot,
   updateDraftWorkflow,
   updateMarketingLead,
+  updateMarketingRunnerSettings,
 } from "@/lib/chameleon-marketing"
 
 export const dynamic = "force-dynamic"
@@ -49,6 +50,10 @@ export async function POST(request: NextRequest) {
       }
       case "runner_control": {
         const result = await controlMarketingRunner(admin, user.id, body.payload)
+        return NextResponse.json(result)
+      }
+      case "runner_settings": {
+        const result = await updateMarketingRunnerSettings(admin, user.id, body.payload ?? {})
         return NextResponse.json(result)
       }
       default:
