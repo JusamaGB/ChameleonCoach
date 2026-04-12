@@ -19,6 +19,14 @@ export type MarketingLead = {
   next_follow_up_at: string | null
   status: string
   owner_user_id: string
+  fit_score?: number | null
+  ai_summary?: string
+  discovery_reason?: string
+  source_post_id?: string
+  source_permalink?: string
+  source_title?: string
+  source_excerpt?: string
+  discovered_at?: string | null
   created_at?: string
   updated_at?: string
 }
@@ -145,6 +153,14 @@ function asLead(key: string, data: Record<string, any>): MarketingLead {
     next_follow_up_at: data.next_follow_up_at ?? null,
     status: data.status ?? "active",
     owner_user_id: data.owner_user_id ?? "",
+    fit_score: typeof data.fit_score === "number" ? data.fit_score : null,
+    ai_summary: data.ai_summary ?? "",
+    discovery_reason: data.discovery_reason ?? "",
+    source_post_id: data.source_post_id ?? "",
+    source_permalink: data.source_permalink ?? "",
+    source_title: data.source_title ?? "",
+    source_excerpt: data.source_excerpt ?? "",
+    discovered_at: data.discovered_at ?? null,
     created_at: data.created_at,
     updated_at: data.updated_at,
   }

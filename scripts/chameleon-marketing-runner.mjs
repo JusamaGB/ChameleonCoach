@@ -1025,7 +1025,11 @@ async function readPrompt(fileName) {
 
 async function loadSectorEntries(sector) {
   const listed = await memoryList(sector);
-  const items = await Promise.all(listed.keys.map((entry) => memoryRead(sector, entry.key, true)));
+  const keys = Array.isArray(listed?.keys) ? listed.keys : [];
+  if (!Array.isArray(listed?.keys)) {
+    await addRunnerAction(`Sector list for ${sector} returned no keys array; treating as empty.`);
+  }
+  const items = await Promise.all(keys.map((entry) => memoryRead(sector, entry.key, true)));
   return items.filter(Boolean);
 }
 

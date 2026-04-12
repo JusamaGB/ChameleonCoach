@@ -86,6 +86,12 @@ function boolLabel(value: boolean | null | undefined) {
   return "Unknown"
 }
 
+function trimPreview(value: string | null | undefined, max = 180) {
+  const text = (value ?? "").trim()
+  if (!text) return ""
+  return text.length > max ? `${text.slice(0, max).trim()}...` : text
+}
+
 export function MarketingConsole({ initialSnapshot }: MarketingConsoleProps) {
   const [snapshot, setSnapshot] = useState(initialSnapshot)
   const [activeTab, setActiveTab] = useState<"operations" | "mcp">("operations")
@@ -333,12 +339,76 @@ export function MarketingConsole({ initialSnapshot }: MarketingConsoleProps) {
                       <Badge variant={statusBadgeVariant(lead.temperature)}>{lead.temperature}</Badge>
                     </div>
                   </div>
-                  <p className="text-sm text-gf-muted mt-3">{lead.notes || "No notes yet."}</p>
+                  {typeof lead.fit_score === "number" ? (
+                    <p className="text-xs text-gf-muted mt-3">Fit score: {lead.fit_score}/10</p>
+                  ) : null}
+                  {lead.source_title ? (
+                    <p className="text-sm text-white mt-3">{lead.source_title}</p>
+                  ) : null}
+                  <p className="text-sm text-gf-muted mt-3">{trimPreview(lead.ai_summary || lead.notes) || "No notes yet."}</p>
+                  {lead.discovery_reason ? (
+                    <p className="text-xs text-gf-muted mt-3">Why matched: {lead.discovery_reason}</p>
+                  ) : null}
                   <p className="text-xs text-gf-muted mt-3">Follow-up: {formatDate(lead.next_follow_up_at)}</p>
                 </button>
               ))
             )}
           </div>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Lead Discovery Trace</CardTitle>
+            <p className="text-sm text-gf-muted mt-1">Source evidence for the currently selected lead.</p>
+          </CardHeader>
+          {selectedLeadKey ? (() => {
+            const selectedLead = leads.find((lead) => lead.key === selectedLeadKey)
+            if (!selectedLead) {
+              return <p className="text-sm text-gf-muted">Selected lead not found.</p>
+            }
+
+            return (
+              <div className="space-y-4">
+                <div className="rounded-xl border border-gf-border bg-gf-black/20 p-4">
+                  <p className="text-sm text-gf-muted">Lead</p>
+                  <p className="mt-1 text-white">{selectedLead.full_name} {selectedLead.handle ? `(@${selectedLead.handle})` : ""}</p>
+                  <p className="mt-1 text-xs text-gf-muted">{selectedLead.source}</p>
+                </div>
+                <div className="rounded-xl border border-gf-border bg-gf-black/20 p-4">
+                  <p className="text-sm text-gf-muted">Source post</p>
+                  <p className="mt-1 text-white">{selectedLead.source_title || "No source title recorded."}</p>
+                  {selectedLead.source_permalink ? (
+                    <a
+                      href={selectedLead.source_permalink}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="mt-2 inline-block text-sm text-gf-pink underline"
+                    >
+                      Open Reddit post
+                    </a>
+                  ) : null}
+                </div>
+                <div className="rounded-xl border border-gf-border bg-gf-black/20 p-4">
+                  <p className="text-sm text-gf-muted">Why the runner matched this lead</p>
+                  <p className="mt-1 text-white">{selectedLead.discovery_reason || "No discovery reason recorded yet."}</p>
+                  {typeof selectedLead.fit_score === "number" ? (
+                    <p className="mt-2 text-xs text-gf-muted">Fit score: {selectedLead.fit_score}/10</p>
+                  ) : null}
+                </div>
+                <div className="rounded-xl border border-gf-border bg-gf-black/20 p-4">
+                  <p className="text-sm text-gf-muted">Extracted context</p>
+                  <p className="mt-1 whitespace-pre-wrap text-white">{selectedLead.source_excerpt || "No excerpt recorded."}</p>
+                </div>
+                <div className="rounded-xl border border-gf-border bg-gf-black/20 p-4">
+                  <p className="text-sm text-gf-muted">AI summary</p>
+                  <p className="mt-1 whitespace-pre-wrap text-white">{selectedLead.ai_summary || "No AI summary recorded yet."}</p>
+                  <p className="mt-2 text-xs text-gf-muted">Discovered: {formatDate(selectedLead.discovered_at || selectedLead.created_at)}</p>
+                </div>
+              </div>
+            )
+          })() : (
+            <p className="text-sm text-gf-muted">Select a lead to inspect the Reddit discovery evidence.</p>
+          )}
         </Card>
 
         <Card>
