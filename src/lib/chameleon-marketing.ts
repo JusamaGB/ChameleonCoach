@@ -471,7 +471,7 @@ export async function updateCoachMarketingSettings(
 
   const patch = {
     user_id: userId,
-    marketing_budget_mode: null,
+    marketing_budget_mode: true,
     marketing_autoscan_enabled:
       typeof input.autoscan_enabled === "boolean" ? input.autoscan_enabled : existing.autoscan_enabled,
     marketing_model_discovery: null,
