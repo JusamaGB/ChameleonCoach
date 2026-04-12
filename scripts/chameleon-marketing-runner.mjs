@@ -13,15 +13,11 @@ const promptsDir = path.join(rootDir, "prompts", "chameleon-marketing");
 const baseUrl = (process.env.CHAMELEON_MEMORY_BASE_URL || "http://127.0.0.1:3000").replace(/\/+$/, "");
 const apiKey = process.env.CHAMELEON_MCP_API_KEY || "";
 const agentId = (process.env.CHAMELEON_AGENT_ID || "MARKETING").toUpperCase();
-const defaultBudgetMode = (process.env.CHAMELEON_BUDGET_MODE || "true").toLowerCase() !== "false";
-const discoveryModelDefault =
-  process.env.CHAMELEON_OPENAI_MODEL_DISCOVERY || process.env.CHAMELEON_OPENAI_MODEL || "gpt-5-nano";
-const draftingModelDefault =
-  process.env.CHAMELEON_OPENAI_MODEL_DRAFTING || process.env.CHAMELEON_OPENAI_MODEL || "gpt-5-mini";
-const revisionModelDefault =
-  process.env.CHAMELEON_OPENAI_MODEL_REVISION || process.env.CHAMELEON_OPENAI_MODEL || "gpt-5-mini";
-const maxDraftVariantsDefault = Number(process.env.CHAMELEON_MAX_DRAFT_VARIANTS || 2);
-const maxOutputTokensDefault = Number(process.env.CHAMELEON_MAX_OUTPUT_TOKENS || 500);
+const discoveryModelDefault = "gpt-5-nano";
+const draftingModelDefault = "gpt-5-mini";
+const revisionModelDefault = "gpt-5-mini";
+const maxDraftVariantsDefault = 1;
+const maxOutputTokensDefault = Number(process.env.CHAMELEON_MAX_OUTPUT_TOKENS || 150);
 const runnerIntervalMs = Number(process.env.CHAMELEON_RUNNER_INTERVAL_MS || 45000);
 const autoScanEnabled = (process.env.CHAMELEON_REDDIT_AUTOSCAN || "true").toLowerCase() !== "false";
 const autoScanEveryMinutes = Number(process.env.CHAMELEON_REDDIT_AUTOSCAN_MINUTES || 45);
@@ -35,6 +31,7 @@ const defaultSubreddits = splitCsv(
 );
 
 const RUNNER_KEY = "runner_marketing";
+const TOKEN_USAGE_KEY = "usage_marketing_tokens";
 const MAX_RECENT_ACTIONS = 20;
 const REDDIT_USER_AGENT = "G-Fitness-Chameleon-Marketing/1.0";
 const priorityRank = { high: 0, normal: 1, low: 2 };
@@ -121,7 +118,6 @@ async function main() {
     last_startup_attempt_at: startupAttemptAt,
     last_startup_status: startupDiagnostics.startup_ready ? "ok" : "blocked",
     last_startup_message: startupDiagnostics.startup_message,
-    budget_mode: runnerSettings.budget_mode,
     model_preferences: runnerSettings.model_preferences,
     output_limits: runnerSettings.output_limits,
     diagnostics: startupDiagnostics,
@@ -144,7 +140,6 @@ async function main() {
         diagnostics: cycleDiagnostics,
         last_startup_status: cycleDiagnostics.startup_ready ? "ok" : "blocked",
         last_startup_message: cycleDiagnostics.startup_message,
-        budget_mode: currentRunnerSettings.budget_mode,
         model_preferences: currentRunnerSettings.model_preferences,
         output_limits: currentRunnerSettings.output_limits,
       });
@@ -449,6 +444,7 @@ async function processLeadSummary(task) {
     taskType: task.data.task_type,
     runnerSettings,
     openAiApiKey: runnerSettings.openai_api_key,
+    ownerUserId,
     recipe: "lead-summary.md",
     context: {
       task,
@@ -501,6 +497,7 @@ async function processDraftTask(task) {
     taskType: task.data.task_type,
     runnerSettings,
     openAiApiKey: runnerSettings.openai_api_key,
+    ownerUserId,
     recipe,
     context: {
       task,
@@ -906,7 +903,7 @@ function buildLeadNote(candidate, scored) {
     .join("\n");
 }
 
-async function generateStructuredOutput({ taskType, runnerSettings, openAiApiKey, recipe, context, fallback }) {
+async function generateStructuredOutput({ taskType, runnerSettings, openAiApiKey, ownerUserId, recipe, context, fallback }) {
   const stableRules = await loadStableRules();
   const recipePrompt = await readPrompt(recipe);
 
@@ -949,6 +946,8 @@ async function generateStructuredOutput({ taskType, runnerSettings, openAiApiKey
       throw new Error(payload?.error?.message || `OpenAI HTTP ${response.status}`);
     }
 
+    await recordTokenUsage(ownerUserId, payload?.usage, model);
+
     const rawText = payload?.output_text || extractResponseText(payload);
     if (!rawText) {
       throw new Error("OpenAI response did not contain output_text");
@@ -976,11 +975,10 @@ function selectModelForTask(taskType, runnerSettings) {
 async function getRunnerSettings(ownerUserId = null) {
   if (!ownerUserId) {
     return {
-      budget_mode: defaultBudgetMode,
       model_preferences: {
-        discovery: discoveryModelDefault,
+        discovery: draftingModelDefault,
         drafting: draftingModelDefault,
-        revision: revisionModelDefault,
+        revision: draftingModelDefault,
       },
       output_limits: {
         max_draft_variants: clampNumber(maxDraftVariantsDefault, 1, 3, maxDraftVariantsDefault),
@@ -999,14 +997,13 @@ async function getRunnerSettings(ownerUserId = null) {
   const settings = payload?.settings || {};
 
   return {
-    budget_mode: settings.budget_mode ?? defaultBudgetMode,
     model_preferences: {
-      discovery: settings?.model_preferences?.discovery || discoveryModelDefault,
-      drafting: settings?.model_preferences?.drafting || draftingModelDefault,
-      revision: settings?.model_preferences?.revision || revisionModelDefault,
+      discovery: draftingModelDefault,
+      drafting: draftingModelDefault,
+      revision: draftingModelDefault,
     },
     output_limits: {
-      max_draft_variants: clampNumber(settings?.output_limits?.max_draft_variants, 1, 3, maxDraftVariantsDefault),
+      max_draft_variants: maxDraftVariantsDefault,
       max_output_tokens: clampNumber(settings?.output_limits?.max_output_tokens, 150, 1200, maxOutputTokensDefault),
     },
     reddit: {
@@ -1016,6 +1013,40 @@ async function getRunnerSettings(ownerUserId = null) {
     autoscan_enabled: settings?.autoscan_enabled ?? autoScanEnabled,
     openai_api_key: payload?.openai_api_key || null,
   };
+}
+
+async function recordTokenUsage(ownerUserId, usage, model) {
+  if (!ownerUserId || !usage) {
+    return;
+  }
+
+  const inputTokens = clampNumber(usage?.input_tokens, 0, Number.MAX_SAFE_INTEGER, 0);
+  const outputTokens = clampNumber(usage?.output_tokens, 0, Number.MAX_SAFE_INTEGER, 0);
+  const totalTokens = clampNumber(
+    usage?.total_tokens,
+    0,
+    Number.MAX_SAFE_INTEGER,
+    inputTokens + outputTokens
+  );
+
+  const existing = await memoryRead("state", TOKEN_USAGE_KEY, true, ownerUserId);
+  const current = existing?.data || {};
+  const payload = {
+    model: model || draftingModelDefault,
+    requests: clampNumber(current.requests, 0, Number.MAX_SAFE_INTEGER, 0) + 1,
+    input_tokens: clampNumber(current.input_tokens, 0, Number.MAX_SAFE_INTEGER, 0) + inputTokens,
+    output_tokens: clampNumber(current.output_tokens, 0, Number.MAX_SAFE_INTEGER, 0) + outputTokens,
+    total_tokens: clampNumber(current.total_tokens, 0, Number.MAX_SAFE_INTEGER, 0) + totalTokens,
+    last_used_at: nowIso(),
+    updated_at: nowIso(),
+    created_at: current.created_at || nowIso(),
+  };
+
+  if (existing) {
+    await memoryUpdate("state", TOKEN_USAGE_KEY, payload, ownerUserId);
+  } else {
+    await memoryWrite("state", TOKEN_USAGE_KEY, payload, ownerUserId);
+  }
 }
 
 function clampNumber(value, min, max, fallback) {

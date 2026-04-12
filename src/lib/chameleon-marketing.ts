@@ -91,7 +91,6 @@ export type MarketingRunnerState = {
   last_startup_attempt_at?: string | null
   last_startup_status?: string | null
   last_startup_message?: string | null
-  budget_mode?: boolean
   model_preferences?: {
     discovery?: string
     drafting?: string
@@ -117,7 +116,6 @@ export type MarketingSettings = {
   has_openai_api_key: boolean
   openai_api_key_last4: string | null
   openai_api_key_set_at: string | null
-  budget_mode: boolean
   autoscan_enabled: boolean
   model_preferences: {
     discovery: string
@@ -131,6 +129,14 @@ export type MarketingSettings = {
   reddit: {
     subreddits: string[]
     search_terms: string[]
+  }
+  token_usage: {
+    model: string
+    requests: number
+    input_tokens: number
+    output_tokens: number
+    total_tokens: number
+    last_used_at: string | null
   }
 }
 
@@ -155,11 +161,12 @@ const TASK_PREFIX = "task_"
 const DRAFT_PREFIX = "draft_"
 const RUNNER_KEY = "runner_marketing"
 
-const DEFAULT_DISCOVERY_MODEL = "gpt-5-nano"
-const DEFAULT_DRAFTING_MODEL = "gpt-5-mini"
-const DEFAULT_REVISION_MODEL = "gpt-5-mini"
-const DEFAULT_MAX_DRAFT_VARIANTS = 2
-const DEFAULT_MAX_OUTPUT_TOKENS = 500
+const FIXED_DISCOVERY_MODEL = "gpt-5-mini"
+const FIXED_DRAFTING_MODEL = "gpt-5-mini"
+const FIXED_REVISION_MODEL = "gpt-5-mini"
+const FIXED_MAX_DRAFT_VARIANTS = 1
+const DEFAULT_MAX_OUTPUT_TOKENS = 150
+const TOKEN_USAGE_KEY = "usage_marketing_tokens"
 const RUNNER_HEARTBEAT_STALE_AFTER_MS = 3 * 60 * 1000
 const DEFAULT_REDDIT_SUBREDDITS = [
   "smallbusiness",
@@ -350,7 +357,6 @@ function normalizeRunner(
     last_startup_attempt_at: data?.last_startup_attempt_at ?? null,
     last_startup_status: data?.last_startup_status ?? null,
     last_startup_message: data?.last_startup_message ?? null,
-    budget_mode: settings.budget_mode,
     model_preferences: settings.model_preferences,
     output_limits: settings.output_limits,
     diagnostics: diagnostics
@@ -373,21 +379,42 @@ function parseSettingsRow(data: Record<string, any> | null | undefined): Marketi
     has_openai_api_key: Boolean(data?.marketing_openai_api_key_ciphertext),
     openai_api_key_last4: data?.marketing_openai_api_key_last4 ?? null,
     openai_api_key_set_at: data?.marketing_openai_api_key_set_at ?? null,
-    budget_mode: data?.marketing_budget_mode ?? true,
     autoscan_enabled: data?.marketing_autoscan_enabled ?? true,
     model_preferences: {
-      discovery: data?.marketing_model_discovery?.trim() || DEFAULT_DISCOVERY_MODEL,
-      drafting: data?.marketing_model_drafting?.trim() || DEFAULT_DRAFTING_MODEL,
-      revision: data?.marketing_model_revision?.trim() || DEFAULT_REVISION_MODEL,
+      discovery: FIXED_DISCOVERY_MODEL,
+      drafting: FIXED_DRAFTING_MODEL,
+      revision: FIXED_REVISION_MODEL,
     },
     output_limits: {
-      max_draft_variants: clampNumber(data?.marketing_max_draft_variants, 1, 3, DEFAULT_MAX_DRAFT_VARIANTS),
+      max_draft_variants: FIXED_MAX_DRAFT_VARIANTS,
       max_output_tokens: clampNumber(data?.marketing_max_output_tokens, 150, 1200, DEFAULT_MAX_OUTPUT_TOKENS),
     },
     reddit: {
       subreddits: normalizeStringArray(data?.marketing_reddit_subreddits, DEFAULT_REDDIT_SUBREDDITS),
       search_terms: normalizeStringArray(data?.marketing_reddit_search_terms, DEFAULT_REDDIT_SEARCH_TERMS),
     },
+    token_usage: {
+      model: FIXED_DRAFTING_MODEL,
+      requests: 0,
+      input_tokens: 0,
+      output_tokens: 0,
+      total_tokens: 0,
+      last_used_at: null,
+    },
+  }
+}
+
+async function getCoachTokenUsage(supabase: SupabaseClient, userId: string) {
+  const entry = await readEntry(supabase, "state", TOKEN_USAGE_KEY, userId)
+  const data = (entry?.data as Record<string, any> | null) ?? null
+
+  return {
+    model: FIXED_DRAFTING_MODEL,
+    requests: clampNumber(data?.requests, 0, Number.MAX_SAFE_INTEGER, 0),
+    input_tokens: clampNumber(data?.input_tokens, 0, Number.MAX_SAFE_INTEGER, 0),
+    output_tokens: clampNumber(data?.output_tokens, 0, Number.MAX_SAFE_INTEGER, 0),
+    total_tokens: clampNumber(data?.total_tokens, 0, Number.MAX_SAFE_INTEGER, 0),
+    last_used_at: typeof data?.last_used_at === "string" ? data.last_used_at : null,
   }
 }
 
@@ -419,41 +446,44 @@ async function getCoachSettingsRow(supabase: SupabaseClient, userId: string) {
 }
 
 export async function getCoachMarketingSettings(supabase: SupabaseClient, userId: string) {
-  return parseSettingsRow(await getCoachSettingsRow(supabase, userId))
+  const [row, tokenUsage] = await Promise.all([
+    getCoachSettingsRow(supabase, userId),
+    getCoachTokenUsage(supabase, userId),
+  ])
+
+  return {
+    ...parseSettingsRow(row),
+    token_usage: tokenUsage,
+  }
 }
 
 export async function updateCoachMarketingSettings(
   supabase: SupabaseClient,
   userId: string,
   input: {
-    budget_mode?: boolean
     autoscan_enabled?: boolean
-    discovery_model?: string
-    drafting_model?: string
-    revision_model?: string
-    max_draft_variants?: number
     max_output_tokens?: number
     reddit_subreddits?: string[]
     reddit_search_terms?: string[]
   }
 ) {
   const existing = parseSettingsRow(await getCoachSettingsRow(supabase, userId))
-  const budgetMode = typeof input.budget_mode === "boolean" ? input.budget_mode : existing.budget_mode
 
   const patch = {
     user_id: userId,
-    marketing_budget_mode: budgetMode,
+    marketing_budget_mode: null,
     marketing_autoscan_enabled:
       typeof input.autoscan_enabled === "boolean" ? input.autoscan_enabled : existing.autoscan_enabled,
-    marketing_model_discovery: input.discovery_model?.trim() || existing.model_preferences.discovery,
-    marketing_model_drafting: input.drafting_model?.trim() || existing.model_preferences.drafting,
-    marketing_model_revision: input.revision_model?.trim() || existing.model_preferences.revision,
-    marketing_max_draft_variants: budgetMode
-      ? clampNumber(input.max_draft_variants ?? existing.output_limits.max_draft_variants, 1, 2, DEFAULT_MAX_DRAFT_VARIANTS)
-      : clampNumber(input.max_draft_variants ?? existing.output_limits.max_draft_variants, 1, 3, DEFAULT_MAX_DRAFT_VARIANTS),
-    marketing_max_output_tokens: budgetMode
-      ? clampNumber(input.max_output_tokens ?? existing.output_limits.max_output_tokens, 150, 500, DEFAULT_MAX_OUTPUT_TOKENS)
-      : clampNumber(input.max_output_tokens ?? existing.output_limits.max_output_tokens, 150, 1200, DEFAULT_MAX_OUTPUT_TOKENS),
+    marketing_model_discovery: null,
+    marketing_model_drafting: null,
+    marketing_model_revision: null,
+    marketing_max_draft_variants: null,
+    marketing_max_output_tokens: clampNumber(
+      input.max_output_tokens ?? existing.output_limits.max_output_tokens,
+      150,
+      1200,
+      DEFAULT_MAX_OUTPUT_TOKENS
+    ),
     marketing_reddit_subreddits: normalizeStringArray(input.reddit_subreddits, existing.reddit.subreddits),
     marketing_reddit_search_terms: normalizeStringArray(input.reddit_search_terms, existing.reddit.search_terms),
     updated_at: nowIso(),
@@ -937,12 +967,7 @@ export async function updateMarketingRunnerSettings(
   supabase: SupabaseClient,
   userId: string,
   input: {
-    budget_mode?: boolean
     autoscan_enabled?: boolean
-    discovery_model?: string
-    drafting_model?: string
-    revision_model?: string
-    max_draft_variants?: number
     max_output_tokens?: number
     reddit_subreddits?: string[]
     reddit_search_terms?: string[]
@@ -957,7 +982,7 @@ export async function updateMarketingRunnerSettings(
     type: "targeted",
     recipients: ["MARKETING"],
     priority: "normal",
-    content: `Runner settings updated. Budget mode: ${settings.budget_mode ? "on" : "off"}. Discovery model: ${settings.model_preferences.discovery}. Drafting model: ${settings.model_preferences.drafting}. Revision model: ${settings.model_preferences.revision}. Variant cap: ${settings.output_limits.max_draft_variants}. Output cap: ${settings.output_limits.max_output_tokens}.`,
+    content: `Runner settings updated. Autoscan: ${settings.autoscan_enabled ? "on" : "off"}. Discovery model: ${settings.model_preferences.discovery}. Drafting model: ${settings.model_preferences.drafting}. Revision model: ${settings.model_preferences.revision}. Variant cap: ${settings.output_limits.max_draft_variants}. Output cap: ${settings.output_limits.max_output_tokens}.`,
     ref_id: RUNNER_KEY,
   })
 
@@ -967,9 +992,8 @@ export async function updateMarketingRunnerSettings(
     sector: "state",
     key: RUNNER_KEY,
     agent: userId,
-    summary: "Updated marketing runner budget settings",
+    summary: "Updated marketing runner settings",
     meta: {
-      budget_mode: settings.budget_mode,
       model_preferences: settings.model_preferences,
       output_limits: settings.output_limits,
       autoscan_enabled: settings.autoscan_enabled,

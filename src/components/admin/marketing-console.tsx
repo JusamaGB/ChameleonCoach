@@ -818,23 +818,25 @@ export function MarketingConsole({ initialSnapshot }: MarketingConsoleProps) {
                       <span>{boolLabel(snapshot.runner.diagnostics?.openai_key_present)}</span>
                     </div>
                     <div className="flex items-center justify-between gap-3">
-                      <span className="text-gf-muted">Budget mode</span>
-                      <span>{snapshot.runner.budget_mode === false ? "Off" : "On"}</span>
-                    </div>
-                    <div className="flex items-center justify-between gap-3">
                       <span className="text-gf-muted">Memory API reachable</span>
                       <span>{boolLabel(snapshot.runner.diagnostics?.memory_api_reachable)}</span>
                     </div>
                     <div>
-                      <p className="text-gf-muted">Model routing</p>
+                      <p className="text-gf-muted">Hard-set model</p>
                       <p className="mt-1 text-white">
-                        Discovery: {snapshot.runner.model_preferences?.discovery || "gpt-5-nano"} | Drafting: {snapshot.runner.model_preferences?.drafting || "gpt-5-mini"} | Revision: {snapshot.runner.model_preferences?.revision || "gpt-5-mini"}
+                        {snapshot.runner.model_preferences?.drafting || "gpt-5-mini"} for summaries, drafts, and revisions
                       </p>
                     </div>
                     <div>
                       <p className="text-gf-muted">Output limits</p>
                       <p className="mt-1 text-white">
-                        {snapshot.runner.output_limits?.max_draft_variants ?? 2} variants max | {snapshot.runner.output_limits?.max_output_tokens ?? 500} output tokens max
+                        {snapshot.runner.output_limits?.max_draft_variants ?? 1} variant max | {snapshot.runner.output_limits?.max_output_tokens ?? 150} output tokens max
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-gf-muted">OpenAI pricing reference</p>
+                      <p className="mt-1 text-white">
+                        GPT-5 mini: $0.75/M input, $4.50/M output.
                       </p>
                     </div>
                     <div>

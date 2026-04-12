@@ -39,13 +39,14 @@ export default function SettingsPage() {
   const [marketingKeyConnected, setMarketingKeyConnected] = useState(false)
   const [marketingKeyLast4, setMarketingKeyLast4] = useState("")
   const [marketingApiKey, setMarketingApiKey] = useState("")
-  const [marketingBudgetMode, setMarketingBudgetMode] = useState<"on" | "off">("on")
   const [marketingAutoscan, setMarketingAutoscan] = useState<"on" | "off">("on")
-  const [marketingDiscoveryModel, setMarketingDiscoveryModel] = useState("gpt-5-nano")
-  const [marketingDraftingModel, setMarketingDraftingModel] = useState("gpt-5-mini")
-  const [marketingRevisionModel, setMarketingRevisionModel] = useState("gpt-5-mini")
-  const [marketingMaxVariants, setMarketingMaxVariants] = useState("2")
-  const [marketingMaxOutputTokens, setMarketingMaxOutputTokens] = useState("500")
+  const [marketingTokenModel, setMarketingTokenModel] = useState("gpt-5-mini")
+  const [marketingTokenRequests, setMarketingTokenRequests] = useState(0)
+  const [marketingInputTokens, setMarketingInputTokens] = useState(0)
+  const [marketingOutputTokens, setMarketingOutputTokens] = useState(0)
+  const [marketingTotalTokens, setMarketingTotalTokens] = useState(0)
+  const [marketingLastTokenUseAt, setMarketingLastTokenUseAt] = useState("")
+  const [marketingMaxOutputTokens, setMarketingMaxOutputTokens] = useState("150")
   const [marketingSubreddits, setMarketingSubreddits] = useState("")
   const [marketingSearchTerms, setMarketingSearchTerms] = useState("")
 
@@ -131,13 +132,14 @@ export default function SettingsPage() {
       .then((data) => {
         setMarketingKeyConnected(Boolean(data.has_openai_api_key))
         setMarketingKeyLast4(data.openai_api_key_last4 ?? "")
-        setMarketingBudgetMode(data.budget_mode === false ? "off" : "on")
         setMarketingAutoscan(data.autoscan_enabled === false ? "off" : "on")
-        setMarketingDiscoveryModel(data.model_preferences?.discovery ?? "gpt-5-nano")
-        setMarketingDraftingModel(data.model_preferences?.drafting ?? "gpt-5-mini")
-        setMarketingRevisionModel(data.model_preferences?.revision ?? "gpt-5-mini")
-        setMarketingMaxVariants(String(data.output_limits?.max_draft_variants ?? 2))
-        setMarketingMaxOutputTokens(String(data.output_limits?.max_output_tokens ?? 500))
+        setMarketingTokenModel(data.token_usage?.model ?? "gpt-5-mini")
+        setMarketingTokenRequests(Number(data.token_usage?.requests ?? 0))
+        setMarketingInputTokens(Number(data.token_usage?.input_tokens ?? 0))
+        setMarketingOutputTokens(Number(data.token_usage?.output_tokens ?? 0))
+        setMarketingTotalTokens(Number(data.token_usage?.total_tokens ?? 0))
+        setMarketingLastTokenUseAt(data.token_usage?.last_used_at ?? "")
+        setMarketingMaxOutputTokens(String(data.output_limits?.max_output_tokens ?? 150))
         setMarketingSubreddits(Array.isArray(data.reddit?.subreddits) ? data.reddit.subreddits.join(", ") : "")
         setMarketingSearchTerms(Array.isArray(data.reddit?.search_terms) ? data.reddit.search_terms.join(", ") : "")
       })
@@ -237,13 +239,8 @@ export default function SettingsPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           openai_api_key: marketingApiKey,
-          budget_mode: marketingBudgetMode === "on",
           autoscan_enabled: marketingAutoscan === "on",
-          discovery_model: marketingDiscoveryModel,
-          drafting_model: marketingDraftingModel,
-          revision_model: marketingRevisionModel,
-          max_draft_variants: Number(marketingMaxVariants || 2),
-          max_output_tokens: Number(marketingMaxOutputTokens || 500),
+          max_output_tokens: Number(marketingMaxOutputTokens || 150),
           reddit_subreddits: marketingSubreddits.split(",").map((item) => item.trim()).filter(Boolean),
           reddit_search_terms: marketingSearchTerms.split(",").map((item) => item.trim()).filter(Boolean),
         }),
@@ -282,6 +279,16 @@ export default function SettingsPage() {
     } finally {
       setMarketingLoading(false)
     }
+  }
+
+  function formatTokenTimestamp(value: string) {
+    if (!value) return "Not used yet"
+    return new Date(value).toLocaleString("en-GB", {
+      day: "numeric",
+      month: "short",
+      hour: "2-digit",
+      minute: "2-digit",
+    })
   }
 
   return (
@@ -411,7 +418,7 @@ export default function SettingsPage() {
       <Card className="mb-6">
         <CardTitle>Marketing AI</CardTitle>
         <p className="text-sm text-gf-muted mt-2 mb-4">
-          Manage your OpenAI BYOK key and the marketing defaults used for summaries, drafts, and Reddit discovery. Scripted Reddit discovery stays cheap; OpenAI spend starts only when copy gets generated.
+          Manage your OpenAI BYOK key and the core marketing controls. Reddit searching stays scripted; OpenAI spend starts only when summaries or drafts are generated.
         </p>
         <form onSubmit={saveMarketingSettings} className="space-y-4">
           <div className="flex items-center gap-2">
@@ -429,16 +436,45 @@ export default function SettingsPage() {
             onChange={(e) => setMarketingApiKey(e.target.value)}
             placeholder={marketingKeyConnected ? "Replace existing key" : "sk-..."}
           />
+          <div className="rounded-xl border border-gf-border bg-gf-surface p-4 text-sm text-gf-muted">
+            <p className="font-medium text-white">Token tracking</p>
+            <div className="mt-3 grid gap-3 md:grid-cols-2">
+              <div>
+                <p>Model</p>
+                <p className="mt-1 text-white">{marketingTokenModel}</p>
+              </div>
+              <div>
+                <p>Requests</p>
+                <p className="mt-1 text-white">{marketingTokenRequests}</p>
+              </div>
+              <div>
+                <p>Input tokens</p>
+                <p className="mt-1 text-white">{marketingInputTokens.toLocaleString("en-GB")}</p>
+              </div>
+              <div>
+                <p>Output tokens</p>
+                <p className="mt-1 text-white">{marketingOutputTokens.toLocaleString("en-GB")}</p>
+              </div>
+              <div>
+                <p>Total tokens</p>
+                <p className="mt-1 text-white">{marketingTotalTokens.toLocaleString("en-GB")}</p>
+              </div>
+              <div>
+                <p>Last used</p>
+                <p className="mt-1 text-white">{formatTokenTimestamp(marketingLastTokenUseAt)}</p>
+              </div>
+            </div>
+          </div>
+          <div className="rounded-xl border border-gf-border bg-gf-surface p-4 text-sm text-gf-muted">
+            <p className="font-medium text-white">Hard-set execution profile</p>
+            <p className="mt-2">
+              The marketing runner uses <span className="text-white">GPT-5 mini</span> for summaries, drafts, and revisions. It is fixed to <span className="text-white">1 draft variant</span> per generation, and you control the output cap below.
+            </p>
+            <p className="mt-2">
+              Based on OpenAI API pricing on 12 April 2026: GPT-5 mini is about <span className="text-white">$0.75/M input</span> and <span className="text-white">$4.50/M output</span>.
+            </p>
+          </div>
           <div className="grid gap-4 md:grid-cols-2">
-            <Select
-              label="Budget Mode"
-              value={marketingBudgetMode}
-              onChange={(e) => setMarketingBudgetMode(e.target.value as "on" | "off")}
-              options={[
-                { value: "on", label: "On" },
-                { value: "off", label: "Off" },
-              ]}
-            />
             <Select
               label="Autoscan"
               value={marketingAutoscan}
@@ -448,11 +484,14 @@ export default function SettingsPage() {
                 { value: "off", label: "Off" },
               ]}
             />
-            <Input label="Discovery Model" value={marketingDiscoveryModel} onChange={(e) => setMarketingDiscoveryModel(e.target.value)} />
-            <Input label="Drafting Model" value={marketingDraftingModel} onChange={(e) => setMarketingDraftingModel(e.target.value)} />
-            <Input label="Revision Model" value={marketingRevisionModel} onChange={(e) => setMarketingRevisionModel(e.target.value)} />
-            <Input label="Max Draft Variants" type="number" min="1" max="3" value={marketingMaxVariants} onChange={(e) => setMarketingMaxVariants(e.target.value)} />
-            <Input label="Max Output Tokens" type="number" min="150" max="1200" value={marketingMaxOutputTokens} onChange={(e) => setMarketingMaxOutputTokens(e.target.value)} />
+            <Input
+              label="Max Output Tokens"
+              type="number"
+              min="150"
+              max="1200"
+              value={marketingMaxOutputTokens}
+              onChange={(e) => setMarketingMaxOutputTokens(e.target.value)}
+            />
           </div>
           <TextArea
             label="Reddit Subreddits"

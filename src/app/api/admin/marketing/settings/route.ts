@@ -82,12 +82,7 @@ export async function PATCH(request: NextRequest) {
     }
 
     const settings = await updateCoachMarketingSettings(admin, result.user.id, {
-      budget_mode: typeof body.budget_mode === "boolean" ? body.budget_mode : undefined,
       autoscan_enabled: typeof body.autoscan_enabled === "boolean" ? body.autoscan_enabled : undefined,
-      discovery_model: typeof body.discovery_model === "string" ? body.discovery_model : undefined,
-      drafting_model: typeof body.drafting_model === "string" ? body.drafting_model : undefined,
-      revision_model: typeof body.revision_model === "string" ? body.revision_model : undefined,
-      max_draft_variants: body.max_draft_variants,
       max_output_tokens: body.max_output_tokens,
       reddit_subreddits: Array.isArray(body.reddit_subreddits) ? body.reddit_subreddits : undefined,
       reddit_search_terms: Array.isArray(body.reddit_search_terms) ? body.reddit_search_terms : undefined,
