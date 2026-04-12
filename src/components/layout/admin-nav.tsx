@@ -17,6 +17,7 @@ import {
   Gem,
   Lightbulb,
   CreditCard,
+  Megaphone,
 } from "lucide-react"
 import { PLATFORM_NAME } from "@/lib/platform"
 
@@ -25,6 +26,7 @@ const navItems = [
   { href: "/admin/clients", label: "Clients", icon: Users },
   { href: "/admin/appointments", label: "Appointments", icon: Calendar },
   { href: "/admin/requests", label: "Requests", icon: Lightbulb },
+  { href: "/admin/marketing", label: "Marketing", icon: Megaphone },
   { href: "/admin/modules", label: "Modules", icon: Layers3 },
   { href: "/admin/payments", label: "Payments", icon: CreditCard },
   { href: "/admin/premium", label: "Premium", icon: Gem },
