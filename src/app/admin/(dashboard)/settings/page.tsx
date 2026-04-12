@@ -4,7 +4,7 @@ import { useEffect, useState } from "react"
 import Link from "next/link"
 import { useSearchParams } from "next/navigation"
 import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
+import { Input, Select, TextArea } from "@/components/ui/input"
 import { Card, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Link2, CheckCircle, AlertCircle, ArrowRight, CreditCard, Layers3 } from "lucide-react"
@@ -33,10 +33,26 @@ export default function SettingsPage() {
   const [profileLoading, setProfileLoading] = useState(false)
   const [profileSaved, setProfileSaved] = useState(false)
   const [profileError, setProfileError] = useState("")
+  const [marketingLoading, setMarketingLoading] = useState(false)
+  const [marketingSaved, setMarketingSaved] = useState(false)
+  const [marketingError, setMarketingError] = useState("")
+  const [marketingKeyConnected, setMarketingKeyConnected] = useState(false)
+  const [marketingKeyLast4, setMarketingKeyLast4] = useState("")
+  const [marketingApiKey, setMarketingApiKey] = useState("")
+  const [marketingBudgetMode, setMarketingBudgetMode] = useState<"on" | "off">("on")
+  const [marketingAutoscan, setMarketingAutoscan] = useState<"on" | "off">("on")
+  const [marketingDiscoveryModel, setMarketingDiscoveryModel] = useState("gpt-5-nano")
+  const [marketingDraftingModel, setMarketingDraftingModel] = useState("gpt-5-mini")
+  const [marketingRevisionModel, setMarketingRevisionModel] = useState("gpt-5-mini")
+  const [marketingMaxVariants, setMarketingMaxVariants] = useState("2")
+  const [marketingMaxOutputTokens, setMarketingMaxOutputTokens] = useState("500")
+  const [marketingSubreddits, setMarketingSubreddits] = useState("")
+  const [marketingSearchTerms, setMarketingSearchTerms] = useState("")
 
   useEffect(() => {
     checkConnection()
     fetchProfile()
+    fetchMarketingSettings()
   }, [])
 
   useEffect(() => {
@@ -105,6 +121,25 @@ export default function SettingsPage() {
         setBusinessName(data.business_name ?? "")
         setCoachTypePreset(data.coach_type_preset ?? null)
         setActiveModules(Array.isArray(data.active_modules) ? data.active_modules : [])
+      })
+      .catch(() => {})
+  }
+
+  function fetchMarketingSettings() {
+    fetch("/api/admin/marketing/settings")
+      .then((res) => res.json())
+      .then((data) => {
+        setMarketingKeyConnected(Boolean(data.has_openai_api_key))
+        setMarketingKeyLast4(data.openai_api_key_last4 ?? "")
+        setMarketingBudgetMode(data.budget_mode === false ? "off" : "on")
+        setMarketingAutoscan(data.autoscan_enabled === false ? "off" : "on")
+        setMarketingDiscoveryModel(data.model_preferences?.discovery ?? "gpt-5-nano")
+        setMarketingDraftingModel(data.model_preferences?.drafting ?? "gpt-5-mini")
+        setMarketingRevisionModel(data.model_preferences?.revision ?? "gpt-5-mini")
+        setMarketingMaxVariants(String(data.output_limits?.max_draft_variants ?? 2))
+        setMarketingMaxOutputTokens(String(data.output_limits?.max_output_tokens ?? 500))
+        setMarketingSubreddits(Array.isArray(data.reddit?.subreddits) ? data.reddit.subreddits.join(", ") : "")
+        setMarketingSearchTerms(Array.isArray(data.reddit?.search_terms) ? data.reddit.search_terms.join(", ") : "")
       })
       .catch(() => {})
   }
@@ -187,6 +222,65 @@ export default function SettingsPage() {
     } finally {
       setProvisioning(false)
       checkConnection()
+    }
+  }
+
+  async function saveMarketingSettings(e: React.FormEvent) {
+    e.preventDefault()
+    setMarketingLoading(true)
+    setMarketingSaved(false)
+    setMarketingError("")
+
+    try {
+      const res = await fetch("/api/admin/marketing/settings", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          openai_api_key: marketingApiKey,
+          budget_mode: marketingBudgetMode === "on",
+          autoscan_enabled: marketingAutoscan === "on",
+          discovery_model: marketingDiscoveryModel,
+          drafting_model: marketingDraftingModel,
+          revision_model: marketingRevisionModel,
+          max_draft_variants: Number(marketingMaxVariants || 2),
+          max_output_tokens: Number(marketingMaxOutputTokens || 500),
+          reddit_subreddits: marketingSubreddits.split(",").map((item) => item.trim()).filter(Boolean),
+          reddit_search_terms: marketingSearchTerms.split(",").map((item) => item.trim()).filter(Boolean),
+        }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || "Failed to save Marketing AI settings")
+      setMarketingApiKey("")
+      setMarketingSaved(true)
+      setTimeout(() => setMarketingSaved(false), 3000)
+      fetchMarketingSettings()
+    } catch (error) {
+      setMarketingError(error instanceof Error ? error.message : "Failed to save Marketing AI settings")
+    } finally {
+      setMarketingLoading(false)
+    }
+  }
+
+  async function removeMarketingApiKey() {
+    setMarketingLoading(true)
+    setMarketingSaved(false)
+    setMarketingError("")
+    try {
+      const res = await fetch("/api/admin/marketing/settings", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ remove_openai_api_key: true }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || "Failed to remove Marketing AI key")
+      setMarketingApiKey("")
+      setMarketingSaved(true)
+      setTimeout(() => setMarketingSaved(false), 3000)
+      fetchMarketingSettings()
+    } catch (error) {
+      setMarketingError(error instanceof Error ? error.message : "Failed to remove Marketing AI key")
+    } finally {
+      setMarketingLoading(false)
     }
   }
 
@@ -312,6 +406,81 @@ export default function SettingsPage() {
             <ArrowRight size={16} className="text-gf-muted" />
           </Link>
         </div>
+      </Card>
+
+      <Card className="mb-6">
+        <CardTitle>Marketing AI</CardTitle>
+        <p className="text-sm text-gf-muted mt-2 mb-4">
+          Manage your OpenAI BYOK key and the marketing defaults used for summaries, drafts, and Reddit discovery. Scripted Reddit discovery stays cheap; OpenAI spend starts only when copy gets generated.
+        </p>
+        <form onSubmit={saveMarketingSettings} className="space-y-4">
+          <div className="flex items-center gap-2">
+            <Badge variant={marketingKeyConnected ? "success" : "warning"}>
+              {marketingKeyConnected ? `Key connected${marketingKeyLast4 ? ` • ending ${marketingKeyLast4}` : ""}` : "Key missing"}
+            </Badge>
+            <Badge variant={marketingAutoscan === "on" ? "default" : "warning"}>
+              Autoscan {marketingAutoscan === "on" ? "live" : "paused"}
+            </Badge>
+          </div>
+          <Input
+            label="OpenAI API Key"
+            type="password"
+            value={marketingApiKey}
+            onChange={(e) => setMarketingApiKey(e.target.value)}
+            placeholder={marketingKeyConnected ? "Replace existing key" : "sk-..."}
+          />
+          <div className="grid gap-4 md:grid-cols-2">
+            <Select
+              label="Budget Mode"
+              value={marketingBudgetMode}
+              onChange={(e) => setMarketingBudgetMode(e.target.value as "on" | "off")}
+              options={[
+                { value: "on", label: "On" },
+                { value: "off", label: "Off" },
+              ]}
+            />
+            <Select
+              label="Autoscan"
+              value={marketingAutoscan}
+              onChange={(e) => setMarketingAutoscan(e.target.value as "on" | "off")}
+              options={[
+                { value: "on", label: "On" },
+                { value: "off", label: "Off" },
+              ]}
+            />
+            <Input label="Discovery Model" value={marketingDiscoveryModel} onChange={(e) => setMarketingDiscoveryModel(e.target.value)} />
+            <Input label="Drafting Model" value={marketingDraftingModel} onChange={(e) => setMarketingDraftingModel(e.target.value)} />
+            <Input label="Revision Model" value={marketingRevisionModel} onChange={(e) => setMarketingRevisionModel(e.target.value)} />
+            <Input label="Max Draft Variants" type="number" min="1" max="3" value={marketingMaxVariants} onChange={(e) => setMarketingMaxVariants(e.target.value)} />
+            <Input label="Max Output Tokens" type="number" min="150" max="1200" value={marketingMaxOutputTokens} onChange={(e) => setMarketingMaxOutputTokens(e.target.value)} />
+          </div>
+          <TextArea
+            label="Reddit Subreddits"
+            value={marketingSubreddits}
+            onChange={(e) => setMarketingSubreddits(e.target.value)}
+          />
+          <TextArea
+            label="Reddit Search Terms"
+            value={marketingSearchTerms}
+            onChange={(e) => setMarketingSearchTerms(e.target.value)}
+          />
+          {marketingError && <p className="text-sm text-red-400">{marketingError}</p>}
+          <div className="flex items-center gap-3 flex-wrap">
+            <Button type="submit" disabled={marketingLoading} size="sm">
+              {marketingLoading ? "Saving..." : "Save Marketing AI"}
+            </Button>
+            {marketingKeyConnected ? (
+              <Button type="button" variant="secondary" size="sm" onClick={removeMarketingApiKey} disabled={marketingLoading}>
+                Remove API Key
+              </Button>
+            ) : null}
+            {marketingSaved && (
+              <span className="text-sm text-green-400 flex items-center gap-1">
+                <CheckCircle size={14} /> Saved
+              </span>
+            )}
+          </div>
+        </form>
       </Card>
 
       <Card>
