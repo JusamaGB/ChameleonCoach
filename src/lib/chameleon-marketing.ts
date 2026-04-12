@@ -160,6 +160,7 @@ const DEFAULT_DRAFTING_MODEL = "gpt-5-mini"
 const DEFAULT_REVISION_MODEL = "gpt-5-mini"
 const DEFAULT_MAX_DRAFT_VARIANTS = 2
 const DEFAULT_MAX_OUTPUT_TOKENS = 500
+const RUNNER_HEARTBEAT_STALE_AFTER_MS = 3 * 60 * 1000
 const DEFAULT_REDDIT_SUBREDDITS = [
   "smallbusiness",
   "entrepreneur",
@@ -211,6 +212,37 @@ function normalizeStringArray(value: unknown, fallback: string[]) {
 
   const normalized = value.map((item) => String(item ?? "").trim()).filter(Boolean)
   return normalized.length > 0 ? normalized : fallback
+}
+
+function parseIsoTimestamp(value: unknown) {
+  if (typeof value !== "string" || !value.trim()) {
+    return null
+  }
+
+  const timestamp = Date.parse(value)
+  return Number.isFinite(timestamp) ? timestamp : null
+}
+
+function getEffectiveRunnerStatus(data: Record<string, any> | null) {
+  const storedStatus = data?.status ?? "offline"
+  const heartbeatAt = data?.heartbeat_at ?? null
+  const heartbeatTimestamp = parseIsoTimestamp(heartbeatAt)
+  const heartbeatAgeMs = heartbeatTimestamp ? Math.max(0, Date.now() - heartbeatTimestamp) : null
+  const heartbeatStale = heartbeatAgeMs === null || heartbeatAgeMs > RUNNER_HEARTBEAT_STALE_AFTER_MS
+
+  if (heartbeatStale && ["starting", "running", "idle", "error", "blocked"].includes(storedStatus)) {
+    return {
+      status: "offline",
+      heartbeatStale: true,
+      heartbeatAgeMs,
+    }
+  }
+
+  return {
+    status: storedStatus,
+    heartbeatStale: false,
+    heartbeatAgeMs,
+  }
 }
 
 function asLead(key: string, data: Record<string, any>, ownerUserId: string | null): MarketingLead {
@@ -296,6 +328,7 @@ function normalizeRunner(
   pendingQueueCount: number,
   settings: MarketingSettings
 ): MarketingRunnerState {
+  const effectiveStatus = getEffectiveRunnerStatus(data)
   const diagnostics =
     data?.diagnostics && typeof data.diagnostics === "object" && !Array.isArray(data.diagnostics)
       ? data.diagnostics
@@ -304,7 +337,7 @@ function normalizeRunner(
   return {
     key: RUNNER_KEY,
     agent: data?.agent ?? "MARKETING",
-    status: data?.status ?? "offline",
+    status: effectiveStatus.status,
     current_task_key: data?.current_task_key ?? null,
     heartbeat_at: data?.heartbeat_at ?? null,
     last_error: data?.last_error ?? null,
@@ -324,9 +357,13 @@ function normalizeRunner(
       ? {
           ...diagnostics,
           openai_key_present: settings.has_openai_api_key,
+          heartbeat_stale: effectiveStatus.heartbeatStale,
+          heartbeat_age_ms: effectiveStatus.heartbeatAgeMs,
         }
       : {
           openai_key_present: settings.has_openai_api_key,
+          heartbeat_stale: effectiveStatus.heartbeatStale,
+          heartbeat_age_ms: effectiveStatus.heartbeatAgeMs,
         },
   }
 }
