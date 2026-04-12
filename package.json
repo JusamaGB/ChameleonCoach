@@ -7,7 +7,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "mcp:chameleon-memory": "node scripts/chameleon-memory-mcp.mjs"
+    "mcp:chameleon-memory": "node scripts/chameleon-memory-mcp.mjs",
+    "runner:marketing": "node scripts/chameleon-marketing-runner.mjs"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.29.0",

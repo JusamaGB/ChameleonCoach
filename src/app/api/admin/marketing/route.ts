@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { createAdmin } from "@/lib/supabase/server"
 import { verifyCoach, isCoachResult } from "@/lib/auth-helpers"
 import {
+  controlMarketingRunner,
   createMarketingLead,
   createMarketingTask,
   getMarketingSnapshot,
@@ -45,6 +46,10 @@ export async function POST(request: NextRequest) {
       case "draft_action": {
         const updated = await updateDraftWorkflow(admin, user.id, body.payload)
         return NextResponse.json({ ok: true, updated })
+      }
+      case "runner_control": {
+        const result = await controlMarketingRunner(admin, user.id, body.payload)
+        return NextResponse.json(result)
       }
       default:
         return NextResponse.json({ error: "Unknown action" }, { status: 400 })

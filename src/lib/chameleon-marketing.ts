@@ -35,6 +35,7 @@ export type MarketingTask = {
   required_output_format: string
   constraints: string[]
   banned_claims: string[]
+  task_payload?: JsonRecord
   requested_revision_note?: string
   claimed_at?: string | null
   completed_at?: string | null
@@ -73,6 +74,9 @@ export type MarketingRunnerState = {
   last_error: string | null
   pending_queue_count: number
   recent_actions: string[]
+  autoscan_enabled?: boolean
+  control_requested_at?: string | null
+  last_control_action?: string | null
 }
 
 export type MarketingSnapshot = {
@@ -94,6 +98,16 @@ export type MarketingSnapshot = {
 const TASK_PREFIX = "task_"
 const DRAFT_PREFIX = "draft_"
 const RUNNER_KEY = "runner_marketing"
+
+export const MARKETING_TASK_TYPES = [
+  "scan_reddit_leads",
+  "lead_summary",
+  "draft_reddit_outreach",
+  "draft_dm_reply",
+  "draft_follow_up",
+  "draft_social_post",
+  "revise_marketing_copy",
+] as const
 
 function nowIso() {
   return new Date().toISOString()
@@ -135,6 +149,10 @@ function asTask(key: string, data: Record<string, any>): MarketingTask {
     required_output_format: data.required_output_format ?? "2-3 variants",
     constraints: Array.isArray(data.constraints) ? data.constraints : [],
     banned_claims: Array.isArray(data.banned_claims) ? data.banned_claims : [],
+    task_payload:
+      data.task_payload && typeof data.task_payload === "object" && !Array.isArray(data.task_payload)
+        ? (data.task_payload as JsonRecord)
+        : undefined,
     requested_revision_note: data.requested_revision_note,
     claimed_at: data.claimed_at ?? null,
     completed_at: data.completed_at ?? null,
@@ -177,6 +195,9 @@ function normalizeRunner(data: Record<string, any> | null, pendingQueueCount: nu
     last_error: data?.last_error ?? null,
     pending_queue_count: pendingQueueCount,
     recent_actions: Array.isArray(data?.recent_actions) ? data.recent_actions : [],
+    autoscan_enabled: data?.autoscan_enabled ?? true,
+    control_requested_at: data?.control_requested_at ?? null,
+    last_control_action: data?.last_control_action ?? null,
   }
 }
 
@@ -310,7 +331,7 @@ export async function createMarketingTask(
   supabase: SupabaseClient,
   userId: string,
   input: {
-    lead_key: string
+    lead_key?: string | null
     task_type: string
     channel: string
     objective: string
@@ -319,18 +340,29 @@ export async function createMarketingTask(
     constraints?: string[]
     banned_claims?: string[]
     priority?: string
+    task_payload?: JsonRecord
   }
 ) {
-  const lead = await readEntry(supabase, "leads", input.lead_key)
-  if (!lead) {
-    throw new Error("Lead not found")
+  const isStandaloneTask = input.task_type === "scan_reddit_leads"
+  const leadKey = input.lead_key ?? null
+  let lead: Awaited<ReturnType<typeof readEntry>> | null = null
+
+  if (!isStandaloneTask) {
+    if (!leadKey) {
+      throw new Error("Lead is required for this task")
+    }
+
+    lead = await readEntry(supabase, "leads", leadKey)
+    if (!lead) {
+      throw new Error("Lead not found")
+    }
   }
 
   const key = makeKey(TASK_PREFIX)
   const timestamp = nowIso()
   const payload: JsonRecord = {
     owner_user_id: userId,
-    lead_key: input.lead_key,
+    lead_key: leadKey,
     task_type: input.task_type,
     status: "queued",
     priority: input.priority ?? "normal",
@@ -340,7 +372,8 @@ export async function createMarketingTask(
     required_output_format: input.required_output_format ?? "2-3 variants plus short rationale",
     constraints: input.constraints ?? [],
     banned_claims: input.banned_claims ?? [],
-    lead_context: lead.data as JsonRecord,
+    lead_context: (lead?.data as JsonRecord | undefined) ?? null,
+    task_payload: input.task_payload ?? {},
     created_at: timestamp,
     updated_at: timestamp,
   }
@@ -349,7 +382,9 @@ export async function createMarketingTask(
   await sendMessage(supabase, {
     sender: "SYSTEM",
     tag: "TASK_QUEUED",
-    content: `Task ${key} queued for ${input.lead_key}: ${input.task_type}`,
+    content: leadKey
+      ? `Task ${key} queued for ${leadKey}: ${input.task_type}`
+      : `Standalone task ${key} queued: ${input.task_type}`,
     type: "broadcast",
     priority: "normal",
   })
@@ -358,8 +393,8 @@ export async function createMarketingTask(
     sector: "state",
     key,
     agent: userId,
-    summary: `Queued ${input.task_type} for ${input.lead_key}`,
-    meta: { channel: input.channel, campaign_profile: input.campaign_profile },
+    summary: leadKey ? `Queued ${input.task_type} for ${leadKey}` : `Queued standalone ${input.task_type}`,
+    meta: { channel: input.channel, campaign_profile: input.campaign_profile, standalone: isStandaloneTask },
   })
 
   return key
@@ -498,4 +533,106 @@ export async function updateDraftWorkflow(
   })
 
   return updated
+}
+
+export async function controlMarketingRunner(
+  supabase: SupabaseClient,
+  userId: string,
+  input: {
+    action: "trigger_scan" | "process_queue" | "pause_autoscan" | "resume_autoscan"
+  }
+) {
+  const timestamp = nowIso()
+  const existingRunner = await readEntry(supabase, "state", RUNNER_KEY)
+  const currentData = (existingRunner?.data as Record<string, any> | null) ?? {}
+
+  const patch: Record<string, any> = {
+    control_requested_at: timestamp,
+    last_control_action: input.action,
+    updated_at: timestamp,
+  }
+
+  switch (input.action) {
+    case "pause_autoscan":
+      patch.autoscan_enabled = false
+      break
+    case "resume_autoscan":
+      patch.autoscan_enabled = true
+      break
+    case "process_queue":
+      patch.run_requested_at = timestamp
+      break
+    case "trigger_scan":
+      patch.manual_scan_requested_at = timestamp
+      break
+  }
+
+  if (existingRunner) {
+    await updateEntry(supabase, "state", RUNNER_KEY, patch)
+  } else {
+    await writeEntry(supabase, "state", RUNNER_KEY, {
+      agent: "MARKETING",
+      status: "offline",
+      current_task_key: null,
+      heartbeat_at: null,
+      last_error: null,
+      pending_queue_count: 0,
+      recent_actions: [],
+      autoscan_enabled: input.action === "pause_autoscan" ? false : true,
+      created_at: timestamp,
+      ...patch,
+    })
+  }
+
+  if (input.action === "trigger_scan") {
+    await createMarketingTask(supabase, userId, {
+      lead_key: null,
+      task_type: "scan_reddit_leads",
+      channel: "reddit_search",
+      objective: "Scan Reddit for fitness and coaching leads using Google Sheets or spreadsheets to manage clients.",
+      campaign_profile: "reddit_google_sheets",
+      required_output_format: "Create qualified leads, conversation records, and outreach tasks for the best matches.",
+      constraints: [
+        "Focus on coaches, personal trainers, online coaches, and fitness operators.",
+        "Prioritize leads mentioning Google Sheets, spreadsheets, onboarding, check-ins, client tracking, or admin workflows.",
+        "Do not create duplicates if the Reddit handle already exists as a lead.",
+      ],
+      banned_claims: [
+        "Do not promise revenue outcomes.",
+        "Do not promise medical or health outcomes.",
+      ],
+      priority: "high",
+      task_payload: {
+        source: "dashboard_trigger",
+      },
+    })
+  }
+
+  await sendMessage(supabase, {
+    sender: "DASHBOARD",
+    tag: "DIRECTIVE",
+    type: "targeted",
+    recipients: ["MARKETING"],
+    priority: "high",
+    content: `Runner control requested: ${input.action}`,
+    ref_id: RUNNER_KEY,
+  })
+
+  await audit(supabase, {
+    op: "marketing_runner_control",
+    sector: "state",
+    key: RUNNER_KEY,
+    agent: userId,
+    summary: `Runner control: ${input.action}`,
+    meta: {
+      action: input.action,
+      previous_status: currentData.status ?? "offline",
+    },
+  })
+
+  return {
+    ok: true,
+    action: input.action,
+    runner_key: RUNNER_KEY,
+  }
 }

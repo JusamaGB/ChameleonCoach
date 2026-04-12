@@ -37,9 +37,9 @@ type TaskFormState = {
 
 const defaultLeadForm: LeadFormState = {
   full_name: "",
-  platform: "instagram",
+  platform: "reddit",
   handle: "",
-  source: "warm inbound",
+  source: "reddit discovery",
   stage: "new",
   temperature: "warm",
   notes: "",
@@ -49,9 +49,9 @@ const defaultLeadForm: LeadFormState = {
 
 const defaultTaskForm: TaskFormState = {
   lead_key: "",
-  task_type: "draft_dm_reply",
-  channel: "dm",
-  objective: "",
+  task_type: "scan_reddit_leads",
+  channel: "reddit_search",
+  objective: "Scan Reddit for coaches using Google Sheets or spreadsheets to run client operations.",
   campaign_profile: "default",
   required_output_format: "2-3 variants plus short rationale",
   constraints: "",
@@ -82,6 +82,7 @@ function draftNeedsReview(draft: MarketingDraft) {
 
 export function MarketingConsole({ initialSnapshot }: MarketingConsoleProps) {
   const [snapshot, setSnapshot] = useState(initialSnapshot)
+  const [activeTab, setActiveTab] = useState<"operations" | "mcp">("operations")
   const [leadForm, setLeadForm] = useState<LeadFormState>(defaultLeadForm)
   const [taskForm, setTaskForm] = useState<TaskFormState>(defaultTaskForm)
   const [selectedLeadKey, setSelectedLeadKey] = useState<string>("")
@@ -91,9 +92,13 @@ export function MarketingConsole({ initialSnapshot }: MarketingConsoleProps) {
   const [isPending, startTransition] = useTransition()
 
   const leads = snapshot.leads
+  const tasks = snapshot.tasks
   const drafts = snapshot.drafts
   const reviewDrafts = useMemo(() => drafts.filter(draftNeedsReview), [drafts])
   const approvedDrafts = useMemo(() => drafts.filter((draft) => ["approved", "ready_to_send"].includes(draft.status)), [drafts])
+  const selectedTaskNeedsLead = taskForm.task_type !== "scan_reddit_leads"
+  const queuedTasks = useMemo(() => tasks.filter((task) => ["queued", "claimed", "revision_requested"].includes(task.status)), [tasks])
+  const sentDrafts = useMemo(() => drafts.filter((draft) => draft.status === "sent"), [drafts])
 
   useEffect(() => {
     if (selectedLeadKey && !snapshot.leads.some((lead) => lead.key === selectedLeadKey)) {
@@ -155,6 +160,18 @@ export function MarketingConsole({ initialSnapshot }: MarketingConsoleProps) {
     setLeadForm(defaultLeadForm)
   }
 
+  function runRunnerControl(action: "trigger_scan" | "process_queue" | "pause_autoscan" | "resume_autoscan", successMessage: string) {
+    startTransition(() => {
+      void submitAction(
+        {
+          action: "runner_control",
+          payload: { action },
+        },
+        successMessage
+      )
+    })
+  }
+
   return (
     <div className="space-y-8">
       <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
@@ -168,10 +185,22 @@ export function MarketingConsole({ initialSnapshot }: MarketingConsoleProps) {
           <Badge variant={snapshot.runner.status === "running" ? "success" : "warning"}>
             Runner {snapshot.runner.status}
           </Badge>
+          <Badge variant={snapshot.runner.autoscan_enabled === false ? "warning" : "default"}>
+            Autoscan {snapshot.runner.autoscan_enabled === false ? "paused" : "live"}
+          </Badge>
           <Button variant="secondary" onClick={() => startTransition(() => { void refreshSnapshot() })} disabled={isPending}>
             Refresh
           </Button>
         </div>
+      </div>
+
+      <div className="flex flex-wrap gap-3">
+        <Button variant={activeTab === "operations" ? "primary" : "secondary"} onClick={() => setActiveTab("operations")}>
+          Operations
+        </Button>
+        <Button variant={activeTab === "mcp" ? "primary" : "secondary"} onClick={() => setActiveTab("mcp")}>
+          MCP Monitor
+        </Button>
       </div>
 
       {message ? (
@@ -180,6 +209,8 @@ export function MarketingConsole({ initialSnapshot }: MarketingConsoleProps) {
         </Card>
       ) : null}
 
+      {activeTab === "operations" ? (
+        <>
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
         <Card glow><p className="text-2xl font-bold">{snapshot.overview.new_leads}</p><p className="text-sm text-gf-muted mt-1">New leads</p></Card>
         <Card><p className="text-2xl font-bold">{snapshot.overview.drafts_awaiting_review}</p><p className="text-sm text-gf-muted mt-1">Awaiting review</p></Card>
@@ -202,6 +233,7 @@ export function MarketingConsole({ initialSnapshot }: MarketingConsoleProps) {
             <Input label="Lead name" value={leadForm.full_name} onChange={(e) => setLeadForm((c) => ({ ...c, full_name: e.target.value }))} />
             <Input label="Handle" value={leadForm.handle} onChange={(e) => setLeadForm((c) => ({ ...c, handle: e.target.value }))} />
             <Select label="Platform" value={leadForm.platform} onChange={(e) => setLeadForm((c) => ({ ...c, platform: e.target.value }))} options={[
+              { value: "reddit", label: "Reddit" },
               { value: "instagram", label: "Instagram" },
               { value: "x", label: "X" },
               { value: "linkedin", label: "LinkedIn" },
@@ -298,17 +330,28 @@ export function MarketingConsole({ initialSnapshot }: MarketingConsoleProps) {
         <Card>
           <CardHeader>
             <CardTitle>Queue Task</CardTitle>
-            <p className="text-sm text-gf-muted mt-1">Create the next drafting job for the local Codex runner.</p>
+            <p className="text-sm text-gf-muted mt-1">Queue discovery or drafting work here. The website stores the job; your local runner actually executes it.</p>
           </CardHeader>
           <div className="grid gap-3">
-            <Select label="Lead" value={taskForm.lead_key} onChange={(e) => setTaskForm((c) => ({ ...c, lead_key: e.target.value }))} options={leads.map((lead) => ({ value: lead.key, label: `${lead.full_name} (${lead.platform})` }))} />
+            {selectedTaskNeedsLead ? (
+              <Select label="Lead" value={taskForm.lead_key} onChange={(e) => setTaskForm((c) => ({ ...c, lead_key: e.target.value }))} options={leads.map((lead) => ({ value: lead.key, label: `${lead.full_name} (${lead.platform})` }))} />
+            ) : (
+              <Card className="border border-gf-border bg-gf-black/20 p-3">
+                <p className="text-sm text-white">This is a standalone discovery task. It does not need a lead selected first.</p>
+              </Card>
+            )}
             <Select label="Task type" value={taskForm.task_type} onChange={(e) => setTaskForm((c) => ({ ...c, task_type: e.target.value }))} options={[
+              { value: "scan_reddit_leads", label: "Scan Reddit leads" },
+              { value: "draft_reddit_outreach", label: "Draft Reddit outreach" },
               { value: "draft_dm_reply", label: "Draft DM reply" },
               { value: "draft_follow_up", label: "Draft follow-up" },
               { value: "draft_social_post", label: "Draft social post" },
               { value: "lead_summary", label: "Lead summary" },
             ]} />
             <Select label="Channel" value={taskForm.channel} onChange={(e) => setTaskForm((c) => ({ ...c, channel: e.target.value }))} options={[
+              { value: "reddit_search", label: "Reddit search" },
+              { value: "reddit_dm", label: "Reddit DM" },
+              { value: "reddit_comment", label: "Reddit comment" },
               { value: "dm", label: "DM" },
               { value: "email", label: "Email" },
               { value: "social", label: "Social" },
@@ -332,24 +375,54 @@ export function MarketingConsole({ initialSnapshot }: MarketingConsoleProps) {
                     action: "create_task",
                     payload: {
                       ...taskForm,
+                      lead_key: selectedTaskNeedsLead ? taskForm.lead_key : null,
                       constraints: taskForm.constraints.split("\n").map((item) => item.trim()).filter(Boolean),
                       banned_claims: taskForm.banned_claims.split("\n").map((item) => item.trim()).filter(Boolean),
                     },
                   }, "Task queued for the local runner.")
                 })
               }
-              disabled={isPending || !taskForm.lead_key || !taskForm.objective.trim()}
+              disabled={isPending || (selectedTaskNeedsLead && !taskForm.lead_key) || !taskForm.objective.trim()}
             >
               Queue task
+            </Button>
+            <Button
+              variant="secondary"
+              onClick={() =>
+                startTransition(() => {
+                  void submitAction({
+                    action: "create_task",
+                    payload: {
+                      lead_key: null,
+                      task_type: "scan_reddit_leads",
+                      channel: "reddit_search",
+                      objective: "Scan Reddit for fitness and coaching leads using Google Sheets or spreadsheets to manage clients.",
+                      campaign_profile: "reddit_google_sheets",
+                      required_output_format: "Create qualified leads, conversation records, and outreach tasks for the best matches.",
+                      constraints: [
+                        "Focus on coaches, personal trainers, online coaches, and fitness operators.",
+                        "Prioritize leads mentioning Google Sheets, spreadsheets, onboarding, check-ins, client tracking, or admin workflows.",
+                        "Do not create duplicates if the Reddit handle already exists as a lead.",
+                      ],
+                      banned_claims: [
+                        "Do not promise revenue outcomes.",
+                        "Do not promise medical or health outcomes.",
+                      ],
+                    },
+                  }, "Reddit discovery task queued.")
+                })
+              }
+              disabled={isPending}
+            >
+              Queue Reddit scan
             </Button>
           </div>
 
           <div className="mt-6 space-y-3">
             <h3 className="text-sm font-semibold text-white">Pending task queue</h3>
-            {snapshot.tasks.filter((task) => ["queued", "claimed", "revision_requested"].includes(task.status)).length === 0 ? (
+            {queuedTasks.length === 0 ? (
               <p className="text-sm text-gf-muted">No queued tasks right now.</p>
-            ) : snapshot.tasks
-                .filter((task) => ["queued", "claimed", "revision_requested"].includes(task.status))
+            ) : queuedTasks
                 .map((task) => (
                   <div key={task.key} className="rounded-xl border border-gf-border bg-gf-black/20 p-4">
                     <div className="flex items-start justify-between gap-3">
@@ -521,6 +594,31 @@ export function MarketingConsole({ initialSnapshot }: MarketingConsoleProps) {
                   </ul>
                 )}
               </div>
+              <div className="rounded-xl border border-gf-border bg-gf-black/20 p-4">
+                <p className="text-gf-muted">AI controls</p>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <Button size="sm" onClick={() => runRunnerControl("trigger_scan", "Reddit scan triggered from the dashboard.")} disabled={isPending}>
+                    Trigger Reddit scan
+                  </Button>
+                  <Button size="sm" variant="secondary" onClick={() => runRunnerControl("process_queue", "Runner told to process the queued work.")} disabled={isPending}>
+                    Process queue
+                  </Button>
+                  {snapshot.runner.autoscan_enabled === false ? (
+                    <Button size="sm" variant="secondary" onClick={() => runRunnerControl("resume_autoscan", "Autoscan resumed.")} disabled={isPending}>
+                      Resume autoscan
+                    </Button>
+                  ) : (
+                    <Button size="sm" variant="ghost" onClick={() => runRunnerControl("pause_autoscan", "Autoscan paused.")} disabled={isPending}>
+                      Pause autoscan
+                    </Button>
+                  )}
+                </div>
+              </div>
+              <div className="rounded-xl border border-gf-border bg-gf-black/20 p-4">
+                <p className="text-gf-muted">Run locally</p>
+                <p className="mt-1 text-white">The website queues work and shows status. To actually execute AI tasks, run the local marketing runner on your machine:</p>
+                <code className="mt-3 block rounded-lg bg-black/40 px-3 py-2 text-xs text-white">npm run runner:marketing</code>
+              </div>
             </div>
           </Card>
 
@@ -548,6 +646,162 @@ export function MarketingConsole({ initialSnapshot }: MarketingConsoleProps) {
           </Card>
         </div>
       </div>
+        </>
+      ) : (
+        <>
+          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+            <Card glow>
+              <p className="text-2xl font-bold">{snapshot.runner.status}</p>
+              <p className="text-sm text-gf-muted mt-1">Runner state</p>
+            </Card>
+            <Card>
+              <p className="text-2xl font-bold">{queuedTasks.length}</p>
+              <p className="text-sm text-gf-muted mt-1">Tasks in motion</p>
+            </Card>
+            <Card>
+              <p className="text-2xl font-bold">{reviewDrafts.length}</p>
+              <p className="text-sm text-gf-muted mt-1">Drafts awaiting human review</p>
+            </Card>
+            <Card>
+              <p className="text-2xl font-bold">{sentDrafts.length}</p>
+              <p className="text-sm text-gf-muted mt-1">Completed sends logged</p>
+            </Card>
+          </div>
+
+          <div className="grid gap-6 xl:grid-cols-[0.9fr,1.1fr]">
+            <Card>
+              <CardHeader>
+                <CardTitle>MCP Controls</CardTitle>
+                <p className="text-sm text-gf-muted mt-1">Dashboard-issued commands for the local agent layer.</p>
+              </CardHeader>
+              <div className="space-y-4">
+                <div className="rounded-xl border border-gf-border bg-gf-black/20 p-4">
+                  <p className="text-sm text-gf-muted">Current task</p>
+                  <p className="mt-1 text-white">{snapshot.runner.current_task_key || "No active task"}</p>
+                </div>
+                <div className="rounded-xl border border-gf-border bg-gf-black/20 p-4">
+                  <p className="text-sm text-gf-muted">Last heartbeat</p>
+                  <p className="mt-1 text-white">{formatDate(snapshot.runner.heartbeat_at)}</p>
+                </div>
+                <div className="rounded-xl border border-gf-border bg-gf-black/20 p-4">
+                  <p className="text-sm text-gf-muted">Last dashboard control</p>
+                  <p className="mt-1 text-white">{snapshot.runner.last_control_action || "None yet"}</p>
+                  <p className="mt-1 text-xs text-gf-muted">{formatDate(snapshot.runner.control_requested_at)}</p>
+                </div>
+                <div className="rounded-xl border border-gf-border bg-gf-black/20 p-4">
+                  <p className="text-sm text-gf-muted">Controls</p>
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    <Button size="sm" onClick={() => runRunnerControl("trigger_scan", "Dashboard scan directive sent.")} disabled={isPending}>
+                      Trigger scan
+                    </Button>
+                    <Button size="sm" variant="secondary" onClick={() => runRunnerControl("process_queue", "Dashboard queue directive sent.")} disabled={isPending}>
+                      Run queued work
+                    </Button>
+                    {snapshot.runner.autoscan_enabled === false ? (
+                      <Button size="sm" variant="secondary" onClick={() => runRunnerControl("resume_autoscan", "Dashboard resumed autoscan.")} disabled={isPending}>
+                        Resume autoscan
+                      </Button>
+                    ) : (
+                      <Button size="sm" variant="ghost" onClick={() => runRunnerControl("pause_autoscan", "Dashboard paused autoscan.")} disabled={isPending}>
+                        Pause autoscan
+                      </Button>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle>MCP Flow Visuals</CardTitle>
+                <p className="text-sm text-gf-muted mt-1">A live view of where work is moving through the Chameleon memory system.</p>
+              </CardHeader>
+              <div className="grid gap-3 md:grid-cols-4">
+                <div className="rounded-xl border border-gf-border bg-gf-black/20 p-4">
+                  <p className="text-xs uppercase tracking-wide text-gf-muted">Discovery</p>
+                  <p className="mt-2 text-2xl font-bold">{leads.length}</p>
+                  <p className="mt-1 text-sm text-gf-muted">Lead records</p>
+                </div>
+                <div className="rounded-xl border border-gf-border bg-gf-black/20 p-4">
+                  <p className="text-xs uppercase tracking-wide text-gf-muted">Queue</p>
+                  <p className="mt-2 text-2xl font-bold">{queuedTasks.length}</p>
+                  <p className="mt-1 text-sm text-gf-muted">Open tasks</p>
+                </div>
+                <div className="rounded-xl border border-gf-border bg-gf-black/20 p-4">
+                  <p className="text-xs uppercase tracking-wide text-gf-muted">Drafting</p>
+                  <p className="mt-2 text-2xl font-bold">{drafts.length}</p>
+                  <p className="mt-1 text-sm text-gf-muted">Content entries</p>
+                </div>
+                <div className="rounded-xl border border-gf-border bg-gf-black/20 p-4">
+                  <p className="text-xs uppercase tracking-wide text-gf-muted">Closed Loop</p>
+                  <p className="mt-2 text-2xl font-bold">{sentDrafts.length}</p>
+                  <p className="mt-1 text-sm text-gf-muted">Sent outcomes</p>
+                </div>
+              </div>
+
+              <div className="mt-6 space-y-3">
+                <p className="text-sm font-semibold text-white">Runner actions</p>
+                {snapshot.runner.recent_actions.length === 0 ? (
+                  <p className="text-sm text-gf-muted">No agent actions recorded yet.</p>
+                ) : (
+                  snapshot.runner.recent_actions.map((action, index) => (
+                    <div key={`${action}-${index}`} className="rounded-xl border border-gf-border bg-gf-black/20 p-4 text-sm text-white">
+                      {action}
+                    </div>
+                  ))
+                )}
+              </div>
+            </Card>
+          </div>
+
+          <div className="grid gap-6 xl:grid-cols-2">
+            <Card>
+              <CardHeader>
+                <CardTitle>MCP Audit Stream</CardTitle>
+                <p className="text-sm text-gf-muted mt-1">Recent memory operations across state, content, leads, and messages.</p>
+              </CardHeader>
+              <div className="space-y-3">
+                {snapshot.activity.audit.length === 0 ? (
+                  <p className="text-sm text-gf-muted">No audit events yet.</p>
+                ) : snapshot.activity.audit.map((event) => (
+                  <div key={event.id} className="rounded-xl border border-gf-border bg-gf-black/20 p-4">
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <p className="font-medium text-white">{event.summary || event.op}</p>
+                        <p className="text-xs text-gf-muted mt-1">{event.sector || "system"} / {event.key || "n/a"} / {event.agent || "unknown"}</p>
+                      </div>
+                      <p className="text-xs text-gf-muted">{formatDate(event.ts)}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle>MCP Message Board</CardTitle>
+                <p className="text-sm text-gf-muted mt-1">Directives, alerts, and runner broadcasts flowing through the message layer.</p>
+              </CardHeader>
+              <div className="space-y-3">
+                {snapshot.messages.messages.length === 0 ? (
+                  <p className="text-sm text-gf-muted">No message traffic yet.</p>
+                ) : snapshot.messages.messages.map((message) => (
+                  <div key={message.key} className="rounded-xl border border-gf-border bg-gf-black/20 p-4">
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <p className="font-medium text-white">{message.data.tag}</p>
+                        <p className="text-xs text-gf-muted mt-1">{message.data.sender} • {message.data.type} • {message.data.channel}</p>
+                      </div>
+                      <p className="text-xs text-gf-muted">{formatDate(message.created_at)}</p>
+                    </div>
+                    <p className="mt-3 text-sm whitespace-pre-wrap text-white/90">{message.data.content}</p>
+                  </div>
+                ))}
+              </div>
+            </Card>
+          </div>
+        </>
+      )}
     </div>
   )
 }

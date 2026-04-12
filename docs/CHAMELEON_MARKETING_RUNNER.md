@@ -7,6 +7,8 @@ This is the v1 contract for the local Codex marketing runner.
 - agent id: `MARKETING` by default
 - transport: local MCP stdio wrapper at `scripts/chameleon-memory-mcp.mjs`
 - source of truth: Chameleon memory in this repo only
+- local process entrypoint: `scripts/chameleon-marketing-runner.mjs`
+- local start command: `npm run runner:marketing`
 
 ## Stable rules
 
@@ -19,11 +21,25 @@ This is the v1 contract for the local Codex marketing runner.
 
 ## Task recipes
 
+- `scan_reddit_leads`
 - `lead_summary`
+- `draft_reddit_outreach`
 - `draft_dm_reply`
 - `draft_follow_up`
 - `draft_social_post`
 - `revise_marketing_copy`
+
+## Reddit-first behavior
+
+The runner is Reddit-first in v1.
+
+- it can auto-queue `scan_reddit_leads`
+- it searches configured subreddits and search phrases
+- it scores likely leads looking for coaches/operators using Google Sheets or spreadsheet-heavy workflows
+- it writes qualified leads into `leads`
+- it writes Reddit source records into `conversations`
+- it queues `lead_summary` and `draft_reddit_outreach` follow-on tasks
+- it never sends anything externally
 
 ## Task storage
 
@@ -34,12 +50,12 @@ Minimum payload fields:
 ```json
 {
   "lead_key": "lead_...",
-  "task_type": "draft_dm_reply",
+  "task_type": "draft_reddit_outreach",
   "status": "queued",
   "priority": "normal",
-  "channel": "dm",
-  "objective": "Reply to a warm lead and move them toward a call",
-  "campaign_profile": "default",
+  "channel": "reddit_dm",
+  "objective": "Draft a natural Reddit outreach message",
+  "campaign_profile": "reddit_google_sheets",
   "required_output_format": "2-3 variants plus short rationale",
   "constraints": ["keep it concise"],
   "banned_claims": ["do not promise medical outcomes"]
@@ -59,6 +75,7 @@ Expected shape:
   "current_task_key": "task_...",
   "heartbeat_at": "2026-04-12T12:00:00.000Z",
   "last_error": null,
+  "pending_queue_count": 4,
   "recent_actions": [
     "Claimed task task_...",
     "Wrote 3 draft variants to content/draft_..."
@@ -76,21 +93,38 @@ Expected payload:
 {
   "task_key": "task_...",
   "lead_key": "lead_...",
-  "channel": "dm",
-  "draft_type": "reply",
+  "channel": "reddit_dm",
+  "draft_type": "reddit_outreach",
   "content": "Draft body here",
   "variant_label": "A",
   "status": "drafted",
-  "campaign_profile": "default",
+  "campaign_profile": "reddit_google_sheets",
   "objective": "Reply to the lead"
 }
 ```
+
+## Required env
+
+- `CHAMELEON_MCP_API_KEY`
+- `CHAMELEON_MEMORY_BASE_URL`
+- `CHAMELEON_AGENT_ID`
+- `OPENAI_API_KEY` for AI drafting
+
+Optional Reddit config:
+
+- `CHAMELEON_REDDIT_AUTOSCAN`
+- `CHAMELEON_REDDIT_AUTOSCAN_MINUTES`
+- `CHAMELEON_REDDIT_SUBREDDITS`
+- `CHAMELEON_REDDIT_SEARCH_TERMS`
+- `CHAMELEON_OPENAI_MODEL`
 
 ## Lifecycle rules
 
 - queued task -> claimed by runner
 - claimed task -> one or more `content/draft_*` entries
+- `scan_reddit_leads` can create new leads plus follow-on tasks
 - new drafts should land as `drafted` or `needs_review`
 - rejected drafts can become `revision_requested`
 - revision requests should create a new `revise_marketing_copy` task
 - only the operator UI can mark drafts `approved`, `ready_to_send`, or `sent`
+- sent drafts can trigger `follow_ups` scheduling and later `draft_follow_up` task creation
