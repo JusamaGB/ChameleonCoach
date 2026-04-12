@@ -49,6 +49,7 @@ export default function SettingsPage() {
   const [marketingMaxOutputTokens, setMarketingMaxOutputTokens] = useState("150")
   const [marketingSubreddits, setMarketingSubreddits] = useState("")
   const [marketingSearchTerms, setMarketingSearchTerms] = useState("")
+  const [marketingInitialState, setMarketingInitialState] = useState("")
 
   useEffect(() => {
     checkConnection()
@@ -130,18 +131,30 @@ export default function SettingsPage() {
     fetch("/api/admin/marketing/settings")
       .then((res) => res.json())
       .then((data) => {
+        const autoscan = data.autoscan_enabled === false ? "off" : "on"
+        const maxOutputTokens = String(data.output_limits?.max_output_tokens ?? 150)
+        const subreddits = Array.isArray(data.reddit?.subreddits) ? data.reddit.subreddits.join(", ") : ""
+        const searchTerms = Array.isArray(data.reddit?.search_terms) ? data.reddit.search_terms.join(", ") : ""
+
         setMarketingKeyConnected(Boolean(data.has_openai_api_key))
         setMarketingKeyLast4(data.openai_api_key_last4 ?? "")
-        setMarketingAutoscan(data.autoscan_enabled === false ? "off" : "on")
+        setMarketingAutoscan(autoscan)
         setMarketingTokenModel(data.token_usage?.model ?? "gpt-5-mini")
         setMarketingTokenRequests(Number(data.token_usage?.requests ?? 0))
         setMarketingInputTokens(Number(data.token_usage?.input_tokens ?? 0))
         setMarketingOutputTokens(Number(data.token_usage?.output_tokens ?? 0))
         setMarketingTotalTokens(Number(data.token_usage?.total_tokens ?? 0))
         setMarketingLastTokenUseAt(data.token_usage?.last_used_at ?? "")
-        setMarketingMaxOutputTokens(String(data.output_limits?.max_output_tokens ?? 150))
-        setMarketingSubreddits(Array.isArray(data.reddit?.subreddits) ? data.reddit.subreddits.join(", ") : "")
-        setMarketingSearchTerms(Array.isArray(data.reddit?.search_terms) ? data.reddit.search_terms.join(", ") : "")
+        setMarketingMaxOutputTokens(maxOutputTokens)
+        setMarketingSubreddits(subreddits)
+        setMarketingSearchTerms(searchTerms)
+        setMarketingInitialState(JSON.stringify({
+          autoscan,
+          maxOutputTokens,
+          subreddits,
+          searchTerms,
+          hasPendingKeyReplacement: false,
+        }))
       })
       .catch(() => {})
   }
@@ -290,6 +303,15 @@ export default function SettingsPage() {
       minute: "2-digit",
     })
   }
+
+  const marketingIsDirty =
+    JSON.stringify({
+      autoscan: marketingAutoscan,
+      maxOutputTokens: marketingMaxOutputTokens,
+      subreddits: marketingSubreddits,
+      searchTerms: marketingSearchTerms,
+      hasPendingKeyReplacement: Boolean(marketingApiKey.trim()),
+    }) !== marketingInitialState
 
   return (
     <div className="max-w-lg mx-auto">
@@ -508,9 +530,11 @@ export default function SettingsPage() {
           />
           {marketingError && <p className="text-sm text-red-400">{marketingError}</p>}
           <div className="flex items-center gap-3 flex-wrap">
-            <Button type="submit" disabled={marketingLoading} size="sm">
-              {marketingLoading ? "Saving..." : "Save Marketing AI"}
-            </Button>
+            {marketingIsDirty ? (
+              <Button type="submit" disabled={marketingLoading} size="sm">
+                {marketingLoading ? "Updating..." : "Update Marketing AI"}
+              </Button>
+            ) : null}
             {marketingKeyConnected ? (
               <Button type="button" variant="secondary" size="sm" onClick={removeMarketingApiKey} disabled={marketingLoading}>
                 Remove API Key

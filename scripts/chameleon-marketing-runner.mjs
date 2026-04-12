@@ -1,7 +1,7 @@
 import { readFile } from "node:fs/promises";
 import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
 loadLocalEnv();
 
@@ -10,7 +10,12 @@ const __dirname = path.dirname(__filename);
 const rootDir = path.resolve(__dirname, "..");
 const promptsDir = path.join(rootDir, "prompts", "chameleon-marketing");
 
-const baseUrl = (process.env.CHAMELEON_MEMORY_BASE_URL || "http://127.0.0.1:3000").replace(/\/+$/, "");
+const baseUrl = (
+  process.env.CHAMELEON_MEMORY_BASE_URL ||
+  process.env.NEXT_PUBLIC_APP_URL ||
+  (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "") ||
+  "http://127.0.0.1:3000"
+).replace(/\/+$/, "");
 const apiKey = process.env.CHAMELEON_MCP_API_KEY || "";
 const agentId = (process.env.CHAMELEON_AGENT_ID || "MARKETING").toUpperCase();
 const discoveryModelDefault = "gpt-5-nano";
@@ -35,11 +40,7 @@ const TOKEN_USAGE_KEY = "usage_marketing_tokens";
 const MAX_RECENT_ACTIONS = 20;
 const REDDIT_USER_AGENT = "G-Fitness-Chameleon-Marketing/1.0";
 const priorityRank = { high: 0, normal: 1, low: 2 };
-
-if (!apiKey) {
-  console.error("CHAMELEON_MCP_API_KEY is required");
-  process.exit(1);
-}
+const isDirectRun = Boolean(process.argv[1]) && pathToFileURL(path.resolve(process.argv[1])).href === import.meta.url;
 
 function loadLocalEnv() {
   const envPath = path.resolve(process.cwd(), ".env.local");
@@ -72,40 +73,50 @@ function loadLocalEnv() {
 let stableRulesCache = null;
 let shuttingDown = false;
 
-process.on("SIGINT", async () => {
-  shuttingDown = true;
-  await patchRunnerState({
-    status: "offline",
-    current_task_key: null,
-    recent_actions: appendAction([], "Runner stopped by SIGINT."),
-  }).catch(() => {});
-  process.exit(0);
-});
+if (isDirectRun) {
+  process.on("SIGINT", async () => {
+    shuttingDown = true;
+    await patchRunnerState({
+      status: "offline",
+      current_task_key: null,
+      recent_actions: appendAction([], "Runner stopped by SIGINT."),
+    }).catch(() => {});
+    process.exit(0);
+  });
 
-process.on("SIGTERM", async () => {
-  shuttingDown = true;
-  await patchRunnerState({
-    status: "offline",
-    current_task_key: null,
-    recent_actions: appendAction([], "Runner stopped by SIGTERM."),
-  }).catch(() => {});
-  process.exit(0);
-});
+  process.on("SIGTERM", async () => {
+    shuttingDown = true;
+    await patchRunnerState({
+      status: "offline",
+      current_task_key: null,
+      recent_actions: appendAction([], "Runner stopped by SIGTERM."),
+    }).catch(() => {});
+    process.exit(0);
+  });
 
-main().catch(async (error) => {
-  console.error(error);
-  await patchRunnerState({
-    status: "error",
-    current_task_key: null,
-    last_error: error instanceof Error ? error.message : "Unknown runner error",
-    last_startup_status: "failed",
-    last_startup_message: error instanceof Error ? error.message : "Unknown runner error",
-    recent_actions: appendAction([], "Runner crashed during startup."),
-  }).catch(() => {});
-  process.exit(1);
-});
+  main().catch(async (error) => {
+    console.error(error);
+    await patchRunnerState({
+      status: "error",
+      current_task_key: null,
+      last_error: error instanceof Error ? error.message : "Unknown runner error",
+      last_startup_status: "failed",
+      last_startup_message: error instanceof Error ? error.message : "Unknown runner error",
+      recent_actions: appendAction([], "Runner crashed during startup."),
+    }).catch(() => {});
+    process.exit(1);
+  });
+}
 
-async function main() {
+function assertRunnerConfig() {
+  if (!apiKey) {
+    throw new Error("CHAMELEON_MCP_API_KEY is required");
+  }
+}
+
+export async function runSingleMarketingCycle() {
+  assertRunnerConfig();
+
   const startupAttemptAt = nowIso();
   const startupDiagnostics = await runStartupDiagnostics();
   const runnerSettings = await getRunnerSettings();
@@ -121,16 +132,31 @@ async function main() {
     model_preferences: runnerSettings.model_preferences,
     output_limits: runnerSettings.output_limits,
     diagnostics: startupDiagnostics,
-    recent_actions: appendAction([], "Runner booted."),
+    recent_actions: appendAction([], "Runner cycle started."),
   });
 
-  await emitRunnerLog(
-    startupDiagnostics.startup_ready ? "GENERAL" : "HUMAN_NEEDED",
-    startupDiagnostics.startup_ready
-      ? `Runner startup checks passed. Memory API reachable at ${startupDiagnostics.memory_base_url}.`
-      : `Runner startup checks failed: ${startupDiagnostics.startup_message}`,
-    startupDiagnostics.startup_ready ? "normal" : "high"
-  ).catch(() => {});
+  if (!startupDiagnostics.startup_ready) {
+    await addRunnerAction(`Startup diagnostics blocked execution: ${startupDiagnostics.startup_message}`);
+    return {
+      ok: false,
+      status: "blocked",
+      message: startupDiagnostics.startup_message,
+    };
+  }
+
+  await runOnce();
+  const runner = await memoryRead("state", RUNNER_KEY, true);
+
+  return {
+    ok: true,
+    status: runner?.data?.status || "idle",
+    current_task_key: runner?.data?.current_task_key || null,
+  };
+}
+
+async function main() {
+  assertRunnerConfig();
+  await runSingleMarketingCycle();
 
   while (!shuttingDown) {
     try {
